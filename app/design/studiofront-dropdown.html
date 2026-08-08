@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Studiofront — dropdown (1a Liquid Glass / 1b Sanity UI)</title>
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+  html,body{margin:0;background:#0e0f11;font-family:-apple-system,'Helvetica Neue',Helvetica,sans-serif;-webkit-font-smoothing:antialiased}
+  input{font:inherit}
+  input::placeholder{color:inherit;opacity:.55}
+  .ss-row:hover{background:rgba(127,133,145,.16)}
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+/* ------------------------------------------------------------------
+   Studiofront — main menu bar dropdown, populated default state.
+   Two themes: 'glass' (macOS Liquid Glass) and 'sanity' (Sanity UI).
+   Theme selection lives in the app's Settings window, not here.
+   ------------------------------------------------------------------ */
+
+const THEMES = {
+  glass: {
+    panel: 'linear-gradient(180deg,rgba(44,46,54,.66),rgba(22,24,30,.76))',
+    blur: 'blur(42px) saturate(1.7)',
+    border: 'rgba(255,255,255,.16)',
+    shadow: '0 22px 60px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.18)',
+    text: 'rgba(255,255,255,.96)', sub: 'rgba(255,255,255,.58)', faint: 'rgba(255,255,255,.4)',
+    tagBg: 'rgba(255,255,255,.1)', chipBg: 'rgba(255,255,255,.09)', chipBorder: 'rgba(255,255,255,.16)',
+    field: 'rgba(255,255,255,.1)', fieldBorder: 'rgba(255,255,255,.18)', divider: 'rgba(255,255,255,.11)',
+    segBg: 'rgba(255,255,255,.1)', segOn: 'rgba(255,255,255,.92)', segOnText: '#191b21', segText: 'rgba(255,255,255,.62)',
+    btnBg: 'rgba(255,255,255,.1)', btnText: 'rgba(255,255,255,.88)',
+    btnPrimaryBg: 'oklch(0.78 0.13 245)', btnPrimaryText: '#10161f',
+    ring: 'rgba(34,36,42,.92)', star: '#f2c14a'
+  },
+  sanity: {
+    panel: '#ffffff', blur: 'none',
+    border: '#d9dbe0', shadow: '0 16px 44px rgba(14,17,22,.34)',
+    text: '#0f1215', sub: '#6b7280', faint: '#98a0aa',
+    tagBg: '#f1f3f6', chipBg: '#f7f8fa', chipBorder: '#dfe1e6',
+    field: '#ffffff', fieldBorder: '#d3d7de', divider: '#ebedf1',
+    segBg: '#f1f3f6', segOn: '#ffffff', segOnText: '#0f1215', segText: '#6b7280',
+    btnBg: '#ffffff', btnText: '#25313f',
+    btnPrimaryBg: '#2276fc', btnPrimaryText: '#ffffff',
+    ring: '#ffffff', star: '#eab308'
+  }
+};
+
+const COPIED_GREEN = '#1f9d55';
+
+const ORG_IDS = {
+  'Northwind Group': 'orgq7f2',
+  'Fjord Media': 'orgfj91',
+  'Halden & Co': 'orghd44',
+  'Aster Health Partners': 'orgas08',
+  'Kessler Studio': 'orgks01'
+};
+const ORG_ORDER = Object.keys(ORG_IDS);
+
+// brand = favicon fetched from the frontend (monogram stands in for the real icon);
+// null brand = no site favicon, fall back to project initials.
+const PROJECTS = [
+  { key:'p1',  name:'Northwind Coffee',      org:'Northwind Group',        id:'nw8f3k2a', ds:'production',  deploy:'deployed 3h ago',   doc:'Homepage Hero',            docTime:'2h ago',    docType:'page',       bucket:'Today',     brand:'#6f4a2e', site:'northwindcoffee.com',           presence:[{initials:'JR',color:'#e0555b'},{initials:'MK',color:'#4d8df6'}] },
+  { key:'p3',  name:'Fjord Media Editorial', org:'Fjord Media',            id:'fj4m7t1e', ds:'production',  deploy:'deployed 22m ago',  doc:'Issue 14 — Cover Story',   docTime:'6m ago',    docType:'article',    bucket:'Today',     brand:'#12324a', site:'fjordmedia.no',                 presence:[{initials:'AL',color:'#2fa37c'},{initials:'TS',color:'#c77d2c'},{initials:'BV',color:'#7a63d6'}] },
+  { key:'p2',  name:'Northwind Wholesale',   org:'Northwind Group',        id:'nw1c9p4x', ds:'staging',     deploy:'deployed 2d ago',   doc:'Wholesale FAQ',            docTime:'1d ago',    docType:'page',       bucket:'Yesterday', brand:'#6f4a2e', site:'wholesale.northwindcoffee.com', presence:[] },
+  { key:'p4',  name:'Fjord Media Careers',   org:'Fjord Media',            id:'fj9k2b6d', ds:'production',  deploy:'deployed 5d ago',   doc:'Open Roles',               docTime:'3d ago',    docType:'page',       bucket:'Earlier',   brand:null,      site:'fjordmedia.no/careers',         presence:[] },
+  { key:'p5',  name:'Halden & Co Storefront',org:'Halden & Co',            id:'hd3x8v5q', ds:'production',  deploy:'deployed 1h ago',   doc:'SS26 Lookbook',            docTime:'40m ago',   docType:'collection', bucket:'Today',     brand:'#171717', site:'halden.co',                     presence:[{initials:'DP',color:'#4d8df6'}] },
+  { key:'p6',  name:'Halden & Co Journal',   org:'Halden & Co',            id:'hd7n2j8w', ds:'development', deploy:'never deployed',    doc:'Draft: Atelier Visit',     docTime:'yesterday', docType:'article',    bucket:'Yesterday', brand:null,      site:null,                            presence:[] },
+  { key:'p7',  name:'Aster Health',          org:'Aster Health Partners',  id:'as6q1w9r', ds:'production',  deploy:'deployed 6h ago',   doc:'Clinic Locations',         docTime:'4h ago',    docType:'location',   bucket:'Today',     brand:'#2fa37c', site:'asterhealth.com',               presence:[{initials:'RN',color:'#2fa37c'}] },
+  { key:'p8',  name:'Aster Health Docs',     org:'Aster Health Partners',  id:'as2v8m3c', ds:'staging',     deploy:'deployed 9d ago',   doc:'Patient Onboarding',       docTime:'6d ago',    docType:'guide',      bucket:'Earlier',   brand:'#2fa37c', site:'docs.asterhealth.com',          presence:[] },
+  { key:'p9',  name:'Studio Kit (Internal)', org:'Kessler Studio',         id:'in2z5y7u', ds:'production',  deploy:'deployed 12d ago',  doc:'Component Library Notes',  docTime:'8d ago',    docType:'note',       bucket:'Earlier',   brand:null,      site:null,                            presence:[] },
+  { key:'p10', name:'Client Intake',         org:'Kessler Studio',         id:'in7t4r2m', ds:'development', deploy:'deployed 4d ago',   doc:'Intake Form Copy',         docTime:'5h ago',    docType:'form',      bucket:'Today',     brand:null,      site:null,                            presence:[{initials:'MK',color:'#4d8df6'},{initials:'JR',color:'#e0555b'}] }
+];
+
+const DEFAULT_FAVORITES = { p1: true, p3: true, p9: true };
+
+const initials = name => name.replace(/[()]/g, '').split(/[\s&]+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
+
+const GlobeIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+    <circle cx="12" cy="12" r="9" /><ellipse cx="12" cy="12" rx="4" ry="9" />
+    <line x1="3" y1="9.5" x2="21" y2="9.5" /><line x1="3" y1="14.5" x2="21" y2="14.5" />
+  </svg>
+);
+
+const GearIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round">
+    <path d="M10.3 2.6h3.4l.5 2.4 2 .8 2-1.4 2.4 2.4-1.4 2 .8 2 2.4.5v3.4l-2.4.5-.8 2 1.4 2-2.4 2.4-2-1.4-2 .8-.5 2.4h-3.4l-.5-2.4-2-.8-2 1.4L2.4 18.7l1.4-2-.8-2-2.4-.5v-3.4l2.4-.5.8-2-1.4-2 2.4-2.4 2 1.4 2-.8z" />
+    <circle cx="12" cy="12" r="3.1" />
+  </svg>
+);
+
+const PencilIcon = () => (
+  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+    <path d="M4 20l3.2-.9L19 7.3a1.8 1.8 0 0 0 0-2.5l-1-1a1.8 1.8 0 0 0-2.5 0L3.8 15.6 3 19.2z" />
+  </svg>
+);
+
+function IconButton({ c, title, onClick, children }) {
+  return (
+    <div title={title} onClick={onClick} style={{ width: 24, height: 23, display: 'flex', alignItems: 'center', justifyContent: 'center',
+      borderRadius: 6, cursor: 'pointer', border: '1px solid ' + c.chipBorder, background: c.btnBg, color: c.btnText }}>
+      {children}
+    </div>
+  );
+}
+
+function ProjectRow({ project: d, c, isFavorite, onToggleFavorite, copiedKey, onCopy, onOpenStudio, onOpenSite, onOpenManage }) {
+  const copied = copiedKey === d.key + ':id';
+  return (
+    <div className="ss-row" style={{ display: 'grid', gridTemplateColumns: '15px 26px 1fr auto', gap: 9, alignItems: 'center', padding: 8, borderRadius: 8, cursor: 'default' }}>
+
+      <div onClick={() => onToggleFavorite(d.key)} style={{ fontSize: 12.5, lineHeight: 1, cursor: 'pointer', textAlign: 'center', color: isFavorite ? c.star : c.faint }}>
+        {isFavorite ? '★' : '☆'}
+      </div>
+
+      {/* favicon fetched from the frontend, initials fallback */}
+      <div title={d.brand ? 'Favicon fetched from ' + d.site : 'No favicon found — initials fallback'}
+        style={{ width: 26, height: 26, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          font: "700 10px -apple-system,sans-serif", letterSpacing: '.2px', overflow: 'hidden',
+          background: d.brand || c.tagBg, color: d.brand ? '#fff' : c.sub, border: '1px solid ' + c.chipBorder }}>
+        {d.brand ? d.name[0].toUpperCase() : initials(d.name)}
+      </div>
+
+      <div style={{ minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 12.5, fontWeight: 600, letterSpacing: '-.15px', color: c.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.name}</span>
+          <div style={{ flex: 'none' }}>
+            <div onClick={() => onCopy(d.key + ':id', d.id)} title="Click to copy project ID"
+              style={{ font: "500 9px ui-monospace,'SF Mono',Menlo,monospace", padding: '1.5px 4px', borderRadius: 3, cursor: 'copy',
+                border: '1px solid ' + (copied ? 'rgba(31,157,85,.45)' : c.chipBorder),
+                background: copied ? 'rgba(31,157,85,.14)' : c.chipBg,
+                color: copied ? COPIED_GREEN : c.sub }}>
+              {copied ? 'copied ✓' : d.id}
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 4, minWidth: 0 }}>
+          {/* schema preview icon for the last edited document's type */}
+          <div title={'Schema type: ' + d.docType}
+            style={{ width: 13, height: 13, flex: 'none', borderRadius: 3, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              font: "700 7.5px ui-monospace,'SF Mono',Menlo,monospace", background: c.chipBg, border: '1px solid ' + c.chipBorder, color: c.faint }}>
+            {d.docType[0].toUpperCase()}
+          </div>
+          <span style={{ fontSize: 10.5, color: c.sub, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.doc}</span>
+          <span title="Last edited" style={{ display: 'flex', alignItems: 'center', gap: 3, flex: 'none', fontSize: 10, color: c.faint }}>
+            <PencilIcon />{d.docTime}
+          </span>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 11, flex: 'none' }}>
+        {/* live presence — shrinks to nothing when nobody is in the studio */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', height: 17 }}>
+          {d.presence.length > 0 && (
+            <div style={{ display: 'flex', paddingLeft: 4 }}>
+              {d.presence.map(u => (
+                <div key={u.initials} title={u.initials + ' is editing now'}
+                  style={{ width: 16, height: 16, borderRadius: '50%', marginLeft: -4, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 7.5, fontWeight: 700, color: '#fff', background: u.color, boxShadow: '0 0 0 1.5px ' + c.ring }}>
+                  {u.initials}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div style={{ display: 'flex', gap: 5, justifyContent: 'flex-end' }}>
+          {d.site && <IconButton c={c} title="Open frontend" onClick={() => onOpenSite(d)}><GlobeIcon /></IconButton>}
+          <IconButton c={c} title="Open in Sanity Manage" onClick={() => onOpenManage(d)}><GearIcon /></IconButton>
+          <div onClick={() => onOpenStudio(d)}
+            style={{ fontSize: 10, fontWeight: 600, padding: '4px 9px', borderRadius: 6, cursor: 'pointer',
+              background: c.btnPrimaryBg, color: c.btnPrimaryText, whiteSpace: 'nowrap' }}>Studio</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StudiofrontDropdown({ theme = 'glass', projects = PROJECTS }) {
+  const c = THEMES[theme];
+  const [query, setQuery] = React.useState('');
+  const [groupBy, setGroupBy] = React.useState('org');      // 'org' | 'recent'
+  const [favorites, setFavorites] = React.useState(DEFAULT_FAVORITES);
+  const [copiedKey, setCopiedKey] = React.useState(null);
+  const timer = React.useRef(null);
+
+  const copy = (key, value) => {
+    if (navigator.clipboard) navigator.clipboard.writeText(value).catch(() => {});
+    setCopiedKey(key);
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => setCopiedKey(null), 1300);
+  };
+
+  const q = query.trim().toLowerCase();
+  const visible = projects.filter(d => !q || [d.name, d.org, d.id, d.ds, d.doc].join(' ').toLowerCase().includes(q));
+
+  // Favorites always pin to their own group above the active grouping.
+  const groups = [];
+  const favItems = visible.filter(d => favorites[d.key]);
+  if (favItems.length) groups.push({ title: 'Favorites', items: favItems });
+  const rest = visible.filter(d => !favorites[d.key]);
+
+  if (groupBy === 'org') {
+    ORG_ORDER.forEach(org => {
+      const items = rest.filter(d => d.org === org);
+      if (items.length) groups.push({ title: org, orgId: ORG_IDS[org], items });
+    });
+  } else {
+    ['Today', 'Yesterday', 'Earlier'].forEach(bucket => {
+      const items = rest.filter(d => d.bucket === bucket);
+      if (items.length) groups.push({ title: bucket, items });
+    });
+  }
+
+  const seg = active => ({
+    fontSize: 9.5, fontWeight: 600, padding: '2px 7px', borderRadius: 4, cursor: 'pointer',
+    background: active ? c.segOn : 'transparent', color: active ? c.segOnText : c.segText
+  });
+
+  const openStudio = d => window.open('https://' + d.id + '.sanity.studio', '_blank');
+  const openSite   = d => window.open('https://' + d.site, '_blank');
+  const openManage = d => window.open('https://sanity.io/manage/project/' + d.id, '_blank');
+
+  return (
+    <div style={{ width: 516, borderRadius: 12, overflow: 'hidden', border: '1px solid ' + c.border, background: c.panel,
+      boxShadow: c.shadow, backdropFilter: c.blur, WebkitBackdropFilter: c.blur }}>
+
+      <div style={{ padding: '11px 12px 10px', borderBottom: '1px solid ' + c.divider }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 9px', borderRadius: 8, border: '1px solid ' + c.fieldBorder, background: c.field }}>
+          <div style={{ width: 9, height: 9, borderRadius: '50%', border: '1.5px solid ' + c.faint }} />
+          <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search projects, orgs, IDs, datasets, documents…"
+            style={{ flex: 1, border: 0, outline: 0, background: 'transparent', fontSize: 11.5, color: c.text }} />
+          <span style={{ font: "600 9px ui-monospace,'SF Mono',Menlo,monospace", padding: '2px 5px', borderRadius: 4, background: c.chipBg, color: c.faint }}>⌘K</span>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 9 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontSize: 9.5, textTransform: 'uppercase', letterSpacing: '.6px', color: c.faint }}>Group by</span>
+            <div style={{ display: 'flex', padding: 2, borderRadius: 6, background: c.segBg, gap: 2 }}>
+              <div onClick={() => setGroupBy('org')} style={seg(groupBy === 'org')}>Org</div>
+              <div onClick={() => setGroupBy('recent')} style={seg(groupBy === 'recent')}>Last edited</div>
+            </div>
+          </div>
+          <span style={{ fontSize: 9.5, color: c.faint }}>{visible.length} of {projects.length} projects</span>
+        </div>
+      </div>
+
+      <div style={{ maxHeight: 640, overflowY: 'auto', padding: '6px 6px 8px' }}>
+        {groups.map(g => {
+          const orgCopied = copiedKey === 'org:' + g.title;
+          return (
+            <React.Fragment key={g.title}>
+              <div style={{ padding: '8px 8px 3px', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.7px', color: c.faint }}>{g.title}</span>
+                {g.orgId && (
+                  <span onClick={() => copy('org:' + g.title, g.orgId)} title="Click to copy org ID"
+                    style={{ font: "500 9px ui-monospace,'SF Mono',Menlo,monospace", letterSpacing: '.2px', cursor: 'copy',
+                      color: orgCopied ? COPIED_GREEN : c.faint }}>
+                    {orgCopied ? 'copied ✓' : g.orgId}
+                  </span>
+                )}
+                <div style={{ flex: 1, height: 1, background: c.divider }} />
+              </div>
+              {g.items.map(d => (
+                <ProjectRow key={g.title + d.key} project={d} c={c}
+                  isFavorite={!!favorites[d.key]}
+                  onToggleFavorite={k => setFavorites(f => ({ ...f, [k]: !f[k] }))}
+                  copiedKey={copiedKey} onCopy={copy}
+                  onOpenStudio={openStudio} onOpenSite={openSite} onOpenManage={openManage} />
+              ))}
+            </React.Fragment>
+          );
+        })}
+        {visible.length === 0 && (
+          <div style={{ padding: '26px 10px', textAlign: 'center', fontSize: 11, color: c.faint }}>No projects match “{query}”</div>
+        )}
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px',
+        borderTop: '1px solid ' + c.divider, fontSize: 9.5, color: c.faint }}>
+        <span>↑↓ navigate · ↵ open Studio · ⌥↵ open site</span>
+        <span style={{ cursor: 'pointer', color: c.sub }}>Settings…</span>
+      </div>
+    </div>
+  );
+}
+
+/* --- preview harness: desktop backdrop + menu bar, drop this in a real app --- */
+function Preview() {
+  const shell = { width: 544, borderRadius: 14, padding: '0 0 26px', overflow: 'hidden',
+    background: 'radial-gradient(120% 90% at 18% 0%,#2f4a63 0%,#1b2b3c 42%,#131a24 100%)' };
+  const bar = { height: 26, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 12,
+    padding: '0 12px', background: 'rgba(10,14,20,.42)', fontSize: 10.5, color: 'rgba(255,255,255,.72)' };
+
+  return (
+    <div style={{ display: 'flex', gap: 44, padding: '48px 52px 64px', alignItems: 'flex-start' }}>
+      {[['1a', 'glass', 'Liquid Glass'], ['1b', 'sanity', 'Sanity UI']].map(([id, theme, label]) => (
+        <div key={id} id={id} style={{ display: 'flex', flexDirection: 'column', gap: 11, flex: 'none' }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 9 }}>
+            <span style={{ font: "600 10.5px ui-monospace,'SF Mono',Menlo,monospace", padding: '3px 7px', borderRadius: 5, background: 'rgba(255,255,255,.1)', color: 'rgba(255,255,255,.82)' }}>{id}</span>
+            <span style={{ fontSize: 11.5, color: 'rgba(255,255,255,.5)' }}>{label}</span>
+          </div>
+          <div style={shell}>
+            <div style={bar}>
+              <div style={{ width: 11, height: 11, borderRadius: 3, background: 'rgba(255,255,255,.55)' }} />
+              <div style={{ width: 11, height: 11, borderRadius: '50%', background: 'rgba(255,255,255,.35)' }} />
+              <span style={{ fontWeight: 600, letterSpacing: '.1px' }}>Studiofront</span>
+              <span style={{ opacity: .6 }}>Fri 10:42</span>
+            </div>
+            <div style={{ margin: '8px 14px 0' }}>
+              <StudiofrontDropdown theme={theme} />
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<Preview />);
+</script>
+</body>
+</html>

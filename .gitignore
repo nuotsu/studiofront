@@ -1,0 +1,20 @@
+# Xcode
+app/build/
+app/DerivedData/
+app/*.xcodeproj/
+app/xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+*.xccheckout
+
+# Swift Package Manager
+.swiftpm/
+.build/
+app/.swiftpm/
+app/.build/
+
+# Local signing (Team ID) — copy from app/Config/Signing.local.xcconfig.example
+app/Config/Signing.local.xcconfig
+
+# macOS
+.DS_Store

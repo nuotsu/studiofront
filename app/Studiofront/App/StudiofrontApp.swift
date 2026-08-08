@@ -1,0 +1,26 @@
+import SwiftUI
+
+@main
+struct StudiofrontApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+
+    var body: some Scene {
+        Window("Settings", id: "settings") {
+            SettingsRootView()
+                .environment(appDelegate.settings)
+                .environment(appDelegate.auth)
+        }
+        .windowStyle(.hiddenTitleBar)
+        .windowResizability(.contentSize)
+        .defaultSize(width: SettingsRootView.windowWidth, height: SettingsRootView.defaultHeight)
+        .defaultLaunchBehavior(.suppressed)
+        .commands {
+            CommandGroup(replacing: .appSettings) {
+                Button("Settings…") {
+                    AppDelegate.shared?.openSettingsWindow()
+                }
+                .keyboardShortcut(",", modifiers: .command)
+            }
+        }
+    }
+}

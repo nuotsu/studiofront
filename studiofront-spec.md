@@ -1,4 +1,4 @@
-# Studio Switcher — Build Spec
+# Studiofront — Build Spec
 
 A native macOS menu bar app for agency developers and editors who manage many Sanity Studios across multiple client organizations. It is a fast switcher, not a management console: open it, find the right client Studio, jump there.
 
@@ -49,7 +49,7 @@ The governing rule: **the popover renders from local cache immediately, then rec
 Build as a single app target plus local Swift packages, so the network and presence layers are testable without launching the UI.
 
 ```
-StudioSwitcher/            app target — shell, popover, settings window
+Studiofront/               app target — shell, popover, settings window
 Packages/
   SanityKit/               Management API client, models, token storage
   PresenceKit/             PresenceProvider protocol + implementations

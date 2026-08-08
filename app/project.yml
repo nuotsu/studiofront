@@ -1,0 +1,70 @@
+name: Studiofront
+options:
+  bundleIdPrefix: dev.nuotsu
+  deploymentTarget:
+    macOS: "26.0"
+  createIntermediateGroups: true
+
+configFiles:
+  Debug: Config/Debug.xcconfig
+  Release: Config/Release.xcconfig
+
+packages:
+  ThemeKit:
+    path: Packages/ThemeKit
+  StudioStore:
+    path: Packages/StudioStore
+  SanityKit:
+    path: Packages/SanityKit
+  PresenceKit:
+    path: Packages/PresenceKit
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    MACOSX_DEPLOYMENT_TARGET: "26.0"
+    ENABLE_HARDENED_RUNTIME: YES
+    ARCHS: arm64
+    ONLY_ACTIVE_ARCH: YES
+
+targets:
+  Studiofront:
+    type: application
+    platform: macOS
+    sources:
+      - path: Studiofront
+    dependencies:
+      - package: ThemeKit
+      - package: StudioStore
+      - package: SanityKit
+    settings:
+      base:
+        PRODUCT_NAME: Studiofront
+        PRODUCT_BUNDLE_IDENTIFIER: dev.nuotsu.Studiofront
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_ENTITLEMENTS: Studiofront/Resources/Studiofront.entitlements
+        OTHER_CODE_SIGN_FLAGS: "--timestamp"
+        INFOPLIST_KEY_LSUIElement: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Studiofront
+        INFOPLIST_KEY_CFBundleName: Studiofront
+        INFOPLIST_KEY_CFBundleShortVersionString: "0.1.0"
+        INFOPLIST_KEY_CFBundleVersion: "1"
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.developer-tools
+        INFOPLIST_KEY_NSHumanReadableCopyright: "Copyright © 2026 nuotsu."
+    entitlements:
+      path: Studiofront/Resources/Studiofront.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.network.client: true
+        com.apple.security.files.user-selected.read-only: true
+        com.apple.security.temporary-exception.files.home-relative-path.read-only:
+          - /.config/sanity/config.json
+
+schemes:
+  Studiofront:
+    build:
+      targets:
+        Studiofront: all
+    run:
+      config: Debug
