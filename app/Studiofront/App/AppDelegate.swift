@@ -27,7 +27,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppDelegate.shared = self
 
-        NSApp.setActivationPolicy(.regular)
+        applyActivationPolicy()
         NSApp.activate(ignoringOtherApps: true)
         clearStaleStatusItemVisibility()
         ensureStatusItem()
@@ -218,18 +218,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         }
     }
 
+    /// `showInDock` is the only input: an accessory app can still own and focus
+    /// the Settings window, so keeping the icon for an open window would just
+    /// contradict the setting.
     func applyActivationPolicy() {
-        if settings.showInDock {
-            NSApp.setActivationPolicy(.regular)
-            return
-        }
-        let settingsVisible = NSApp.windows.contains { $0.isVisible && Self.isSettingsWindow($0) }
-        NSApp.setActivationPolicy(settingsVisible ? .regular : .accessory)
+        NSApp.setActivationPolicy(settings.showInDock ? .regular : .accessory)
     }
 
     func openSettingsWindow(pane: SettingsPane = .general) {
         auth.selectedSettingsPane = pane
-        NSApp.setActivationPolicy(.regular)
+        applyActivationPolicy()
         NSApp.activate(ignoringOtherApps: true)
         // Post while the popover is still mounted so SwiftUI `openWindow` can run.
         NotificationCenter.default.post(name: .openSettingsRequested, object: nil)
@@ -267,6 +265,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         configureSettingsWindowChrome(window)
         window.makeKeyAndOrderFront(nil)
         window.collectionBehavior.insert(.moveToActiveSpace)
+        // Accessory apps are not activated for free the way a dock-visible app
+        // is, and the window only exists by this point, so re-activate here or
+        // Settings can surface unfocused behind whatever was frontmost.
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     /// Accessory apps often never materialize a SwiftUI `Window` / `Settings` scene
