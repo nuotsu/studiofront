@@ -25,7 +25,7 @@ struct PopoverRootView: View {
         .frame(width: metrics.popoverWidth)
         .frame(maxHeight: metrics.popoverMaxHeight)
         .background(ThemedSurface())
-        .clipShape(RoundedRectangle(cornerRadius: metrics.panelCornerRadius, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: theme.cornerRadius(metrics.panelCornerRadius), style: theme.cornerStyle))
         .studioTheme(theme)
         .preferredColorScheme(settings.appearancePreference.colorScheme)
         .id(settings.themePreference)
@@ -108,7 +108,7 @@ struct PopoverRootView: View {
             }
         }
         .padding(theme.metrics.headerPadding)
-        .background(theme.colors.panelFill)
+        .background(theme.surface.kind == .glass ? Color.clear : theme.colors.panelFill)
     }
 
     private var authBanner: some View {
@@ -127,13 +127,13 @@ struct PopoverRootView: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
             .background(theme.colors.primaryBackground)
-            .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: theme.cornerRadius(5), style: theme.cornerStyle))
             .accessibilityLabel(auth.needsReconnect ? "Reconnect" : "Connect Sanity")
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
         .background(theme.colors.chipBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: theme.cornerRadius(8), style: theme.cornerStyle))
     }
 
     private var list: some View {
