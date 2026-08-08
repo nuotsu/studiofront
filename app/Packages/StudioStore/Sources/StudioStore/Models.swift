@@ -6,12 +6,18 @@ public struct SanityProject: Sendable, Identifiable, Hashable, Codable {
     public var organizationId: String?
     public var organizationName: String?
     public var studioHost: String?
+    /// From the (deprecated but still populated) `metadata.externalStudioHost`
+    /// project field — where the Studio is embedded on the developer's own
+    /// domain instead of a `.sanity.studio` subdomain.
+    public var externalStudioHost: URL?
     public var datasets: [Dataset]
     public var members: [Member]
     public var currentUserRole: String?
     public var createdAt: Date
     /// Fixture / favicon stand-in. Nil → initials on the theme tag background.
     public var brandColorHex: String?
+    /// From `isDisabledByUser` — Sanity Manage's "Archived" state.
+    public var isArchived: Bool
 
     public init(
         id: String,
@@ -19,21 +25,25 @@ public struct SanityProject: Sendable, Identifiable, Hashable, Codable {
         organizationId: String? = nil,
         organizationName: String? = nil,
         studioHost: String? = nil,
+        externalStudioHost: URL? = nil,
         datasets: [Dataset] = [],
         members: [Member] = [],
         currentUserRole: String? = nil,
         createdAt: Date = Date(),
-        brandColorHex: String? = nil
+        brandColorHex: String? = nil,
+        isArchived: Bool = false
     ) {
         self.id = id
         self.displayName = displayName
         self.organizationId = organizationId
         self.organizationName = organizationName
         self.studioHost = studioHost
+        self.externalStudioHost = externalStudioHost
         self.datasets = datasets
         self.members = members
         self.currentUserRole = currentUserRole
         self.createdAt = createdAt
+        self.isArchived = isArchived
         self.brandColorHex = brandColorHex
     }
 
@@ -188,6 +198,18 @@ public struct ProjectRow: Sendable, Identifiable, Hashable {
     public var displayTitle: String {
         curation.nickname ?? project.displayName
     }
+
+    /// Where the "Studio" button should actually go: a deployed `.sanity.studio`
+    /// subdomain first, then the project's own domain if the Studio is embedded
+    /// there (`metadata.externalStudioHost`), else the Manage page as last resort.
+    public var resolvedStudioURL: URL? {
+        if let studioHost = project.studioHost, !studioHost.isEmpty,
+           let url = URL(string: "https://\(studioHost).sanity.studio")
+        {
+            return url
+        }
+        return project.externalStudioHost ?? project.manageURL
+    }
 }
 
 public enum GroupBy: String, CaseIterable, Identifiable, Sendable {
@@ -207,12 +229,20 @@ public enum GroupBy: String, CaseIterable, Identifiable, Sendable {
 public enum RecencyBucket: String, CaseIterable, Sendable {
     case today
     case yesterday
+    case thisWeek
+    case lastWeek
+    case thisMonth
+    case lastMonth
     case earlier
 
     public var title: String {
         switch self {
         case .today: "Today"
         case .yesterday: "Yesterday"
+        case .thisWeek: "This week"
+        case .lastWeek: "Last week"
+        case .thisMonth: "This month"
+        case .lastMonth: "Last month"
         case .earlier: "Earlier"
         }
     }
@@ -224,6 +254,22 @@ public enum RecencyBucket: String, CaseIterable, Sendable {
            calendar.isDate(date, inSameDayAs: yesterday)
         {
             return .yesterday
+        }
+        if calendar.isDate(date, equalTo: now, toGranularity: .weekOfYear) {
+            return .thisWeek
+        }
+        if let lastWeek = calendar.date(byAdding: .weekOfYear, value: -1, to: now),
+           calendar.isDate(date, equalTo: lastWeek, toGranularity: .weekOfYear)
+        {
+            return .lastWeek
+        }
+        if calendar.isDate(date, equalTo: now, toGranularity: .month) {
+            return .thisMonth
+        }
+        if let lastMonth = calendar.date(byAdding: .month, value: -1, to: now),
+           calendar.isDate(date, equalTo: lastMonth, toGranularity: .month)
+        {
+            return .lastMonth
         }
         return .earlier
     }

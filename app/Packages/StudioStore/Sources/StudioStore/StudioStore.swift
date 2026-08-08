@@ -13,6 +13,7 @@ public final class StudioStore {
     public var copiedKey: String?
     public var searchFocusToken: UInt = 0
     public var isRefreshing: Bool = false
+    public var hideArchivedProjects: Bool = true
     public var onCurationChanged: (() -> Void)?
     public var onRefreshRequested: (() -> Void)?
 
@@ -36,10 +37,14 @@ public final class StudioStore {
         )
     }
 
-    public var totalCount: Int { rows.filter { !$0.curation.isHidden }.count }
+    public var totalCount: Int { rows.filter { !$0.curation.isHidden && !isArchivedAndHidden($0) }.count }
 
     public var visibleRows: [ProjectRow] {
-        rows.filter { !$0.curation.isHidden && matches($0) }
+        rows.filter { !$0.curation.isHidden && !isArchivedAndHidden($0) && matches($0) }
+    }
+
+    private func isArchivedAndHidden(_ row: ProjectRow) -> Bool {
+        hideArchivedProjects && row.project.isArchived
     }
 
     public var curationSnapshot: [ProjectCuration] {
@@ -56,7 +61,7 @@ public final class StudioStore {
 
         let favorites = visible.filter(\.curation.isFavorite)
         if !favorites.isEmpty {
-            result.append(ProjectGroup(id: "favorites", title: "Favorites", items: favorites))
+            result.append(ProjectGroup(id: "favorites", title: "Favorites", items: sortedByRecency(favorites)))
         }
 
         let rest = visible.filter { !$0.curation.isFavorite }
@@ -69,7 +74,7 @@ public final class StudioStore {
                 seen.insert(org.id)
                 let items = rest.filter { $0.project.organizationId == org.id }
                 if !items.isEmpty {
-                    result.append(ProjectGroup(id: org.id, title: org.name, organizationId: org.id, items: items))
+                    result.append(ProjectGroup(id: org.id, title: org.name, organizationId: org.id, items: sortedByRecency(items)))
                 }
             }
             let leftoverOrgs = Dictionary(grouping: rest.filter { row in
@@ -82,11 +87,11 @@ public final class StudioStore {
                     == .orderedAscending
             }) {
                 let title = items.first?.project.organizationName ?? id
-                result.append(ProjectGroup(id: id, title: title, organizationId: id, items: items))
+                result.append(ProjectGroup(id: id, title: title, organizationId: id, items: sortedByRecency(items)))
             }
             let orphans = rest.filter { $0.project.organizationId == nil }
             if !orphans.isEmpty {
-                result.append(ProjectGroup(id: "other", title: "Other", items: orphans))
+                result.append(ProjectGroup(id: "other", title: "Other", items: sortedByRecency(orphans)))
             }
         case .lastEdited:
             for bucket in RecencyBucket.allCases {
@@ -97,11 +102,23 @@ public final class StudioStore {
                     return RecencyBucket.bucket(for: edited) == bucket
                 }
                 if !items.isEmpty {
-                    result.append(ProjectGroup(id: bucket.rawValue, title: bucket.title, items: items))
+                    result.append(ProjectGroup(id: bucket.rawValue, title: bucket.title, items: sortedByRecency(items)))
                 }
             }
         }
         return result
+    }
+
+    /// Newest last-edited document first; projects with no activity data sink to the bottom.
+    private func sortedByRecency(_ items: [ProjectRow]) -> [ProjectRow] {
+        items.sorted { lhs, rhs in
+            switch (lhs.activity.lastEditedDocument?.editedAt, rhs.activity.lastEditedDocument?.editedAt) {
+            case let (l?, r?): return l > r
+            case (.some, .none): return true
+            case (.none, .some): return false
+            case (.none, .none): return false
+            }
+        }
     }
 
     public var flatVisibleIDs: [String] {
@@ -271,10 +288,23 @@ public final class StudioStore {
             row.curation.frontendLinks.map(\.label).joined(separator: " "),
             row.curation.extraStudioLinks.map(\.label).joined(separator: " "),
         ]
-        return fields.contains { normalize($0).contains(needle) }
+        return fields.contains { field in
+            let normalized = normalize(field)
+            return normalized.contains(needle) || initials(of: normalized).contains(needle)
+        }
     }
 
     private func normalize(_ string: String) -> String {
         string.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+    }
+
+    /// First letter of each word, e.g. "elevate experiences" -> "ee", so a
+    /// query like "ee" matches "Elevate Experiences" the way an acronym would.
+    private func initials(of normalizedString: String) -> String {
+        normalizedString
+            .split(whereSeparator: { !$0.isLetter && !$0.isNumber })
+            .compactMap(\.first)
+            .map(String.init)
+            .joined()
     }
 }

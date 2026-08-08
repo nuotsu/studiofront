@@ -72,7 +72,7 @@ public actor SanityClient {
         organizationId: String
     ) async throws -> [RemoteStudioApp] {
         let dtos: [UserApplicationDTO] = try await get(
-            path: "\(SanityAPI.version)/user-applications",
+            path: "\(SanityAPI.userApplicationsVersion)/user-applications",
             token: token,
             query: [
                 URLQueryItem(name: "organizationId", value: organizationId),
@@ -81,7 +81,41 @@ public actor SanityClient {
         )
         return dtos.compactMap { dto in
             guard let host = dto.appHost, !host.isEmpty else { return nil }
-            return RemoteStudioApp(projectId: dto.projectId, appHost: host)
+            return RemoteStudioApp(projectId: dto.projectId, appHost: host, isExternal: dto.urlType == "external")
+        }
+    }
+
+    /// Content query against the project's dataset over the CDN, for activity data
+    /// not available from the Management API (§6.3). Never throws for lack of
+    /// dataset access — callers should treat `.unauthorized`/`.notFound` as a
+    /// normal, quiet "no activity" state rather than a reportable error.
+    public func lastEditedDocument(
+        token: String,
+        projectId: String,
+        dataset: String,
+        etag: String? = nil
+    ) async throws -> SanityConditional<RemoteEditedDocument?> {
+        let groq = """
+        {
+          "published": *[!(_id in path("drafts.**")) && !(_id in path("_.**"))] | order(_updatedAt desc)[0]{_id, _type, _updatedAt, title, name},
+          "draft": *[_id in path("drafts.**") && !(_id in path("_.**"))] | order(_updatedAt desc)[0]{_id, _type, _updatedAt, title, name}
+        }
+        """
+        guard var components = URLComponents(
+            url: URL(string: "https://\(projectId).apicdn.sanity.io")!,
+            resolvingAgainstBaseURL: false
+        ) else {
+            throw SanityError.transport("Couldn’t reach Sanity.")
+        }
+        components.path = "/\(SanityAPI.version)/data/query/\(dataset)"
+        components.queryItems = [URLQueryItem(name: "query", value: groq)]
+        guard let url = components.url else {
+            throw SanityError.transport("Couldn’t reach Sanity.")
+        }
+
+        let result: SanityConditional<QueryEnvelope> = try await performGET(url: url, token: token, etag: etag)
+        return result.map { envelope in
+            RemoteEditedDocument.resolving(published: envelope.published, draft: envelope.draft)
         }
     }
 
@@ -103,7 +137,6 @@ public actor SanityClient {
         query: [URLQueryItem] = [],
         etag: String?
     ) async throws -> SanityConditional<T> {
-        try Task.checkCancellation()
         var url = SanityAPI.baseURL
         for component in path.split(separator: "/") {
             url = url.appending(path: String(component))
@@ -116,7 +149,15 @@ public actor SanityClient {
             }
             url = resolved
         }
+        return try await performGET(url: url, token: token, etag: etag)
+    }
 
+    private func performGET<T: Decodable & Sendable>(
+        url: URL,
+        token: String,
+        etag: String?
+    ) async throws -> SanityConditional<T> {
+        try Task.checkCancellation()
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")

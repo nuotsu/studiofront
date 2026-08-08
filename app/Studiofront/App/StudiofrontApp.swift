@@ -10,7 +10,7 @@ struct StudiofrontApp: App {
                 .environment(appDelegate.settings)
                 .environment(appDelegate.auth)
         }
-        .windowStyle(.hiddenTitleBar)
+        .windowToolbarStyle(.unified(showsTitle: false))
         .windowResizability(.contentSize)
         .defaultSize(width: SettingsRootView.windowWidth, height: SettingsRootView.defaultHeight)
         .defaultLaunchBehavior(.suppressed)

@@ -23,7 +23,6 @@ struct SettingsRootView: View {
                     ideal: Self.sidebarWidth,
                     max: Self.sidebarWidth
                 )
-                .toolbar(removing: .sidebarToggle)
         } detail: {
             Group {
                 switch auth.selectedSettingsPane {
@@ -35,9 +34,14 @@ struct SettingsRootView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .ignoresSafeArea(.container, edges: .top)
-            .toolbar(removing: .sidebarToggle)
         }
         .navigationSplitViewStyle(.automatic)
+        // Force an NSToolbar so the sidebar can own a titlebar section (traffic lights).
+        .toolbar {
+            ToolbarSpacer(.flexible)
+        }
+        .toolbar(removing: .sidebarToggle)
+        .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
         .background(SettingsSplitViewTuner())
         .environment(search)
         .frame(
@@ -167,8 +171,8 @@ private extension View {
     }
 }
 
-/// Pins the Tahoe floating sidebar to a fixed leading column instead of
-/// letting extra window width fractionally center it.
+/// Pins the Tahoe floating sidebar to a fixed leading column and stretches it
+/// full-height under the titlebar so traffic lights sit inside the glass.
 private struct SettingsSplitViewTuner: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView {
         let view = NSView(frame: .zero)
@@ -183,6 +187,8 @@ private struct SettingsSplitViewTuner: NSViewRepresentable {
 
     private static func tune(from view: NSView) {
         guard let split = enclosingSplitViewController(from: view) else { return }
+        configureWindowChrome(split.view.window)
+
         for item in split.splitViewItems {
             switch item.behavior {
             case .sidebar:
@@ -192,9 +198,12 @@ private struct SettingsSplitViewTuner: NSViewRepresentable {
                 item.holdingPriority = .defaultHigh
                 item.canCollapse = false
                 item.canCollapseFromWindowResize = false
+                item.allowsFullHeightLayout = true
+                item.titlebarSeparatorStyle = .none
             default:
                 item.holdingPriority = .defaultLow
                 item.automaticallyAdjustsSafeAreaInsets = true
+                item.titlebarSeparatorStyle = .none
             }
         }
         split.minimumThicknessForInlineSidebars = 0
@@ -203,6 +212,15 @@ private struct SettingsSplitViewTuner: NSViewRepresentable {
         if split.splitView.subviews.count > 1 {
             split.splitView.setPosition(SettingsRootView.sidebarWidth, ofDividerAt: 0)
         }
+    }
+
+    private static func configureWindowChrome(_ window: NSWindow?) {
+        guard let window else { return }
+        window.styleMask.insert(.fullSizeContentView)
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
+        window.titlebarSeparatorStyle = .none
+        window.toolbarStyle = .unified
     }
 
     private static func enclosingSplitViewController(from view: NSView) -> NSSplitViewController? {

@@ -144,13 +144,19 @@ final class ProjectSyncService {
             }
 
             var studioHosts: [String: String] = [:]
+            var externalStudioHostsFromApps: [String: URL] = [:]
             for orgID in Set(remote.compactMap(\.organizationId)) {
                 try Task.checkCancellation()
                 guard let apps = try? await client.listStudioApplications(token: token, organizationId: orgID) else {
                     continue
                 }
                 for app in apps {
-                    if let projectId = app.projectId {
+                    guard let projectId = app.projectId else { continue }
+                    if app.isExternal {
+                        if let url = URL(string: app.appHost) {
+                            externalStudioHostsFromApps[projectId] = url
+                        }
+                    } else {
                         studioHosts[projectId] = app.appHost
                     }
                 }
@@ -197,17 +203,33 @@ final class ProjectSyncService {
                     organizationId: project.organizationId,
                     organizationName: project.organizationId.flatMap { orgNames[$0] } ?? project.organizationId,
                     studioHost: project.studioHost ?? studioHosts[project.id],
+                    // `/user-applications` is the current, more accurate source
+                    // (confirmed against the live API: SanityPress 2023's app entry
+                    // points at a different, newer domain than its own deprecated
+                    // metadata.externalStudioHost still records) — prefer it.
+                    externalStudioHost: externalStudioHostsFromApps[project.id] ?? project.externalStudioHost,
                     datasets: datasetsByProject[project.id] ?? [],
                     members: project.members.map { member in
                         Member(id: member.id, displayName: member.id, role: member.role)
                     },
                     currentUserRole: project.members.first(where: { $0.id == currentUserID })?.role,
                     createdAt: project.createdAt == .distantPast ? Date() : project.createdAt,
-                    brandColorHex: project.color.flatMap(Self.normalizedHex)
+                    brandColorHex: project.color.flatMap(Self.normalizedHex),
+                    isArchived: project.isArchived
                 )
             }
             snapshot.cachedAt = Date()
             snapshot.curation = mergedCuration(with: remote.map(\.id))
+
+            let curationByID = Dictionary(uniqueKeysWithValues: snapshot.curation.map { ($0.projectId, $0) })
+            let eligibleIDs = projectIDs.filter { !(curationByID[$0]?.isHidden ?? false) }
+            snapshot.activity = await fetchActivity(
+                token: token,
+                projectIDs: eligibleIDs,
+                datasetsByProject: datasetsByProject,
+                previous: snapshot.activity
+            )
+
             PersistenceStore.save(snapshot)
             applySnapshotToStore()
         } catch is CancellationError {
@@ -219,6 +241,67 @@ final class ProjectSyncService {
         } catch {
             applySnapshotToStore()
         }
+    }
+
+    /// Fetches the last-edited document per project (§6.3). Per-project failures —
+    /// including lack of dataset access, which is expected and not every user
+    /// token grants read access to every org's datasets — resolve to an empty
+    /// `ProjectActivity` rather than surfacing an error or triggering reconnect.
+    /// Cancellation leaves the project's previous cached value untouched.
+    private func fetchActivity(
+        token: String,
+        projectIDs: [String],
+        datasetsByProject: [String: [Dataset]],
+        previous: [String: ProjectActivity]
+    ) async -> [String: ProjectActivity] {
+        var result = previous
+        let limit = SanityClient.datasetConcurrencyLimit
+        let client = self.client
+        for start in stride(from: 0, to: projectIDs.count, by: limit) {
+            if Task.isCancelled { break }
+            let end = min(start + limit, projectIDs.count)
+            let slice = Array(projectIDs[start..<end])
+            await withTaskGroup(of: (String, ProjectActivity?).self) { group in
+                for id in slice {
+                    guard let dataset = Self.primaryDataset(from: datasetsByProject[id] ?? []) else { continue }
+                    group.addTask {
+                        do {
+                            let conditional = try await client.lastEditedDocument(
+                                token: token,
+                                projectId: id,
+                                dataset: dataset
+                            )
+                            let doc: RemoteEditedDocument? = conditional.value ?? nil
+                            guard let doc else { return (id, ProjectActivity()) }
+                            return (id, ProjectActivity(
+                                lastEditedDocument: EditedDocument(
+                                    title: doc.title,
+                                    typeName: doc.typeName,
+                                    editedAt: doc.updatedAt
+                                )
+                            ))
+                        } catch is CancellationError {
+                            return (id, nil)
+                        } catch SanityError.cancelled {
+                            return (id, nil)
+                        } catch {
+                            return (id, ProjectActivity())
+                        }
+                    }
+                }
+                for await (id, activity) in group {
+                    if let activity {
+                        result[id] = activity
+                    }
+                }
+            }
+        }
+        return result
+    }
+
+    private static func primaryDataset(from datasets: [Dataset]) -> String? {
+        if datasets.contains(where: { $0.name == "production" }) { return "production" }
+        return datasets.map(\.name).sorted().first
     }
 
     private func mergedCuration(with remoteIDs: [String]) -> [ProjectCuration] {
@@ -239,7 +322,7 @@ final class ProjectSyncService {
             ProjectRow(
                 project: project,
                 curation: curationByID[project.id] ?? ProjectCuration(projectId: project.id),
-                activity: ProjectActivity(),
+                activity: snapshot.activity[project.id] ?? ProjectActivity(),
                 isUnavailable: false
             )
         }
@@ -255,7 +338,7 @@ final class ProjectSyncService {
                         displayName: curation.nickname ?? curation.projectId
                     ),
                     curation: curation,
-                    activity: ProjectActivity(),
+                    activity: snapshot.activity[curation.projectId] ?? ProjectActivity(),
                     isUnavailable: true
                 )
             )

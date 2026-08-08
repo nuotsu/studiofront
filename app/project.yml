@@ -18,6 +18,9 @@ packages:
     path: Packages/SanityKit
   PresenceKit:
     path: Packages/PresenceKit
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: 2.9.5
 
 settings:
   base:
@@ -38,18 +41,30 @@ targets:
       - package: ThemeKit
       - package: StudioStore
       - package: SanityKit
+      - package: Sparkle
+        product: Sparkle
+    info:
+      path: Studiofront/Resources/Info.plist
+      properties:
+        CFBundleShortVersionString: "0.0.1"
+        CFBundleVersion: "1"
+        SUFeedURL: https://github.com/nuotsu/studiofront/releases/latest/download/appcast.xml
+        SUPublicEDKey: v/SVpv1UO0YocJuBwLCj9eF9DV5SooDM3VxnarGWJf0=
+        SUEnableInstallerLauncherService: true
+        SUEnableAutomaticChecks: true
+        SUAutomaticallyUpdate: true
     settings:
       base:
         PRODUCT_NAME: Studiofront
         PRODUCT_BUNDLE_IDENTIFIER: dev.nuotsu.Studiofront
+        MARKETING_VERSION: "0.0.1"
+        CURRENT_PROJECT_VERSION: "1"
         GENERATE_INFOPLIST_FILE: YES
         CODE_SIGN_ENTITLEMENTS: Studiofront/Resources/Studiofront.entitlements
         OTHER_CODE_SIGN_FLAGS: "--timestamp"
         INFOPLIST_KEY_LSUIElement: YES
         INFOPLIST_KEY_CFBundleDisplayName: Studiofront
         INFOPLIST_KEY_CFBundleName: Studiofront
-        INFOPLIST_KEY_CFBundleShortVersionString: "0.1.0"
-        INFOPLIST_KEY_CFBundleVersion: "1"
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.developer-tools
         INFOPLIST_KEY_NSHumanReadableCopyright: "Copyright © 2026 nuotsu."
     entitlements:
@@ -60,6 +75,9 @@ targets:
         com.apple.security.files.user-selected.read-only: true
         com.apple.security.temporary-exception.files.home-relative-path.read-only:
           - /.config/sanity/config.json
+        com.apple.security.temporary-exception.mach-lookup.global-name:
+          - dev.nuotsu.Studiofront-spks
+          - dev.nuotsu.Studiofront-spki
 
 schemes:
   Studiofront:

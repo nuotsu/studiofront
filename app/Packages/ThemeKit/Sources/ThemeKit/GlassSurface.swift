@@ -7,15 +7,22 @@ public struct GlassSurface: NSViewRepresentable {
     var cornerRadius: CGFloat
     var material: NSVisualEffectView.Material
     var blendingMode: NSVisualEffectView.BlendingMode
+    /// Skips `NSGlassEffectView` even when available. That view's "Liquid Glass"
+    /// rendering has its own baked-in lift/rounding/brightening independent of
+    /// `cornerRadius`, which looks wrong for a plain flat blur strip — use this
+    /// for a predictable, ordinary frosted-glass look instead.
+    var preferSimpleMaterial: Bool
 
     public init(
         cornerRadius: CGFloat,
         material: NSVisualEffectView.Material = .popover,
-        blendingMode: NSVisualEffectView.BlendingMode = .behindWindow
+        blendingMode: NSVisualEffectView.BlendingMode = .behindWindow,
+        preferSimpleMaterial: Bool = false
     ) {
         self.cornerRadius = cornerRadius
         self.material = material
         self.blendingMode = blendingMode
+        self.preferSimpleMaterial = preferSimpleMaterial
     }
 
     public func makeNSView(context: Context) -> PassthroughGlassView {
@@ -23,7 +30,7 @@ public struct GlassSurface: NSViewRepresentable {
         container.autoresizingMask = [.width, .height]
 
         let chrome: NSView
-        if let glassClass = NSClassFromString("NSGlassEffectView") as? NSView.Type {
+        if !preferSimpleMaterial, let glassClass = NSClassFromString("NSGlassEffectView") as? NSView.Type {
             let glass = glassClass.init(frame: .zero)
             glass.autoresizingMask = [.width, .height]
             glass.wantsLayer = true

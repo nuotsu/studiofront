@@ -44,7 +44,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         popover = pop
 
         applyAppearance(settings.appearancePreference)
-        NSApp.setActivationPolicy(.accessory)
+        applyActivationPolicy()
         store.onCurationChanged = { [weak self] in
             self?.sync.persistCuration()
         }
@@ -59,6 +59,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
             await auth.restoreOnLaunch()
             self.sync.loadCache()
         }
+        // Start Sparkle after launch so the first-run permission prompt is not buried.
+        _ = AppUpdater.shared
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -98,6 +100,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
             button.toolTip = "Studiofront"
             button.target = self
             button.action = #selector(statusItemClicked(_:))
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
         statusItem = item
         UserDefaults.standard.set(true, forKey: "NSStatusItem Visible \(Self.statusItemAutosaveName)")
@@ -133,7 +136,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
     }
 
     @objc private func statusItemClicked(_ sender: NSStatusBarButton) {
-        togglePopover()
+        guard let event = NSApp.currentEvent else {
+            togglePopover()
+            return
+        }
+        if event.type == .rightMouseUp || event.modifierFlags.contains(.control) {
+            showStatusItemMenu()
+        } else {
+            togglePopover()
+        }
+    }
+
+    private func showStatusItemMenu() {
+        guard let button = statusItem?.button else { return }
+        closePopover()
+
+        let menu = NSMenu()
+        menu.addItem(withTitle: "Settings", action: #selector(openSettingsFromMenu(_:)), keyEquivalent: "")
+        menu.addItem(withTitle: "Account", action: #selector(openAccountFromMenu(_:)), keyEquivalent: "")
+        menu.addItem(.separator())
+        menu.addItem(withTitle: "Check for Updates…", action: #selector(checkForUpdatesFromMenu(_:)), keyEquivalent: "")
+        for item in menu.items {
+            item.target = self
+        }
+
+        let point = NSPoint(x: 0, y: button.bounds.height + 2)
+        menu.popUp(positioning: nil, at: point, in: button)
+    }
+
+    @objc private func openSettingsFromMenu(_ sender: Any?) {
+        openSettingsWindow(pane: .general)
+    }
+
+    @objc private func openAccountFromMenu(_ sender: Any?) {
+        openSettingsWindow(pane: .account)
+    }
+
+    @objc private func checkForUpdatesFromMenu(_ sender: Any?) {
+        AppUpdater.shared.checkForUpdates(sender)
     }
 
     func togglePopover() {
@@ -161,7 +201,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
     }
 
     func openSelectedStudio() {
-        guard let url = store.selectedRow?.project.studioURL else { return }
+        guard let url = store.selectedRow?.resolvedStudioURL else { return }
         openURL(url)
     }
 
@@ -176,6 +216,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         if let window = NSApp.windows.first(where: Self.isSettingsWindow) {
             window.appearance = preference.nsAppearance
         }
+    }
+
+    func applyActivationPolicy() {
+        if settings.showInDock {
+            NSApp.setActivationPolicy(.regular)
+            return
+        }
+        let settingsVisible = NSApp.windows.contains { $0.isVisible && Self.isSettingsWindow($0) }
+        NSApp.setActivationPolicy(settingsVisible ? .regular : .accessory)
     }
 
     func openSettingsWindow(pane: SettingsPane = .general) {
@@ -203,6 +252,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
     private func configureSettingsWindowChrome(_ window: NSWindow) {
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
+        window.titlebarSeparatorStyle = .none
         window.styleMask.insert([.fullSizeContentView, .resizable])
         window.toolbarStyle = .unified
         window.minSize = NSSize(width: SettingsRootView.windowWidth, height: SettingsRootView.minHeight)
@@ -258,10 +308,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
 
     func windowWillClose(_ notification: Notification) {
         DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            if self.popover?.isShown != true {
-                NSApp.setActivationPolicy(.accessory)
-            }
+            self?.applyActivationPolicy()
         }
     }
 
@@ -292,13 +339,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         removeKeyMonitor()
         sync.cancel()
         DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            let settingsVisible = NSApp.windows.contains { $0.isVisible && Self.isSettingsWindow($0) }
-            if settingsVisible {
-                NSApp.setActivationPolicy(.regular)
-            } else {
-                NSApp.setActivationPolicy(.accessory)
-            }
+            self?.applyActivationPolicy()
         }
     }
 

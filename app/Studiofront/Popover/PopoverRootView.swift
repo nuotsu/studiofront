@@ -31,6 +31,7 @@ struct PopoverRootView: View {
         .id(settings.themePreference)
         .onAppear {
             searchFocused = true
+            store.hideArchivedProjects = settings.hideArchivedProjects
             store.reconcileSelection()
         }
         .onChange(of: store.searchFocusToken) { _, _ in
@@ -40,6 +41,10 @@ struct PopoverRootView: View {
             store.reconcileSelection()
         }
         .onChange(of: store.groupBy) { _, _ in
+            store.reconcileSelection()
+        }
+        .onChange(of: settings.hideArchivedProjects) { _, hide in
+            store.hideArchivedProjects = hide
             store.reconcileSelection()
         }
         .onChange(of: settings.appearancePreference) { _, preference in
@@ -103,6 +108,7 @@ struct PopoverRootView: View {
             }
         }
         .padding(theme.metrics.headerPadding)
+        .background(theme.colors.panelFill)
     }
 
     private var authBanner: some View {
@@ -134,23 +140,27 @@ struct PopoverRootView: View {
         let theme = settings.resolvedTheme
         return ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 0) {
+                LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
                     ForEach(store.groups) { group in
-                        SectionHeader(
-                            title: group.title,
-                            accessory: group.organizationId,
-                            accessoryCopied: store.copiedOrganizationID == group.organizationId,
-                            onAccessory: group.organizationId.map { id in
-                                { store.copyOrganizationID(id) }
-                            },
-                            isFavorite: group.organizationId.map(store.isOrganizationFavorite),
-                            onToggleFavorite: group.organizationId.map { id in
-                                { store.toggleOrganizationFavorite(id) }
+                        Section {
+                            ForEach(group.items) { row in
+                                ProjectRowView(row: row, isSelected: store.selectedID == row.id)
+                                    .id(row.id)
                             }
-                        )
-                        ForEach(group.items) { row in
-                            ProjectRowView(row: row, isSelected: store.selectedID == row.id)
-                                .id(row.id)
+                        } header: {
+                            SectionHeader(
+                                title: group.title,
+                                itemCount: group.organizationId != nil ? group.items.count : nil,
+                                accessory: group.organizationId,
+                                accessoryCopied: store.copiedOrganizationID == group.organizationId,
+                                onAccessory: group.organizationId.map { id in
+                                    { store.copyOrganizationID(id) }
+                                },
+                                isFavorite: group.organizationId.map(store.isOrganizationFavorite),
+                                onToggleFavorite: group.organizationId.map { id in
+                                    { store.toggleOrganizationFavorite(id) }
+                                }
+                            )
                         }
                     }
 
@@ -159,10 +169,12 @@ struct PopoverRootView: View {
                             .font(.system(size: 11))
                             .foregroundStyle(theme.colors.faint)
                             .frame(maxWidth: .infinity)
+                            .padding(.horizontal, theme.metrics.listPadding.leading)
                             .padding(.vertical, 26)
                     }
                 }
-                .padding(theme.metrics.listPadding)
+                .padding(.top, theme.metrics.listPadding.top)
+                .padding(.bottom, theme.metrics.listPadding.bottom)
             }
             .frame(maxHeight: theme.metrics.listMaxHeight)
             .onChange(of: store.selectedID) { _, id in
@@ -182,7 +194,7 @@ struct PopoverRootView: View {
         if store.isRefreshing, store.totalCount == 0 {
             return "Refreshing…"
         }
-        return "\(store.visibleRows.count) of \(store.totalCount) projects"
+        return "\(store.visibleRows.count) projects"
     }
 
     private var emptyListMessage: String {

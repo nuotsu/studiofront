@@ -9,7 +9,10 @@ enum RelativeTimestamp {
         if interval < 24 * 3600 { return "\(max(1, Int((interval / 3600).rounded())))h ago" }
         let days = Int((interval / (24 * 3600)).rounded())
         if days <= 1 { return "yesterday" }
-        return "\(days)d ago"
+        if days < 7 { return "\(days)d ago" }
+        if days < 31 { return "\(max(1, days / 7))wk ago" }
+        if days < 365 { return "\(max(1, days / 30))mo ago" }
+        return "\(max(1, days / 365))yr ago"
     }
 }
 

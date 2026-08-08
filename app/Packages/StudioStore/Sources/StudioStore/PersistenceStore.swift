@@ -20,7 +20,7 @@ public struct PersistedOrganization: Sendable, Codable, Hashable, Identifiable {
 }
 
 public struct PersistedSnapshot: Sendable, Codable {
-    public static let currentSchemaVersion = 1
+    public static let currentSchemaVersion = 2
 
     public var schemaVersion: Int
     public var cachedAt: Date?
@@ -28,6 +28,7 @@ public struct PersistedSnapshot: Sendable, Codable {
     public var organizations: [PersistedOrganization]
     public var curation: [ProjectCuration]
     public var etags: [String: String]
+    public var activity: [String: ProjectActivity]
 
     public init(
         schemaVersion: Int = PersistedSnapshot.currentSchemaVersion,
@@ -35,7 +36,8 @@ public struct PersistedSnapshot: Sendable, Codable {
         projects: [SanityProject] = [],
         organizations: [PersistedOrganization] = [],
         curation: [ProjectCuration] = [],
-        etags: [String: String] = [:]
+        etags: [String: String] = [:],
+        activity: [String: ProjectActivity] = [:]
     ) {
         self.schemaVersion = schemaVersion
         self.cachedAt = cachedAt
@@ -43,6 +45,7 @@ public struct PersistedSnapshot: Sendable, Codable {
         self.organizations = organizations
         self.curation = curation
         self.etags = etags
+        self.activity = activity
     }
 }
 

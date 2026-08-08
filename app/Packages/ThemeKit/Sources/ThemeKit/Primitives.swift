@@ -30,6 +30,8 @@ public struct CopyChip: View {
     var accessibilityName: String
     var action: () -> Void
 
+    @State private var isHovered = false
+
     public init(text: String, copied: Bool, accessibilityName: String, action: @escaping () -> Void) {
         self.text = text
         self.copied = copied
@@ -42,17 +44,10 @@ public struct CopyChip: View {
         Button(action: action) {
             Text(copied ? "copied ✓" : text)
                 .font(theme.typography.chip)
-                .foregroundStyle(copied ? colors.copied : colors.sub)
-                .padding(.horizontal, 4)
-                .padding(.vertical, 1.5)
-                .background(copied ? colors.copied.opacity(0.14) : colors.chipBackground)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 3, style: .continuous)
-                        .strokeBorder(copied ? colors.copied.opacity(0.45) : colors.chipBorder, lineWidth: 1)
-                )
-                .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
+                .foregroundStyle(copied ? colors.copied : colors.sub.opacity(isHovered ? 1 : 0.55))
         }
         .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
         .accessibilityLabel(copied ? "Copied" : accessibilityName)
     }
 }
@@ -116,14 +111,18 @@ public struct IconButton: View {
 public struct SectionHeader: View {
     @Environment(\.studioTheme) private var theme
     var title: String
+    var itemCount: Int?
     var accessory: String?
     var accessoryCopied: Bool
     var onAccessory: (() -> Void)?
     var isFavorite: Bool?
     var onToggleFavorite: (() -> Void)?
 
+    @State private var isAccessoryHovered = false
+
     public init(
         title: String,
+        itemCount: Int? = nil,
         accessory: String? = nil,
         accessoryCopied: Bool = false,
         onAccessory: (() -> Void)? = nil,
@@ -131,6 +130,7 @@ public struct SectionHeader: View {
         onToggleFavorite: (() -> Void)? = nil
     ) {
         self.title = title
+        self.itemCount = itemCount
         self.accessory = accessory
         self.accessoryCopied = accessoryCopied
         self.onAccessory = onAccessory
@@ -154,7 +154,7 @@ public struct SectionHeader: View {
                 .accessibilityLabel(isFavorite ? "Remove organization from favorites" : "Add organization to favorites")
             }
 
-            Text(title.uppercased())
+            Text(itemCount.map { "\(title.uppercased()) (\($0))" } ?? title.uppercased())
                 .font(theme.typography.section)
                 .tracking(0.7)
                 .foregroundStyle(colors.faint)
@@ -166,9 +166,10 @@ public struct SectionHeader: View {
                     Text(accessoryCopied ? "copied ✓" : accessory)
                         .font(theme.typography.chip)
                         .tracking(0.2)
-                        .foregroundStyle(accessoryCopied ? colors.copied : colors.faint)
+                        .foregroundStyle(accessoryCopied ? colors.copied : colors.faint.opacity(isAccessoryHovered ? 1 : 0.55))
                 }
                 .buttonStyle(.plain)
+                .onHover { isAccessoryHovered = $0 }
                 .accessibilityLabel(accessoryCopied ? "Copied" : "Copy organization ID \(accessory)")
             }
 
@@ -176,9 +177,22 @@ public struct SectionHeader: View {
                 .fill(colors.divider)
                 .frame(height: 1)
         }
-        .padding(.horizontal, 8)
-        .padding(.top, 8)
+        .padding(.leading, 8 + theme.metrics.listPadding.leading)
+        .padding(.trailing, 8 + theme.metrics.listPadding.trailing)
+        .padding(.top, 3)
         .padding(.bottom, 3)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(backing)
+    }
+
+    @ViewBuilder
+    private var backing: some View {
+        if theme.surface.kind == .glass {
+            GlassSurface(cornerRadius: 0, blendingMode: .withinWindow, preferSimpleMaterial: true)
+                .allowsHitTesting(false)
+        } else {
+            theme.colors.panelFill
+        }
     }
 }
 
@@ -331,10 +345,12 @@ public struct ProjectAvatar: View {
     @Environment(\.studioTheme) private var theme
     var name: String
     var brandHex: String?
+    var favicon: Image?
 
-    public init(name: String, brandHex: String?) {
+    public init(name: String, brandHex: String?, favicon: Image? = nil) {
         self.name = name
         self.brandHex = brandHex
+        self.favicon = favicon
     }
 
     public var body: some View {
@@ -342,7 +358,14 @@ public struct ProjectAvatar: View {
         let letter = String(name.prefix(1)).uppercased()
         let initials = DisplayInitials.from(name)
         ZStack {
-            if let brandHex {
+            if let favicon {
+                theme.colors.tagBackground
+                favicon
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: size, height: size)
+                    .clipped()
+            } else if let brandHex {
                 Color(hex: brandHex)
                 Text(letter)
                     .font(theme.typography.avatar)

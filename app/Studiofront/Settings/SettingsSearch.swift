@@ -3,9 +3,11 @@ import Observation
 import SwiftUI
 
 enum SettingsSearchTarget: String, Hashable, CaseIterable {
+    case showInDock
+    case refreshInterval
+    case hideArchivedProjects
     case theme
     case appearance
-    case refreshInterval
     case accountIdentity
     case signOut
     case cliLogin
@@ -24,6 +26,27 @@ struct SettingsSearchItem: Identifiable, Hashable {
 enum SettingsSearchIndex {
     static let all: [SettingsSearchItem] = [
         SettingsSearchItem(
+            title: "Show in Dock",
+            keywords: ["dock", "show", "icon", "menubar", "menu bar"],
+            pane: .general,
+            target: .showInDock,
+            systemImage: "dock.rectangle"
+        ),
+        SettingsSearchItem(
+            title: "Refresh interval",
+            keywords: ["refresh", "interval", "sync", "minutes"],
+            pane: .general,
+            target: .refreshInterval,
+            systemImage: "arrow.clockwise"
+        ),
+        SettingsSearchItem(
+            title: "Hide archived projects",
+            keywords: ["archive", "archived", "hide", "disabled"],
+            pane: .general,
+            target: .hideArchivedProjects,
+            systemImage: "archivebox"
+        ),
+        SettingsSearchItem(
             title: "Theme",
             keywords: ["theme", "liquid glass", "sanity ui"],
             pane: .general,
@@ -36,13 +59,6 @@ enum SettingsSearchIndex {
             pane: .general,
             target: .appearance,
             systemImage: "circle.lefthalf.filled"
-        ),
-        SettingsSearchItem(
-            title: "Refresh interval",
-            keywords: ["refresh", "interval", "sync", "minutes"],
-            pane: .general,
-            target: .refreshInterval,
-            systemImage: "arrow.clockwise"
         ),
         SettingsSearchItem(
             title: "Account",
