@@ -133,11 +133,11 @@ public struct ThemedSurface: View {
                 GlassSurface(cornerRadius: metrics.panelCornerRadius)
                     .allowsHitTesting(false)
             } else {
-                RoundedRectangle(cornerRadius: metrics.panelCornerRadius, style: .continuous)
+                RoundedRectangle(cornerRadius: theme.cornerRadius(metrics.panelCornerRadius), style: theme.cornerStyle)
                     .fill(colors.panelFill)
             }
 
-            RoundedRectangle(cornerRadius: metrics.panelCornerRadius, style: .continuous)
+            RoundedRectangle(cornerRadius: theme.cornerRadius(metrics.panelCornerRadius), style: theme.cornerStyle)
                 .strokeBorder(colors.panelBorder, lineWidth: 1)
         }
     }

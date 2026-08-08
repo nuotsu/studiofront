@@ -17,7 +17,7 @@ public struct RowContainer<Content: View>: View {
         content()
             .padding(metrics.rowPadding)
             .background(
-                RoundedRectangle(cornerRadius: metrics.rowCornerRadius, style: .continuous)
+                RoundedRectangle(cornerRadius: theme.cornerRadius(metrics.rowCornerRadius), style: theme.cornerStyle)
                     .fill(isSelected ? theme.colors.selection : (isHovered ? theme.colors.hover : .clear))
             )
     }
@@ -70,7 +70,7 @@ public struct PrimaryButton: View {
                 .padding(.horizontal, 9)
                 .padding(.vertical, 4)
                 .background(theme.colors.primaryBackground)
-                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: theme.cornerRadius(6), style: theme.cornerStyle))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(title)
@@ -98,10 +98,10 @@ public struct IconButton: View {
                 .frame(width: metrics.iconButtonSize.width, height: metrics.iconButtonSize.height)
                 .background(theme.colors.buttonBackground)
                 .overlay(
-                    RoundedRectangle(cornerRadius: metrics.iconButtonCornerRadius, style: .continuous)
+                    RoundedRectangle(cornerRadius: theme.cornerRadius(metrics.iconButtonCornerRadius), style: theme.cornerStyle)
                         .strokeBorder(theme.colors.chipBorder, lineWidth: 1)
                 )
-                .clipShape(RoundedRectangle(cornerRadius: metrics.iconButtonCornerRadius, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: theme.cornerRadius(metrics.iconButtonCornerRadius), style: theme.cornerStyle))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(accessibilityLabel)
@@ -264,10 +264,10 @@ public struct TypeBadge: View {
             .frame(width: theme.metrics.typeBadgeSize, height: theme.metrics.typeBadgeSize)
             .background(theme.colors.chipBackground)
             .overlay(
-                RoundedRectangle(cornerRadius: theme.metrics.typeBadgeCornerRadius, style: .continuous)
+                RoundedRectangle(cornerRadius: theme.cornerRadius(theme.metrics.typeBadgeCornerRadius), style: theme.cornerStyle)
                     .strokeBorder(theme.colors.chipBorder, lineWidth: 1)
             )
-            .clipShape(RoundedRectangle(cornerRadius: theme.metrics.typeBadgeCornerRadius, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: theme.cornerRadius(theme.metrics.typeBadgeCornerRadius), style: theme.cornerStyle))
             .accessibilityLabel("Schema type: \(typeName)")
     }
 }
@@ -292,17 +292,17 @@ public struct SearchFieldChrome<Content: View>: View {
                 .padding(.horizontal, 5)
                 .padding(.vertical, 2)
                 .background(theme.colors.chipBackground)
-                .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: theme.cornerRadius(4), style: theme.cornerStyle))
                 .accessibilityHidden(true)
         }
         .padding(.horizontal, 9)
         .padding(.vertical, 6)
         .background(theme.colors.fieldBackground)
         .overlay(
-            RoundedRectangle(cornerRadius: theme.metrics.searchFieldCornerRadius, style: .continuous)
+            RoundedRectangle(cornerRadius: theme.cornerRadius(theme.metrics.searchFieldCornerRadius), style: theme.cornerStyle)
                 .strokeBorder(theme.colors.fieldBorder, lineWidth: 1)
         )
-        .clipShape(RoundedRectangle(cornerRadius: theme.metrics.searchFieldCornerRadius, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: theme.cornerRadius(theme.metrics.searchFieldCornerRadius), style: theme.cornerStyle))
     }
 }
 
@@ -329,7 +329,7 @@ public struct GroupByControl<Value: Hashable>: View {
                         .padding(.horizontal, 7)
                         .padding(.vertical, 2)
                         .background(on ? theme.colors.segmentOn : Color.clear)
-                        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                        .clipShape(RoundedRectangle(cornerRadius: theme.cornerRadius(4), style: theme.cornerStyle))
                 }
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(on ? .isSelected : [])
@@ -337,7 +337,7 @@ public struct GroupByControl<Value: Hashable>: View {
         }
         .padding(2)
         .background(theme.colors.segmentBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: theme.cornerRadius(6), style: theme.cornerStyle))
     }
 }
 
@@ -378,9 +378,9 @@ public struct ProjectAvatar: View {
             }
         }
         .frame(width: size, height: size)
-        .clipShape(RoundedRectangle(cornerRadius: theme.metrics.avatarCornerRadius, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: theme.cornerRadius(theme.metrics.avatarCornerRadius), style: theme.cornerStyle))
         .overlay(
-            RoundedRectangle(cornerRadius: theme.metrics.avatarCornerRadius, style: .continuous)
+            RoundedRectangle(cornerRadius: theme.cornerRadius(theme.metrics.avatarCornerRadius), style: theme.cornerStyle)
                 .strokeBorder(theme.colors.chipBorder, lineWidth: 1)
         )
         .accessibilityHidden(true)

@@ -7,6 +7,20 @@ public protocol Theme: Sendable {
     var surface: SurfaceStyle { get }
 }
 
+extension Theme {
+    /// Sanity UI is a flat, non-glass design language and uses its own fixed
+    /// 0.1875rem (3pt) corner radius instead of the Liquid Glass metrics.
+    public func cornerRadius(_ glassValue: CGFloat) -> CGFloat {
+        surface.kind == .glass ? glassValue : 3
+    }
+
+    /// Liquid Glass uses macOS's continuous "squircle" corners; Sanity UI uses
+    /// plain circular corners to match Sanity Studio's flat chrome.
+    public var cornerStyle: RoundedCornerStyle {
+        surface.kind == .glass ? .continuous : .circular
+    }
+}
+
 public enum ThemePreference: String, CaseIterable, Identifiable, Sendable {
     case liquidGlass
     case sanityUI

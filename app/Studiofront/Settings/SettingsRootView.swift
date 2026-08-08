@@ -221,6 +221,17 @@ private struct SettingsSplitViewTuner: NSViewRepresentable {
         window.titlebarAppearsTransparent = true
         window.titlebarSeparatorStyle = .none
         window.toolbarStyle = .unified
+        hideSidebarToggle(in: window)
+    }
+
+    /// SwiftUI's `.toolbar(removing: .sidebarToggle)` doesn't reliably remove
+    /// AppKit's automatic sidebar toggle button from this forced NSToolbar, so
+    /// strip it directly whenever the toolbar is (re)built.
+    private static func hideSidebarToggle(in window: NSWindow) {
+        guard let toolbar = window.toolbar else { return }
+        while let index = toolbar.items.firstIndex(where: { $0.itemIdentifier == .toggleSidebar }) {
+            toolbar.removeItem(at: index)
+        }
     }
 
     private static func enclosingSplitViewController(from view: NSView) -> NSSplitViewController? {
