@@ -160,7 +160,7 @@ Sanity's own CLI does browser-based login, so the flow exists; what is not estab
 **VERIFY before building §5.1** — check Sanity's current docs for third-party OAuth or app-token flows, and inspect how `sanity login` performs its browser handshake and where it persists the result. Do not build against a guessed endpoint. If no documented third-party flow exists, ship 5.2 + 5.3 as v1 and revisit.
 
 ### 5.1 Preferred: browser auth
-`ASWebAuthenticationSession` with a custom scheme callback (`studioswitcher://auth`). Exchange for a token, store in Keychain. Show the authenticated user's name and avatar in Settings once connected.
+`ASWebAuthenticationSession` with a custom scheme callback (`studiofront://auth`). Exchange for a token, store in Keychain. Show the authenticated user's name and avatar in Settings once connected.
 
 ### 5.2 Zero-setup path for developers
 On first launch, look for an existing Sanity CLI credential on disk (**VERIFY** the current location — commonly `~/.config/sanity/config.json`, but confirm rather than trusting this). If found and valid, offer: *"Use your existing Sanity CLI login?"* — one click, no browser.
