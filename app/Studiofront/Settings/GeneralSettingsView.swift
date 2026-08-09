@@ -24,27 +24,8 @@ struct GeneralSettingsView: View {
                     Toggle("Hide archived projects", isOn: $settings.hideArchivedProjects)
                         .settingsHighlight(.hideArchivedProjects)
                 }
-
-                Section {
-                    Picker("Theme", selection: $settings.themePreference) {
-                        ForEach(ThemePreference.allCases) { preference in
-                            Text(preference.title).tag(preference)
-                        }
-                    }
-                    .settingsHighlight(.theme)
-
-                    Picker("Appearance", selection: $settings.appearancePreference) {
-                        ForEach(AppearancePreference.allCases) { preference in
-                            Text(preference.title).tag(preference)
-                        }
-                    }
-                    .settingsHighlight(.appearance)
-                }
             }
             .formStyle(.grouped)
-        }
-        .onChange(of: settings.appearancePreference) { _, preference in
-            AppDelegate.shared?.applyAppearance(preference)
         }
         .onChange(of: settings.showInDock) { _, _ in
             AppDelegate.shared?.applyActivationPolicy()

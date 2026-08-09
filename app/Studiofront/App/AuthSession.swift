@@ -4,6 +4,7 @@ import SanityKit
 
 enum SettingsPane: String, CaseIterable, Identifiable, Hashable {
     case general
+    case appearance
     case account
     case keybindings
 
@@ -12,6 +13,7 @@ enum SettingsPane: String, CaseIterable, Identifiable, Hashable {
     var title: String {
         switch self {
         case .general: "General"
+        case .appearance: "Appearance"
         case .account: "Account"
         case .keybindings: "Keybindings"
         }
@@ -20,6 +22,7 @@ enum SettingsPane: String, CaseIterable, Identifiable, Hashable {
     var systemImage: String {
         switch self {
         case .general: "gearshape"
+        case .appearance: "paintbrush"
         case .account: "person.crop.circle"
         case .keybindings: "keyboard"
         }

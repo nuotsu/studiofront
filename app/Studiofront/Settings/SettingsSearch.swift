@@ -51,14 +51,14 @@ enum SettingsSearchIndex {
         SettingsSearchItem(
             title: "Theme",
             keywords: ["theme", "liquid glass", "sanity ui"],
-            pane: .general,
+            pane: .appearance,
             target: .theme,
             systemImage: "paintpalette"
         ),
         SettingsSearchItem(
             title: "Appearance",
             keywords: ["appearance", "light", "dark", "system"],
-            pane: .general,
+            pane: .appearance,
             target: .appearance,
             systemImage: "circle.lefthalf.filled"
         ),

@@ -8,10 +8,11 @@ struct SettingsRootView: View {
     static let windowWidth: CGFloat = 600
     static let minHeight: CGFloat = 360
     static let sidebarWidth: CGFloat = 200
-    static let defaultHeight: CGFloat = 420
+    static let defaultHeight: CGFloat = 630
 
     @State private var query = ""
     @State private var selectedSearchID: String?
+    @FocusState private var searchFieldFocused: Bool
     @State private var search = SettingsSearchState()
 
     var body: some View {
@@ -28,6 +29,8 @@ struct SettingsRootView: View {
                 switch auth.selectedSettingsPane {
                 case .general:
                     GeneralSettingsView()
+                case .appearance:
+                    AppearanceSettingsView()
                 case .account:
                     AccountSettingsView()
                 case .keybindings:
@@ -38,6 +41,10 @@ struct SettingsRootView: View {
             .ignoresSafeArea(.container, edges: .top)
         }
         .navigationSplitViewStyle(.automatic)
+        // The scene's "Settings" title would draw over the pane heading beneath
+        // the transparent titlebar; SwiftUI keeps restoring it, so clear it here
+        // rather than fighting it from AppKit.
+        .navigationTitle("")
         // Force an NSToolbar so the sidebar can own a titlebar section (traffic lights).
         .toolbar {
             ToolbarSpacer(.flexible)
@@ -66,6 +73,7 @@ struct SettingsRootView: View {
                 .foregroundStyle(.secondary)
             TextField("Search", text: $query)
                 .textFieldStyle(.plain)
+                .focused($searchFieldFocused)
                 .onSubmit { selectFirstMatch() }
             if !query.isEmpty {
                 Button {
@@ -83,22 +91,39 @@ struct SettingsRootView: View {
         .padding(.vertical, 6)
         .background {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor))
-                .overlay(
+                .fill(.ultraThinMaterial)
+                .overlay {
+                    // Faint dark wash so the field reads as recessed into the
+                    // sidebar glass rather than as a bordered control.
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .strokeBorder(Color.primary.opacity(0.12), lineWidth: 1)
-                )
+                        .fill(Color.black.opacity(0.06))
+                }
         }
-        .padding(.horizontal, 12)
+        // 10 matches the sidebar rows' own inset, so the field lines up with them.
+        .padding(.horizontal, 10)
         .padding(.top, 6)
         .padding(.bottom, 8)
         .onChange(of: query) { _, _ in
             selectedSearchID = nil
+            // Switching the sidebar between browse and results mode rebuilds this
+            // field, so re-assert focus once that settles or typing drops it.
+            DispatchQueue.main.async { searchFieldFocused = true }
         }
     }
 
-    @ViewBuilder
     private var sidebarList: some View {
+        sidebarContent
+            .listStyle(.sidebar)
+            .scrollEdgeEffectStyle(.soft, for: .top)
+            // Attached once, outside the branches below: hanging it off each list
+            // rebuilt the text field on the first keystroke, which dropped focus.
+            .safeAreaBar(edge: .top) {
+                searchField
+            }
+    }
+
+    @ViewBuilder
+    private var sidebarContent: some View {
         @Bindable var auth = auth
         let matches = SettingsSearchIndex.matches(query)
         if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -108,13 +133,11 @@ struct SettingsRootView: View {
                         .tag(pane)
                 }
             }
-            .sidebarSearchChrome(searchField: searchField)
         } else if matches.isEmpty {
             List {
                 Text("No Results")
                     .foregroundStyle(.secondary)
             }
-            .sidebarSearchChrome(searchField: searchField)
         } else {
             List(selection: $selectedSearchID) {
                 ForEach(matches) { item in
@@ -131,7 +154,6 @@ struct SettingsRootView: View {
                     .tag(Optional.some(item.id))
                 }
             }
-            .sidebarSearchChrome(searchField: searchField)
             .onChange(of: selectedSearchID) { _, id in
                 guard let id, let item = matches.first(where: { $0.id == id }) else { return }
                 jump(to: item)
@@ -160,16 +182,6 @@ struct SettingsRootView: View {
         default:
             target
         }
-    }
-}
-
-private extension View {
-    func sidebarSearchChrome(searchField: some View) -> some View {
-        listStyle(.sidebar)
-            .scrollEdgeEffectStyle(.soft, for: .top)
-            .safeAreaBar(edge: .top) {
-                searchField
-            }
     }
 }
 
@@ -216,20 +228,38 @@ private struct SettingsSplitViewTuner: NSViewRepresentable {
         }
     }
 
+    /// AppKit finishes building the titlebar and toolbar after the split view
+    /// appears, and rebuilds them later, so a single pass can run too early or be
+    /// undone. Re-apply over the next few runloop turns.
     private static func configureWindowChrome(_ window: NSWindow?) {
         guard let window else { return }
+        applyWindowChrome(to: window)
+        for delay in [0.05, 0.2, 0.5] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                applyWindowChrome(to: window)
+            }
+        }
+    }
+
+    private static func applyWindowChrome(to window: NSWindow) {
         window.styleMask.insert(.fullSizeContentView)
+        // `fullSizeContentView` draws the titlebar over the content, so a visible
+        // window title lands on top of the pane's own heading. `titleVisibility`
+        // alone doesn't stick here — SwiftUI keeps restoring the scene title — so
+        // clear the string too. The window is matched by its "settings"
+        // identifier, not its title, so nothing depends on the text.
         window.titleVisibility = .hidden
+        window.title = ""
         window.titlebarAppearsTransparent = true
         window.titlebarSeparatorStyle = .none
         window.toolbarStyle = .unified
-        hideSidebarToggle(in: window)
+        removeSidebarToggleItems(from: window)
     }
 
     /// SwiftUI's `.toolbar(removing: .sidebarToggle)` doesn't reliably remove
     /// AppKit's automatic sidebar toggle button from this forced NSToolbar, so
     /// strip it directly whenever the toolbar is (re)built.
-    private static func hideSidebarToggle(in window: NSWindow) {
+    private static func removeSidebarToggleItems(from window: NSWindow) {
         guard let toolbar = window.toolbar else { return }
         while let index = toolbar.items.firstIndex(where: { $0.itemIdentifier == .toggleSidebar }) {
             toolbar.removeItem(at: index)

@@ -8,7 +8,10 @@ struct AccountSettingsView: View {
     @State private var tokenDraft = ""
 
     var body: some View {
-        SettingsPaneChrome(title: SettingsPane.account.title) {
+        SettingsPaneChrome(
+            title: SettingsPane.account.title,
+            description: auth.isSignedIn ? nil : "Connect a Sanity account to load live projects."
+        ) {
             Form {
                 identitySection
                 if !auth.isSignedIn {
@@ -31,48 +34,50 @@ struct AccountSettingsView: View {
 
     @ViewBuilder
     private var identitySection: some View {
-        Section("Account") {
-            switch auth.status {
-            case .connecting:
-                HStack {
-                    ProgressView()
-                        .controlSize(.small)
-                    Text("Connecting…")
-                }
-                .settingsHighlight(.accountIdentity)
-            case let .signedIn(user, source):
-                HStack(spacing: 12) {
-                    avatar(for: user)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(user.name)
-                            .font(.headline)
-                        if let email = user.email, !email.isEmpty {
-                            Text(email)
+        // Signed out, the pane header already says everything this section would,
+        // so the whole group (and its duplicate "Account" heading) drops away.
+        if auth.status != .signedOut {
+            Section(auth.isSignedIn ? "Connected account" : "Account") {
+                switch auth.status {
+                case .connecting:
+                    HStack {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("Connecting…")
+                    }
+                    .settingsHighlight(.accountIdentity)
+                case let .signedIn(user, source):
+                    HStack(spacing: 12) {
+                        avatar(for: user)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(user.name)
+                                .font(.headline)
+                            if let email = user.email, !email.isEmpty {
+                                Text(email)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Text("Token source: \(source.title)")
+                                .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
-                        Text("Token source: \(source.title)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
                     }
-                }
-                .settingsHighlight(.accountIdentity)
-                Button("Sign Out", role: .destructive) {
-                    auth.signOut()
-                    tokenDraft = ""
-                }
-                .settingsHighlight(.signOut)
-            case .reconnectRequired:
-                Text("Session expired. Sign in again with your CLI login or a personal token.")
                     .settingsHighlight(.accountIdentity)
-                Button("Reconnect with Sanity CLI") {
-                    Task { await auth.importCLIToken() }
+                    Button("Sign Out", role: .destructive) {
+                        auth.signOut()
+                        tokenDraft = ""
+                    }
+                    .settingsHighlight(.signOut)
+                case .reconnectRequired:
+                    Text("Session expired. Sign in again with your CLI login or a personal token.")
+                        .settingsHighlight(.accountIdentity)
+                    Button("Reconnect with Sanity CLI") {
+                        Task { await auth.importCLIToken() }
+                    }
+                    .disabled(!auth.cliProbe.isReadable)
+                    .settingsHighlight(.cliLogin)
+                case .signedOut:
+                    EmptyView()
                 }
-                .disabled(!auth.cliProbe.isReadable)
-                .settingsHighlight(.cliLogin)
-            case .signedOut:
-                Text("Connect a Sanity account to load live projects.")
-                    .foregroundStyle(.secondary)
-                    .settingsHighlight(.accountIdentity)
             }
         }
     }
