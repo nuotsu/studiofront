@@ -35,6 +35,27 @@ enum AppearancePreference: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+enum MenuBarIconPreference: String, CaseIterable, Identifiable, Sendable {
+    case studiofront
+    case sanity
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .studiofront: "Studiofront"
+        case .sanity: "Sanity"
+        }
+    }
+
+    var imageName: String {
+        switch self {
+        case .studiofront: "MenuBarIcon"
+        case .sanity: "MenuBarIconSanity"
+        }
+    }
+}
+
 @MainActor
 @Observable
 final class AppSettings {
@@ -44,6 +65,10 @@ final class AppSettings {
 
     var appearancePreference: AppearancePreference {
         didSet { UserDefaults.standard.set(appearancePreference.rawValue, forKey: Keys.appearance) }
+    }
+
+    var menuBarIconPreference: MenuBarIconPreference {
+        didSet { UserDefaults.standard.set(menuBarIconPreference.rawValue, forKey: Keys.menuBarIcon) }
     }
 
     var showInDock: Bool {
@@ -122,6 +147,7 @@ final class AppSettings {
     init(
         themePreference: ThemePreference = .liquidGlass,
         appearancePreference: AppearancePreference = .system,
+        menuBarIconPreference: MenuBarIconPreference = .studiofront,
         showInDock: Bool = false,
         refreshIntervalMinutes: Int = 5,
         hideArchivedProjects: Bool = true,
@@ -134,6 +160,7 @@ final class AppSettings {
     ) {
         self.themePreference = themePreference
         self.appearancePreference = appearancePreference
+        self.menuBarIconPreference = menuBarIconPreference
         self.showInDock = showInDock
         self.refreshIntervalMinutes = refreshIntervalMinutes
         self.hideArchivedProjects = hideArchivedProjects
@@ -149,6 +176,7 @@ final class AppSettings {
         let defaults = UserDefaults.standard
         let theme = ThemePreference(rawValue: defaults.string(forKey: Keys.theme) ?? "") ?? .liquidGlass
         let appearance = AppearancePreference(rawValue: defaults.string(forKey: Keys.appearance) ?? "") ?? .system
+        let menuBarIcon = MenuBarIconPreference(rawValue: defaults.string(forKey: Keys.menuBarIcon) ?? "") ?? .studiofront
         let showInDock = defaults.object(forKey: Keys.showInDock) as? Bool ?? false
         let storedInterval = defaults.object(forKey: Keys.refreshInterval) as? Int
         let refresh = Self.allowedRefreshIntervals.contains(storedInterval ?? -1) ? storedInterval! : 5
@@ -165,6 +193,7 @@ final class AppSettings {
         return AppSettings(
             themePreference: theme,
             appearancePreference: appearance,
+            menuBarIconPreference: menuBarIcon,
             showInDock: showInDock,
             refreshIntervalMinutes: refresh,
             hideArchivedProjects: hideArchivedProjects,
@@ -182,6 +211,7 @@ final class AppSettings {
     private enum Keys {
         static let theme = "themePreference"
         static let appearance = "appearancePreference"
+        static let menuBarIcon = "menuBarIconPreference"
         static let showInDock = "showInDock"
         static let refreshInterval = "refreshIntervalMinutes"
         static let hideArchivedProjects = "hideArchivedProjects"

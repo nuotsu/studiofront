@@ -6,6 +6,7 @@ enum SettingsSearchTarget: String, Hashable, CaseIterable {
     case showInDock
     case refreshInterval
     case hideArchivedProjects
+    case menuBarIcon
     case theme
     case appearance
     case accountIdentity
@@ -48,6 +49,13 @@ enum SettingsSearchIndex {
             pane: .general,
             target: .hideArchivedProjects,
             systemImage: "archivebox"
+        ),
+        SettingsSearchItem(
+            title: "Menubar icon",
+            keywords: ["menubar", "menu bar", "icon", "status item", "sanity", "studiofront", "logo"],
+            pane: .appearance,
+            target: .menuBarIcon,
+            systemImage: "menubar.rectangle"
         ),
         SettingsSearchItem(
             title: "Theme",

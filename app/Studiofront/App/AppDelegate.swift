@@ -96,7 +96,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         item.autosaveName = Self.statusItemAutosaveName
         item.isVisible = true
         if let button = item.button {
-            button.image = Self.menuBarStatusImage()
+            button.image = Self.menuBarStatusImage(named: settings.menuBarIconPreference.imageName)
             button.imagePosition = .imageOnly
             button.toolTip = "Studiofront"
             button.target = self
@@ -113,9 +113,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         }
     }
 
+    func applyMenuBarIcon(_ preference: MenuBarIconPreference) {
+        statusItem?.button?.image = Self.menuBarStatusImage(named: preference.imageName)
+    }
+
     /// Template glyph sized to menu-bar height, preserving the SVG aspect ratio.
-    private static func menuBarStatusImage() -> NSImage? {
-        guard let source = NSImage(named: "MenuBarIcon") else { return nil }
+    private static func menuBarStatusImage(named name: String) -> NSImage? {
+        guard let source = NSImage(named: name) else { return nil }
         let height: CGFloat = 16
         let aspect = source.size.width / max(source.size.height, 1)
         let size = NSSize(width: (height * aspect).rounded(), height: height)
@@ -154,6 +158,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
 
         let menu = NSMenu()
         menu.addItem(withTitle: "Settings", action: #selector(openSettingsFromMenu(_:)), keyEquivalent: "")
+        menu.addItem(withTitle: "Appearance", action: #selector(openAppearanceFromMenu(_:)), keyEquivalent: "")
+        menu.addItem(withTitle: "Keybindings", action: #selector(openKeybindingsFromMenu(_:)), keyEquivalent: "")
         menu.addItem(withTitle: "Account", action: #selector(openAccountFromMenu(_:)), keyEquivalent: "")
         menu.addItem(.separator())
         menu.addItem(withTitle: "Check for Updates…", action: #selector(checkForUpdatesFromMenu(_:)), keyEquivalent: "")
@@ -167,6 +173,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
 
     @objc private func openSettingsFromMenu(_ sender: Any?) {
         openSettingsWindow(pane: .general)
+    }
+
+    @objc private func openAppearanceFromMenu(_ sender: Any?) {
+        openSettingsWindow(pane: .appearance)
+    }
+
+    @objc private func openKeybindingsFromMenu(_ sender: Any?) {
+        openSettingsWindow(pane: .keybindings)
     }
 
     @objc private func openAccountFromMenu(_ sender: Any?) {
