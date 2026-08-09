@@ -175,16 +175,24 @@ struct PopoverRootView: View {
         return ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
-                    ForEach(store.groups) { group in
+                    ForEach(Array(store.groups.enumerated()), id: \.element.id) { index, group in
                         Section {
                             ForEach(group.items) { row in
                                 ProjectRowView(row: row, isSelected: store.selectedID == row.id)
                                     .id(row.id)
                             }
+                            // Gap before the next group's label. It lives in the
+                            // scrolling content rather than on the header: padding
+                            // there leaves a transparent strip with rows sliding
+                            // through it while pinned, and an offset to close that
+                            // strip stops the header pinning at all.
+                            if index < store.groups.count - 1 {
+                                Color.clear.frame(height: 4)
+                            }
                         } header: {
                             SectionHeader(
                                 title: group.title,
-                                itemCount: group.organizationId != nil ? group.items.count : nil,
+                                itemCount: group.items.count,
                                 accessory: group.organizationId,
                                 accessoryCopied: store.copiedOrganizationID == group.organizationId,
                                 onAccessory: group.organizationId.map { id in
@@ -207,7 +215,6 @@ struct PopoverRootView: View {
                             .padding(.vertical, 26)
                     }
                 }
-                .padding(.top, theme.metrics.listPadding.top)
                 .padding(.bottom, theme.metrics.listPadding.bottom)
             }
             .frame(maxHeight: theme.metrics.listMaxHeight)
