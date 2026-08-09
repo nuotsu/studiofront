@@ -286,23 +286,80 @@ public struct SearchFieldChrome<Content: View>: View {
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(theme.colors.faint)
             content()
-            Text("⌘K")
-                .font(theme.typography.shortcut)
-                .foregroundStyle(theme.colors.faint)
-                .padding(.horizontal, 5)
-                .padding(.vertical, 2)
-                .background(theme.colors.chipBackground)
-                .clipShape(RoundedRectangle(cornerRadius: theme.cornerRadius(4), style: theme.cornerStyle))
-                .accessibilityHidden(true)
+            KeycapLegend([.symbol("command"), .text("K")])
         }
         .padding(.horizontal, 9)
         .padding(.vertical, 6)
-        .background(theme.colors.fieldBackground)
-        .overlay(
-            RoundedRectangle(cornerRadius: theme.cornerRadius(theme.metrics.searchFieldCornerRadius), style: theme.cornerStyle)
-                .strokeBorder(theme.colors.fieldBorder, lineWidth: 1)
+        .background(
+            ZStack {
+                theme.colors.chipBackground
+                Color.black.opacity(0.04)
+            }
         )
         .clipShape(RoundedRectangle(cornerRadius: theme.cornerRadius(theme.metrics.searchFieldCornerRadius), style: theme.cornerStyle))
+    }
+}
+
+/// A single keyboard-key glyph rendered in a keycap legend — an SF Symbol where one exists,
+/// otherwise a literal character (e.g. "," or "1–9", which have no SF Symbol equivalent).
+public enum KeyGlyph: Hashable, Sendable {
+    case symbol(String)
+    case text(String)
+}
+
+/// A single glyph within a `KeycapLegend`, drawn with no background of its own —
+/// the legend applies one shared border around the whole combo, not per-glyph.
+private struct KeyGlyphView: View {
+    @Environment(\.studioTheme) private var theme
+    var glyph: KeyGlyph
+
+    init(_ glyph: KeyGlyph) {
+        self.glyph = glyph
+    }
+
+    var body: some View {
+        switch glyph {
+        case .symbol(let name):
+            Image(systemName: name)
+                .font(.system(size: 8, weight: .semibold))
+        case .text(let text):
+            Text(text)
+                .font(.system(size: 8, weight: .semibold))
+        }
+    }
+}
+
+/// Renders a keyboard shortcut as a single keycap chip — every glyph in the combo
+/// (e.g. ⌘ + K) shares one border, rather than each glyph getting its own box.
+public struct KeycapLegend: View {
+    @Environment(\.studioTheme) private var theme
+    var glyphs: [KeyGlyph]
+    var compact: Bool
+
+    /// `compact` shrinks the chip's own padding/frame only — glyph font sizes are
+    /// unaffected, so the keys stay legible while taking up less room in tight rows.
+    public init(_ glyphs: [KeyGlyph], compact: Bool = false) {
+        self.glyphs = glyphs
+        self.compact = compact
+    }
+
+    public var body: some View {
+        HStack(spacing: compact ? 2 : 3) {
+            ForEach(Array(glyphs.enumerated()), id: \.offset) { _, glyph in
+                KeyGlyphView(glyph)
+            }
+        }
+        .foregroundStyle(theme.colors.faint)
+        .frame(minHeight: compact ? 11 : 14)
+        .padding(.horizontal, compact ? 2 : 5)
+        .padding(.vertical, compact ? 1.5 : 2)
+        .background(theme.colors.chipBackground)
+        .overlay(
+            RoundedRectangle(cornerRadius: theme.cornerRadius(4), style: theme.cornerStyle)
+                .strokeBorder(theme.colors.chipBorder, lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: theme.cornerRadius(4), style: theme.cornerStyle))
+        .accessibilityHidden(true)
     }
 }
 
@@ -311,33 +368,44 @@ public struct GroupByControl<Value: Hashable>: View {
     var selection: Binding<Value>
     var options: [(Value, String)]
 
+    @State private var isHovered = false
+
     public init(selection: Binding<Value>, options: [(Value, String)]) {
         self.selection = selection
         self.options = options
     }
 
+    private var selectedTitle: String {
+        options.first(where: { $0.0 == selection.wrappedValue })?.1 ?? ""
+    }
+
     public var body: some View {
-        HStack(spacing: 2) {
+        Menu {
             ForEach(options, id: \.0) { value, title in
-                let on = selection.wrappedValue == value
-                Button {
+                Button(title) {
                     selection.wrappedValue = value
-                } label: {
-                    Text(title)
-                        .font(.system(size: 9.5, weight: .semibold))
-                        .foregroundStyle(on ? theme.colors.segmentOnText : theme.colors.segmentText)
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 2)
-                        .background(on ? theme.colors.segmentOn : Color.clear)
-                        .clipShape(RoundedRectangle(cornerRadius: theme.cornerRadius(4), style: theme.cornerStyle))
                 }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(on ? .isSelected : [])
             }
+        } label: {
+            Text(selectedTitle)
+                .font(.system(size: 9.5, weight: .regular))
+                .foregroundStyle(theme.colors.faint)
+                .lineLimit(1)
         }
-        .padding(2)
-        .background(theme.colors.segmentBackground)
-        .clipShape(RoundedRectangle(cornerRadius: theme.cornerRadius(6), style: theme.cornerStyle))
+        .menuStyle(.borderlessButton)
+        .controlSize(.small)
+        .tint(theme.colors.faint)
+        .fixedSize()
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(
+            ZStack {
+                theme.colors.chipBackground
+                Color.black.opacity(isHovered ? 0.10 : 0.04)
+            }
+        )
+        .clipShape(RoundedRectangle(cornerRadius: theme.cornerRadius(4), style: theme.cornerStyle))
+        .onHover { isHovered = $0 }
     }
 }
 

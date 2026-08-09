@@ -19,8 +19,6 @@ struct PopoverRootView: View {
             header
             Divider().overlay(theme.colors.divider)
             list
-            Divider().overlay(theme.colors.divider)
-            footer
         }
         .frame(width: metrics.popoverWidth)
         .frame(maxHeight: metrics.popoverMaxHeight)
@@ -65,25 +63,51 @@ struct PopoverRootView: View {
             if auth.needsReconnect || auth.status == .signedOut {
                 authBanner
             }
-            SearchFieldChrome {
-                TextField(
-                    "Search projects, orgs, IDs, datasets, documents…",
-                    text: $store.query
-                )
-                .textFieldStyle(.plain)
-                .font(theme.typography.search)
-                .foregroundStyle(theme.colors.text)
-                .focused($searchFocused)
-                .background(SearchFieldTuning())
+            HStack(spacing: 8) {
+                SearchFieldChrome {
+                    TextField(
+                        "Search projects, orgs, IDs, datasets, documents…",
+                        text: $store.query
+                    )
+                    .textFieldStyle(.plain)
+                    .font(theme.typography.search)
+                    .foregroundStyle(theme.colors.text)
+                    .focused($searchFocused)
+                    .background(SearchFieldTuning())
+                }
+                Button {
+                    AppDelegate.shared?.openSettingsWindow()
+                } label: {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(theme.colors.faint)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Settings")
             }
 
-            HStack {
+            HStack(spacing: 10) {
+                HStack(spacing: 5) {
+                    if store.isRefreshing {
+                        ProgressView()
+                            .controlSize(.mini)
+                            .tint(theme.colors.faint)
+                    }
+                    Text(projectCountLabel)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
+                }
+                .font(.system(size: 9.5))
+                .foregroundStyle(theme.colors.faint)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(store.isRefreshing ? "Refreshing projects" : projectCountLabel)
+
                 HStack(spacing: 6) {
                     Text("Group by")
                         .font(.system(size: 9.5))
-                        .textCase(.uppercase)
-                        .tracking(0.6)
                         .foregroundStyle(theme.colors.faint)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
                     GroupByControl(
                         selection: $store.groupBy,
                         options: [
@@ -92,19 +116,29 @@ struct PopoverRootView: View {
                         ]
                     )
                 }
+
                 Spacer()
-                HStack(spacing: 5) {
-                    if store.isRefreshing {
-                        ProgressView()
-                            .controlSize(.mini)
-                            .tint(theme.colors.faint)
+
+                HStack(spacing: 4) {
+                    HStack(spacing: 3) {
+                        KeycapLegend([.symbol("arrow.up")], compact: true)
+                        KeycapLegend([.symbol("arrow.down")], compact: true)
                     }
-                    Text(projectCountLabel)
+                    Text("Navigate")
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
                 }
                 .font(.system(size: 9.5))
                 .foregroundStyle(theme.colors.faint)
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel(store.isRefreshing ? "Refreshing projects" : projectCountLabel)
+
+                HStack(spacing: 4) {
+                    KeycapLegend(openStudioGlyphs, compact: true)
+                    Text("Open Studio")
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
+                }
+                .font(.system(size: 9.5))
+                .foregroundStyle(theme.colors.faint)
             }
         }
         .padding(theme.metrics.headerPadding)
@@ -210,21 +244,12 @@ struct PopoverRootView: View {
         return "Connect Sanity to load projects"
     }
 
-    private var footer: some View {
-        let theme = settings.resolvedTheme
-        return HStack {
-            Text("↑↓ navigate · ↵ open Studio · ⌥↵ open site")
-                .font(theme.typography.footer)
-                .foregroundStyle(theme.colors.faint)
-            Spacer()
-            Button("Settings…") {
-                AppDelegate.shared?.openSettingsWindow()
-            }
-            .buttonStyle(.plain)
-            .font(theme.typography.footer)
-            .foregroundStyle(theme.colors.sub)
-            .accessibilityLabel("Settings")
-        }
-        .padding(theme.metrics.footerPadding)
+    /// Reflects the user's current "Open Studio" binding (default Return, or whatever
+    /// they recorded in Settings → Keybindings) so this legend never drifts from reality.
+    private var openStudioGlyphs: [KeyGlyph] {
+        let modifierGlyphs = KeyGlyphMapping.modifierGlyphs(settings.openStudioModifierFlags)
+        let keyGlyph = KeyGlyphMapping.glyph(forKeyCode: UInt16(settings.openStudioKeyCode), characters: settings.openStudioCharacters)
+        return modifierGlyphs + [keyGlyph]
     }
+
 }
