@@ -45,6 +45,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
 
         applyAppearance(settings.appearancePreference)
         applyActivationPolicy()
+        applyGlobalHotKey()
         store.onCurationChanged = { [weak self] in
             self?.sync.persistCuration()
         }
@@ -191,6 +192,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
 
     func closePopover() {
         popover?.performClose(nil)
+    }
+
+    /// Summons the popover from the global hotkey. Unlike a status-item click,
+    /// another app is frontmost here, so activate first or the popover appears
+    /// without keyboard focus and its transient behavior closes it immediately.
+    func togglePopoverFromGlobalHotKey() {
+        if popover?.isShown == true {
+            closePopover()
+            return
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        togglePopover()
+    }
+
+    func applyGlobalHotKey() {
+        GlobalHotKeyMonitor.shared.update(
+            keyCode: UInt16(settings.openStudiofrontKeyCode),
+            modifierFlags: settings.openStudiofrontModifierFlags
+        ) { [weak self] in
+            self?.togglePopoverFromGlobalHotKey()
+        }
     }
 
     func openURL(_ url: URL, dismiss: Bool = true) {

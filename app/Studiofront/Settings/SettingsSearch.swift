@@ -14,6 +14,7 @@ enum SettingsSearchTarget: String, Hashable, CaseIterable {
     case personalToken
     case keybindingsOverview
     case openStudioShortcut
+    case openStudiofrontShortcut
 }
 
 struct SettingsSearchItem: Identifiable, Hashable {
@@ -102,6 +103,13 @@ enum SettingsSearchIndex {
             keywords: ["open studio", "return", "enter", "rebind", "record"],
             pane: .keybindings,
             target: .openStudioShortcut,
+            systemImage: "keyboard"
+        ),
+        SettingsSearchItem(
+            title: "Open Studiofront shortcut",
+            keywords: ["open studiofront", "global", "hotkey", "summon", "rebind", "record"],
+            pane: .keybindings,
+            target: .openStudiofrontShortcut,
             systemImage: "keyboard"
         ),
     ]

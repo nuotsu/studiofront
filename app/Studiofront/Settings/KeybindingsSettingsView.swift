@@ -11,6 +11,19 @@ struct KeybindingsSettingsView: View {
             description: "Click to configure custom binding"
         ) {
             Form {
+                Section("Global") {
+                    ConfigurableKeybindingRow(
+                        label: "Open Studiofront",
+                        keyCode: $settings.openStudiofrontKeyCode,
+                        modifierRawValue: $settings.openStudiofrontModifierRawValue,
+                        characters: $settings.openStudiofrontCharacters,
+                        defaultKeyCode: AppSettings.defaultOpenStudiofrontKeyCode,
+                        defaultModifierRawValue: AppSettings.defaultOpenStudiofrontModifierRawValue,
+                        defaultCharacters: AppSettings.defaultOpenStudiofrontCharacters
+                    )
+                    .settingsHighlight(.openStudiofrontShortcut)
+                }
+
                 Section("Navigation") {
                     KeybindingRow(label: "Move selection up", glyphs: [.symbol("arrow.up")])
                         .settingsHighlight(.keybindingsOverview)
@@ -23,7 +36,9 @@ struct KeybindingsSettingsView: View {
                         label: "Open Studio",
                         keyCode: $settings.openStudioKeyCode,
                         modifierRawValue: $settings.openStudioModifierRawValue,
-                        characters: $settings.openStudioCharacters
+                        characters: $settings.openStudioCharacters,
+                        defaultKeyCode: AppSettings.defaultOpenStudioKeyCode,
+                        defaultModifierRawValue: AppSettings.defaultOpenStudioModifierRawValue
                     )
                     .settingsHighlight(.openStudioShortcut)
                     KeybindingRow(label: "Copy project ID", glyphs: [.symbol("command"), .text("C")])
@@ -41,6 +56,12 @@ struct KeybindingsSettingsView: View {
                 }
             }
             .formStyle(.grouped)
+        }
+        .onChange(of: settings.openStudiofrontKeyCode) { _, _ in
+            AppDelegate.shared?.applyGlobalHotKey()
+        }
+        .onChange(of: settings.openStudiofrontModifierRawValue) { _, _ in
+            AppDelegate.shared?.applyGlobalHotKey()
         }
     }
 }
@@ -66,12 +87,14 @@ private struct ConfigurableKeybindingRow: View {
     @Binding var keyCode: Int
     @Binding var modifierRawValue: Int
     @Binding var characters: String
+    var defaultKeyCode: Int
+    var defaultModifierRawValue: Int
+    var defaultCharacters: String = ""
 
     @State private var isRecording = false
 
     private var isDefault: Bool {
-        keyCode == AppSettings.defaultOpenStudioKeyCode
-            && modifierRawValue == AppSettings.defaultOpenStudioModifierRawValue
+        keyCode == defaultKeyCode && modifierRawValue == defaultModifierRawValue
     }
 
     var body: some View {
@@ -80,9 +103,9 @@ private struct ConfigurableKeybindingRow: View {
             Spacer()
             Button("Reset") {
                 isRecording = false
-                keyCode = AppSettings.defaultOpenStudioKeyCode
-                modifierRawValue = AppSettings.defaultOpenStudioModifierRawValue
-                characters = ""
+                keyCode = defaultKeyCode
+                modifierRawValue = defaultModifierRawValue
+                characters = defaultCharacters
             }
             .buttonStyle(.plain)
             .font(.system(size: 11))

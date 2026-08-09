@@ -73,6 +73,18 @@ final class AppSettings {
         didSet { UserDefaults.standard.set(openStudioCharacters, forKey: Keys.openStudioCharacters) }
     }
 
+    var openStudiofrontKeyCode: Int {
+        didSet { UserDefaults.standard.set(openStudiofrontKeyCode, forKey: Keys.openStudiofrontKeyCode) }
+    }
+
+    var openStudiofrontModifierRawValue: Int {
+        didSet { UserDefaults.standard.set(openStudiofrontModifierRawValue, forKey: Keys.openStudiofrontModifierRawValue) }
+    }
+
+    var openStudiofrontCharacters: String {
+        didSet { UserDefaults.standard.set(openStudiofrontCharacters, forKey: Keys.openStudiofrontCharacters) }
+    }
+
     var refreshInterval: TimeInterval {
         TimeInterval(max(1, refreshIntervalMinutes) * 60)
     }
@@ -94,6 +106,19 @@ final class AppSettings {
     nonisolated static let defaultOpenStudioKeyCode = 36
     nonisolated static let defaultOpenStudioModifierRawValue = 0
 
+    var openStudiofrontModifierFlags: NSEvent.ModifierFlags {
+        NSEvent.ModifierFlags(rawValue: UInt(openStudiofrontModifierRawValue))
+            .intersection(.deviceIndependentFlagsMask)
+    }
+
+    /// ⌘⌥⌃S — a system-wide combo, so it needs modifiers that won't collide with
+    /// ordinary typing in whatever app happens to be frontmost.
+    nonisolated static let defaultOpenStudiofrontKeyCode = 1
+    nonisolated static let defaultOpenStudiofrontModifierRawValue = Int(
+        NSEvent.ModifierFlags([.command, .option, .control]).rawValue
+    )
+    nonisolated static let defaultOpenStudiofrontCharacters = "s"
+
     init(
         themePreference: ThemePreference = .liquidGlass,
         appearancePreference: AppearancePreference = .system,
@@ -102,7 +127,10 @@ final class AppSettings {
         hideArchivedProjects: Bool = true,
         openStudioKeyCode: Int = AppSettings.defaultOpenStudioKeyCode,
         openStudioModifierRawValue: Int = AppSettings.defaultOpenStudioModifierRawValue,
-        openStudioCharacters: String = ""
+        openStudioCharacters: String = "",
+        openStudiofrontKeyCode: Int = AppSettings.defaultOpenStudiofrontKeyCode,
+        openStudiofrontModifierRawValue: Int = AppSettings.defaultOpenStudiofrontModifierRawValue,
+        openStudiofrontCharacters: String = AppSettings.defaultOpenStudiofrontCharacters
     ) {
         self.themePreference = themePreference
         self.appearancePreference = appearancePreference
@@ -112,6 +140,9 @@ final class AppSettings {
         self.openStudioKeyCode = openStudioKeyCode
         self.openStudioModifierRawValue = openStudioModifierRawValue
         self.openStudioCharacters = openStudioCharacters
+        self.openStudiofrontKeyCode = openStudiofrontKeyCode
+        self.openStudiofrontModifierRawValue = openStudiofrontModifierRawValue
+        self.openStudiofrontCharacters = openStudiofrontCharacters
     }
 
     static func load() -> AppSettings {
@@ -125,6 +156,12 @@ final class AppSettings {
         let openStudioKeyCode = defaults.object(forKey: Keys.openStudioKeyCode) as? Int ?? Self.defaultOpenStudioKeyCode
         let openStudioModifierRawValue = defaults.object(forKey: Keys.openStudioModifierRawValue) as? Int ?? Self.defaultOpenStudioModifierRawValue
         let openStudioCharacters = defaults.string(forKey: Keys.openStudioCharacters) ?? ""
+        let openStudiofrontKeyCode = defaults.object(forKey: Keys.openStudiofrontKeyCode) as? Int
+            ?? Self.defaultOpenStudiofrontKeyCode
+        let openStudiofrontModifierRawValue = defaults.object(forKey: Keys.openStudiofrontModifierRawValue) as? Int
+            ?? Self.defaultOpenStudiofrontModifierRawValue
+        let openStudiofrontCharacters = defaults.string(forKey: Keys.openStudiofrontCharacters)
+            ?? Self.defaultOpenStudiofrontCharacters
         return AppSettings(
             themePreference: theme,
             appearancePreference: appearance,
@@ -133,7 +170,10 @@ final class AppSettings {
             hideArchivedProjects: hideArchivedProjects,
             openStudioKeyCode: openStudioKeyCode,
             openStudioModifierRawValue: openStudioModifierRawValue,
-            openStudioCharacters: openStudioCharacters
+            openStudioCharacters: openStudioCharacters,
+            openStudiofrontKeyCode: openStudiofrontKeyCode,
+            openStudiofrontModifierRawValue: openStudiofrontModifierRawValue,
+            openStudiofrontCharacters: openStudiofrontCharacters
         )
     }
 
@@ -148,5 +188,8 @@ final class AppSettings {
         static let openStudioKeyCode = "openStudioKeyCode"
         static let openStudioModifierRawValue = "openStudioModifierRawValue"
         static let openStudioCharacters = "openStudioCharacters"
+        static let openStudiofrontKeyCode = "openStudiofrontKeyCode"
+        static let openStudiofrontModifierRawValue = "openStudiofrontModifierRawValue"
+        static let openStudiofrontCharacters = "openStudiofrontCharacters"
     }
 }
