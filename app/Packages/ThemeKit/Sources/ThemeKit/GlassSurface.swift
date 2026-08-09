@@ -30,12 +30,11 @@ public struct GlassSurface: NSViewRepresentable {
         container.autoresizingMask = [.width, .height]
 
         let chrome: NSView
-        if !preferSimpleMaterial, let glassClass = NSClassFromString("NSGlassEffectView") as? NSView.Type {
-            let glass = glassClass.init(frame: .zero)
+        if !preferSimpleMaterial {
+            let glass = NSGlassEffectView(frame: .zero)
             glass.autoresizingMask = [.width, .height]
-            glass.wantsLayer = true
-            Self.applyCornerRadius(cornerRadius, to: glass)
-            Self.applyDefaultGlassStyle(to: glass)
+            glass.cornerRadius = cornerRadius
+            glass.style = .regular
             chrome = glass
         } else {
             let view = NSVisualEffectView()
@@ -61,12 +60,18 @@ public struct GlassSurface: NSViewRepresentable {
     public func updateNSView(_ container: PassthroughGlassView, context: Context) {
         guard let chrome = container.chromeView else { return }
 
+        if let glass = chrome as? NSGlassEffectView {
+            if container.appliedCornerRadius != cornerRadius {
+                container.appliedCornerRadius = cornerRadius
+                glass.cornerRadius = cornerRadius
+            }
+            return
+        }
+
         if container.appliedCornerRadius != cornerRadius {
             container.appliedCornerRadius = cornerRadius
             Self.applyCornerRadius(cornerRadius, to: chrome)
         }
-
-        if chrome.className == "NSGlassEffectView" { return }
 
         guard let visualEffect = chrome as? NSVisualEffectView else { return }
         guard container.appliedMaterial != material
@@ -87,17 +92,6 @@ public struct GlassSurface: NSViewRepresentable {
         view.layer?.cornerRadius = radius
         view.layer?.cornerCurve = .continuous
         view.layer?.masksToBounds = radius > 0
-    }
-
-    private static func applyDefaultGlassStyle(to glassView: NSView) {
-        let styleSelector = NSSelectorFromString("setStyle:")
-        if glassView.responds(to: styleSelector),
-           let implementation = glassView.method(for: styleSelector)
-        {
-            typealias StyleSetter = @convention(c) (AnyObject, Selector, Int) -> Void
-            let setter = unsafeBitCast(implementation, to: StyleSetter.self)
-            setter(glassView, styleSelector, 0)
-        }
     }
 }
 

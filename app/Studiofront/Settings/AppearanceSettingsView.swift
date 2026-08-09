@@ -135,22 +135,24 @@ private struct ThemeSwatch: View {
 
     var body: some View {
         let theme = preference.theme
-        let fill: AnyShapeStyle = theme.surface.kind == .glass
-            ? AnyShapeStyle(.regularMaterial)
-            : AnyShapeStyle(theme.colors.panelFill)
 
-        RoundedRectangle(cornerRadius: 6, style: theme.cornerStyle)
-            .fill(fill)
-            .overlay(
-                RoundedRectangle(cornerRadius: theme.cornerRadius(5), style: theme.cornerStyle)
-                    .fill(theme.colors.primaryBackground)
-                    .frame(width: 18, height: 10)
-            )
-            .overlay(
+        ZStack {
+            if theme.surface.kind == .glass {
+                GlassSurface(cornerRadius: 6)
+            } else {
                 RoundedRectangle(cornerRadius: 6, style: theme.cornerStyle)
-                    .strokeBorder(theme.colors.panelBorder, lineWidth: 1)
-            )
-            .frame(width: 40, height: 24)
+                    .fill(theme.colors.panelFill)
+            }
+
+            RoundedRectangle(cornerRadius: theme.cornerRadius(5), style: theme.cornerStyle)
+                .fill(theme.colors.primaryBackground)
+                .frame(width: 18, height: 10)
+
+            RoundedRectangle(cornerRadius: 6, style: theme.cornerStyle)
+                .strokeBorder(theme.colors.panelBorder, lineWidth: 1)
+        }
+        .frame(width: 40, height: 24)
+        .clipShape(RoundedRectangle(cornerRadius: 6, style: theme.cornerStyle))
     }
 }
 
