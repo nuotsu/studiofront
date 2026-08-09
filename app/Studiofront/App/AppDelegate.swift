@@ -153,22 +153,48 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
     }
 
     private func showStatusItemMenu() {
-        guard let button = statusItem?.button else { return }
+        guard let item = statusItem, let button = item.button else { return }
         closePopover()
 
         let menu = NSMenu()
+        let openItem = NSMenuItem(
+            title: "Open Studiofront",
+            action: #selector(openStudiofrontFromMenu(_:)),
+            keyEquivalent: ""
+        )
+        if !settings.openStudiofrontCharacters.isEmpty {
+            openItem.keyEquivalent = settings.openStudiofrontCharacters
+            openItem.keyEquivalentModifierMask = settings.openStudiofrontModifierFlags
+        }
+        menu.addItem(openItem)
+        menu.addItem(.separator())
         menu.addItem(withTitle: "Settings", action: #selector(openSettingsFromMenu(_:)), keyEquivalent: "")
         menu.addItem(withTitle: "Appearance", action: #selector(openAppearanceFromMenu(_:)), keyEquivalent: "")
         menu.addItem(withTitle: "Keybindings", action: #selector(openKeybindingsFromMenu(_:)), keyEquivalent: "")
         menu.addItem(withTitle: "Account", action: #selector(openAccountFromMenu(_:)), keyEquivalent: "")
         menu.addItem(.separator())
         menu.addItem(withTitle: "Check for Updates…", action: #selector(checkForUpdatesFromMenu(_:)), keyEquivalent: "")
-        for item in menu.items {
-            item.target = self
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—"
+        menu.addItem(withTitle: "Current version: v\(version)", action: nil, keyEquivalent: "")
+        menu.addItem(.separator())
+        menu.addItem(withTitle: "Quit Studiofront", action: #selector(quitFromMenu(_:)), keyEquivalent: "q")
+        for menuItem in menu.items {
+            menuItem.target = self
         }
 
-        let point = NSPoint(x: 0, y: button.bounds.height + 2)
-        menu.popUp(positioning: nil, at: point, in: button)
+        // Native status-item menu presentation (rather than manual `popUp`) avoids an
+        // AppKit glitch where the menu renders truncated and resizes/relocates on hover.
+        item.menu = menu
+        button.performClick(nil)
+        item.menu = nil
+    }
+
+    @objc private func openStudiofrontFromMenu(_ sender: Any?) {
+        togglePopover()
+    }
+
+    @objc private func quitFromMenu(_ sender: Any?) {
+        NSApp.terminate(sender)
     }
 
     @objc private func openSettingsFromMenu(_ sender: Any?) {
