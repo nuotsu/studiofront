@@ -136,9 +136,11 @@ public struct ThemedSurface: View {
                 RoundedRectangle(cornerRadius: metrics.panelCornerRadius, style: .continuous)
                     .fill(colors.panelFill)
             }
-
-            RoundedRectangle(cornerRadius: metrics.panelCornerRadius, style: .continuous)
-                .strokeBorder(colors.panelBorder, lineWidth: 1)
+        }
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(colors.panelBorder)
+                .frame(height: 1)
         }
     }
 }

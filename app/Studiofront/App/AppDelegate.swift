@@ -205,11 +205,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         openURL(url)
     }
 
-    func openSelectedSite() {
-        guard let url = store.selectedRow?.curation.primaryFrontendURL else { return }
-        openURL(url)
-    }
-
     func applyAppearance(_ preference: AppearancePreference) {
         popover?.appearance = preference.nsAppearance
         popover?.contentViewController?.view.appearance = preference.nsAppearance
@@ -367,10 +362,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
     private func handlePopoverKey(keyCode: UInt16, modifierRaw: UInt, characters: String) -> Bool {
         guard popover?.isShown == true else { return false }
         let flags = NSEvent.ModifierFlags(rawValue: modifierRaw).intersection(.deviceIndependentFlagsMask)
-        let command = flags.contains(.command)
-        let option = flags.contains(.option)
 
-        if command {
+        if matchesOpenStudioBinding(keyCode: keyCode, flags: flags) {
+            openSelectedStudio()
+            return true
+        }
+
+        if flags.contains(.command) {
             let character = characters.lowercased()
             switch character {
             case "c":
@@ -405,13 +403,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         case 125:
             store.selectNext()
             return true
-        case 36, 76:
-            if option {
-                openSelectedSite()
-            } else {
-                openSelectedStudio()
-            }
-            return true
         case 53:
             if store.clearQueryOrSignalDismiss() {
                 closePopover()
@@ -420,5 +411,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         default:
             return false
         }
+    }
+
+    private func matchesOpenStudioBinding(keyCode: UInt16, flags: NSEvent.ModifierFlags) -> Bool {
+        let pressed = AppSettings.normalizedOpenStudioKeyCode(keyCode)
+        let bound = AppSettings.normalizedOpenStudioKeyCode(UInt16(settings.openStudioKeyCode))
+        return pressed == bound && flags == settings.openStudioModifierFlags
     }
 }

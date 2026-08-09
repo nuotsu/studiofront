@@ -58,6 +58,21 @@ final class AppSettings {
         didSet { UserDefaults.standard.set(hideArchivedProjects, forKey: Keys.hideArchivedProjects) }
     }
 
+    var openStudioKeyCode: Int {
+        didSet { UserDefaults.standard.set(openStudioKeyCode, forKey: Keys.openStudioKeyCode) }
+    }
+
+    var openStudioModifierRawValue: Int {
+        didSet { UserDefaults.standard.set(openStudioModifierRawValue, forKey: Keys.openStudioModifierRawValue) }
+    }
+
+    /// The raw characters captured when this binding was last recorded (empty for the
+    /// default Return binding). Persisted so letter/digit rebinds can still render their
+    /// correct glyph after a relaunch, when there's no live NSEvent to re-derive it from.
+    var openStudioCharacters: String {
+        didSet { UserDefaults.standard.set(openStudioCharacters, forKey: Keys.openStudioCharacters) }
+    }
+
     var refreshInterval: TimeInterval {
         TimeInterval(max(1, refreshIntervalMinutes) * 60)
     }
@@ -66,18 +81,37 @@ final class AppSettings {
         themePreference.theme
     }
 
+    var openStudioModifierFlags: NSEvent.ModifierFlags {
+        NSEvent.ModifierFlags(rawValue: UInt(openStudioModifierRawValue))
+            .intersection(.deviceIndependentFlagsMask)
+    }
+
+    /// Return and keypad Enter are treated as the same key everywhere this binding is read or recorded.
+    nonisolated static func normalizedOpenStudioKeyCode(_ keyCode: UInt16) -> UInt16 {
+        keyCode == 76 ? 36 : keyCode
+    }
+
+    nonisolated static let defaultOpenStudioKeyCode = 36
+    nonisolated static let defaultOpenStudioModifierRawValue = 0
+
     init(
         themePreference: ThemePreference = .liquidGlass,
         appearancePreference: AppearancePreference = .system,
         showInDock: Bool = false,
         refreshIntervalMinutes: Int = 5,
-        hideArchivedProjects: Bool = true
+        hideArchivedProjects: Bool = true,
+        openStudioKeyCode: Int = AppSettings.defaultOpenStudioKeyCode,
+        openStudioModifierRawValue: Int = AppSettings.defaultOpenStudioModifierRawValue,
+        openStudioCharacters: String = ""
     ) {
         self.themePreference = themePreference
         self.appearancePreference = appearancePreference
         self.showInDock = showInDock
         self.refreshIntervalMinutes = refreshIntervalMinutes
         self.hideArchivedProjects = hideArchivedProjects
+        self.openStudioKeyCode = openStudioKeyCode
+        self.openStudioModifierRawValue = openStudioModifierRawValue
+        self.openStudioCharacters = openStudioCharacters
     }
 
     static func load() -> AppSettings {
@@ -88,12 +122,18 @@ final class AppSettings {
         let storedInterval = defaults.object(forKey: Keys.refreshInterval) as? Int
         let refresh = Self.allowedRefreshIntervals.contains(storedInterval ?? -1) ? storedInterval! : 5
         let hideArchivedProjects = defaults.object(forKey: Keys.hideArchivedProjects) as? Bool ?? true
+        let openStudioKeyCode = defaults.object(forKey: Keys.openStudioKeyCode) as? Int ?? Self.defaultOpenStudioKeyCode
+        let openStudioModifierRawValue = defaults.object(forKey: Keys.openStudioModifierRawValue) as? Int ?? Self.defaultOpenStudioModifierRawValue
+        let openStudioCharacters = defaults.string(forKey: Keys.openStudioCharacters) ?? ""
         return AppSettings(
             themePreference: theme,
             appearancePreference: appearance,
             showInDock: showInDock,
             refreshIntervalMinutes: refresh,
-            hideArchivedProjects: hideArchivedProjects
+            hideArchivedProjects: hideArchivedProjects,
+            openStudioKeyCode: openStudioKeyCode,
+            openStudioModifierRawValue: openStudioModifierRawValue,
+            openStudioCharacters: openStudioCharacters
         )
     }
 
@@ -105,5 +145,8 @@ final class AppSettings {
         static let showInDock = "showInDock"
         static let refreshInterval = "refreshIntervalMinutes"
         static let hideArchivedProjects = "hideArchivedProjects"
+        static let openStudioKeyCode = "openStudioKeyCode"
+        static let openStudioModifierRawValue = "openStudioModifierRawValue"
+        static let openStudioCharacters = "openStudioCharacters"
     }
 }
