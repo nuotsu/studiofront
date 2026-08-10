@@ -61,6 +61,9 @@ struct SettingsRootView: View {
             maxHeight: .infinity
         )
         .preferredColorScheme(settings.appearancePreference.colorScheme)
+        .transaction { $0.disablesAnimations = true }
+        .animation(nil, value: settings.appearancePreference)
+        .id(settings.appearancePreference)
         .onAppear {
             AppDelegate.shared?.applyAppearance(settings.appearancePreference)
             AppDelegate.shared?.configureOpenSettingsWindow()

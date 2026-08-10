@@ -26,7 +26,10 @@ struct PopoverRootView: View {
         .clipShape(RoundedRectangle(cornerRadius: theme.cornerRadius(metrics.panelCornerRadius), style: theme.cornerStyle))
         .studioTheme(theme)
         .preferredColorScheme(settings.appearancePreference.colorScheme)
-        .id(settings.themePreference)
+        .transaction { $0.disablesAnimations = true }
+        .animation(nil, value: settings.appearancePreference)
+        // Remount on appearance so adaptive Liquid Glass colors don't crossfade.
+        .id("\(settings.themePreference.rawValue)-\(settings.appearancePreference.rawValue)")
         .onAppear {
             searchFocused = true
             store.hideArchivedProjects = settings.hideArchivedProjects

@@ -48,11 +48,11 @@ private struct MenuBarIconPicker: View {
     @Binding var selection: MenuBarIconPreference
 
     var body: some View {
-        HStack(spacing: 2) {
+        HStack(alignment: .top, spacing: 2) {
             ForEach(MenuBarIconPreference.allCases) { preference in
                 SettingsOptionTile(
                     label: preference.title,
-                    labelWidth: 72,
+                    labelWidth: SettingsOptionTileMetrics.labelWidth,
                     isSelected: selection == preference,
                     action: { selection = preference }
                 ) {
@@ -66,8 +66,10 @@ private struct MenuBarIconPicker: View {
                             .frame(height: 18)
                             .foregroundStyle(.primary)
                     }
-                    .frame(width: 40, height: 24)
-                    .padding(6)
+                    .frame(
+                        width: SettingsOptionTileMetrics.previewWidth,
+                        height: SettingsOptionTileMetrics.previewHeight
+                    )
                 }
             }
         }
@@ -75,6 +77,18 @@ private struct MenuBarIconPicker: View {
 }
 
 // MARK: - Preview tile (selection ring on the preview, not the label)
+
+private enum SettingsOptionTileMetrics {
+    /// Wide enough for "Studiofront" on one line; shared by menu bar + theme.
+    static let previewWidth: CGFloat = 72
+    static let previewHeight: CGFloat = 44
+    static let labelWidth: CGFloat = 72
+
+    /// Appearance tiles are 25% narrower/shorter than the shared preview size.
+    static let appearancePreviewWidth: CGFloat = 54
+    static let appearancePreviewHeight: CGFloat = 33
+    static let appearanceLabelWidth: CGFloat = 54
+}
 
 /// Shared chrome for a single-select preview tile: a small preview on top,
 /// a label below. Selection shows as an accent ring around the preview;
@@ -91,17 +105,18 @@ private struct SettingsOptionTile<Preview: View>: View {
             VStack(spacing: 6) {
                 preview()
                     .overlay(
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
                             .strokeBorder(
                                 isSelected ? Color.accentColor : Color.primary.opacity(0.12),
                                 lineWidth: isSelected ? 1.5 : 1
                             )
                     )
-                    .frame(width: labelWidth, alignment: .trailing)
+                    .frame(width: labelWidth, alignment: .center)
                 Text(label)
                     .fontWeight(isSelected ? .semibold : .regular)
                     .foregroundStyle(isSelected ? .primary : .secondary)
-                    .frame(width: labelWidth)
+                    .multilineTextAlignment(.center)
+                    .frame(width: labelWidth, alignment: .center)
             }
             .padding(.horizontal, 6)
             .padding(.vertical, 6)
@@ -117,11 +132,11 @@ private struct ThemePicker: View {
     @Binding var selection: ThemePreference
 
     var body: some View {
-        HStack(spacing: 2) {
+        HStack(alignment: .top, spacing: 2) {
             ForEach(ThemePreference.allCases) { preference in
                 SettingsOptionTile(
                     label: preference.title,
-                    labelWidth: 84,
+                    labelWidth: SettingsOptionTileMetrics.labelWidth,
                     isSelected: selection == preference,
                     action: { selection = preference }
                 ) {
@@ -153,7 +168,10 @@ private struct ThemeSwatch: View {
             RoundedRectangle(cornerRadius: 6, style: theme.cornerStyle)
                 .strokeBorder(theme.colors.panelBorder, lineWidth: 1)
         }
-        .frame(width: 40, height: 28)
+        .frame(
+            width: SettingsOptionTileMetrics.previewWidth,
+            height: SettingsOptionTileMetrics.previewHeight
+        )
         .clipShape(RoundedRectangle(cornerRadius: 6, style: theme.cornerStyle))
     }
 }
@@ -164,11 +182,11 @@ private struct AppearancePicker: View {
     @Binding var selection: AppearancePreference
 
     var body: some View {
-        HStack(spacing: 2) {
+        HStack(alignment: .top, spacing: 2) {
             ForEach(AppearancePreference.allCases) { preference in
                 SettingsOptionTile(
                     label: preference.title,
-                    labelWidth: 56,
+                    labelWidth: SettingsOptionTileMetrics.appearanceLabelWidth,
                     isSelected: selection == preference,
                     action: { selection = preference }
                 ) {
@@ -189,32 +207,56 @@ private struct AppearanceSwatch: View {
     private static let darkTop = Color(white: 0.32)
     private static let darkBody = Color(white: 0.16)
 
+    /// Inset window size — leaves a wallpaper margin inside the selection ring.
+    private static let windowWidth: CGFloat = 40
+    private static let windowHeight: CGFloat = 20
+
     var body: some View {
-        HStack(spacing: 0) {
-            switch preference {
-            case .system:
-                window(top: Self.lightTop, body: Self.lightBody)
-                window(top: Self.darkTop, body: Self.darkBody)
-            case .light:
-                window(top: Self.lightTop, body: Self.lightBody)
-            case .dark:
-                window(top: Self.darkTop, body: Self.darkBody)
-            }
-        }
-        .frame(width: 40, height: 24)
-        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-        .overlay(
+        ZStack {
+            // Native-looking blue → purple desktop behind the window chrome.
             RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.12), lineWidth: 1)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color(red: 0.30, green: 0.52, blue: 0.92),
+                            Color(red: 0.42, green: 0.34, blue: 0.82),
+                            Color(red: 0.22, green: 0.18, blue: 0.48),
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+
+            HStack(spacing: 0) {
+                switch preference {
+                case .system:
+                    window(top: Self.lightTop, body: Self.lightBody)
+                    window(top: Self.darkTop, body: Self.darkBody)
+                case .light:
+                    window(top: Self.lightTop, body: Self.lightBody)
+                case .dark:
+                    window(top: Self.darkTop, body: Self.darkBody)
+                }
+            }
+            .frame(width: Self.windowWidth, height: Self.windowHeight)
+            .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .strokeBorder(Color.black.opacity(0.18), lineWidth: 0.5)
+            )
+        }
+        .frame(
+            width: SettingsOptionTileMetrics.appearancePreviewWidth,
+            height: SettingsOptionTileMetrics.appearancePreviewHeight
         )
-        .padding(8)
+        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
     }
 
     private func window(top: Color, body: Color) -> some View {
         VStack(spacing: 0) {
-            top.frame(height: 6)
+            top.frame(height: 5)
             body
         }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

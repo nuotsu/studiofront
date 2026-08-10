@@ -76,9 +76,7 @@ private struct KeybindingRow: View {
             Spacer()
             KeycapLegend(glyphs)
         }
-        .foregroundStyle(.secondary)
-        .opacity(0.55)
-        .disabled(true)
+        .allowsHitTesting(false)
     }
 }
 

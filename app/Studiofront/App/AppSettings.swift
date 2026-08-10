@@ -64,7 +64,12 @@ final class AppSettings {
     }
 
     var appearancePreference: AppearancePreference {
-        didSet { UserDefaults.standard.set(appearancePreference.rawValue, forKey: Keys.appearance) }
+        didSet {
+            UserDefaults.standard.set(appearancePreference.rawValue, forKey: Keys.appearance)
+            // Apply before the next SwiftUI render so theme colors that snapshot
+            // against `NSApp.appearance` resolve to the new light/dark immediately.
+            AppDelegate.shared?.applyAppearance(appearancePreference)
+        }
     }
 
     var menuBarIconPreference: MenuBarIconPreference {

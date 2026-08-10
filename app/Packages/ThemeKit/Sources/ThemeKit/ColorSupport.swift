@@ -24,12 +24,15 @@ extension Color {
         Color(.sRGB, red: red, green: green, blue: blue, opacity: alpha)
     }
 
-    /// Appearance-adaptive color. Resolves against the view's effective appearance.
+    /// Appearance-adaptive color.
+    ///
+    /// Resolves to a discrete light/dark `Color` against the current app
+    /// appearance. Dynamic `NSColor(name:)` providers crossfade when light/dark
+    /// flips; a plain `Color` swapped via appearance remounts snaps instead.
     static func adaptive(light: Color, dark: Color) -> Color {
-        Color(nsColor: NSColor(name: nil) { appearance in
-            let isDark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-            return NSColor(isDark ? dark : light)
-        })
+        let appearance = NSApp.appearance ?? NSApp.effectiveAppearance
+        let isDark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        return isDark ? dark : light
     }
 
     /// White-on-dark / black-on-light translucent ink used by Liquid Glass.

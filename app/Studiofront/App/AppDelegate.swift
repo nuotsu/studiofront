@@ -268,10 +268,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
     }
 
     func applyAppearance(_ preference: AppearancePreference) {
-        popover?.appearance = preference.nsAppearance
-        popover?.contentViewController?.view.appearance = preference.nsAppearance
-        if let window = NSApp.windows.first(where: Self.isSettingsWindow) {
-            window.appearance = preference.nsAppearance
+        // Appearance changes otherwise crossfade Liquid Glass materials/colors.
+        // Force a zero-duration update across AppKit + tear down any in-flight
+        // layer animations on the popover and Settings window.
+        let appearance = preference.nsAppearance
+
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0
+            context.allowsImplicitAnimation = false
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            CATransaction.setAnimationDuration(0)
+            defer { CATransaction.commit() }
+
+            NSApp.appearance = appearance
+
+            popover?.appearance = appearance
+            if let view = popover?.contentViewController?.view {
+                view.appearance = appearance
+                Self.stripAnimations(from: view)
+            }
+
+            for window in NSApp.windows where Self.isSettingsWindow(window) {
+                let previousBehavior = window.animationBehavior
+                window.animationBehavior = .none
+                window.appearance = appearance
+                window.contentView?.appearance = appearance
+                if let contentView = window.contentView {
+                    Self.stripAnimations(from: contentView)
+                }
+                window.animationBehavior = previousBehavior
+            }
+        }
+    }
+
+    private static func stripAnimations(from view: NSView) {
+        view.layer?.removeAllAnimations()
+        for subview in view.subviews {
+            stripAnimations(from: subview)
         }
     }
 
