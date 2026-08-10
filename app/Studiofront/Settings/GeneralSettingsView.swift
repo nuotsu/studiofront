@@ -24,6 +24,20 @@ struct GeneralSettingsView: View {
                     Toggle("Hide archived projects", isOn: $settings.hideArchivedProjects)
                         .settingsHighlight(.hideArchivedProjects)
                 }
+
+                Section {
+                    Picker("Presence", selection: $settings.presenceMode) {
+                        ForEach(PresenceMode.allCases) { mode in
+                            Text(mode.title).tag(mode)
+                        }
+                    }
+                    .settingsHighlight(.presenceMode)
+                    if let caption = settings.presenceMode.caption {
+                        Text(caption)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
             .formStyle(.grouped)
         }

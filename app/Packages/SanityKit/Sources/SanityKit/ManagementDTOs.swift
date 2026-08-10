@@ -21,6 +21,16 @@ public struct RemoteMember: Sendable, Identifiable, Equatable {
     public var role: String?
 }
 
+/// From `GET /projects/{projectId}/users/{ids}` — a different resource shape
+/// than `/users/me` (confirmed against the live API: this one uses `imageUrl`,
+/// not `/users/me`'s `profileImage`). Both `displayName` and `imageUrl` are
+/// absent for members who haven't set one.
+public struct RemoteMemberProfile: Sendable, Identifiable, Equatable {
+    public var id: String
+    public var displayName: String
+    public var imageURL: URL?
+}
+
 public struct RemoteDataset: Sendable, Hashable {
     public var name: String
     public var aclMode: String
@@ -80,6 +90,12 @@ struct ProjectDTO: Decodable {
     }
 }
 
+struct ProjectUserDTO: Decodable {
+    var id: String
+    var displayName: String?
+    var imageUrl: String?
+}
+
 struct DatasetDTO: Decodable {
     var name: String
     var aclMode: String?
@@ -127,6 +143,30 @@ public struct RemoteEditedDocument: Sendable, Equatable {
             title: winner.isDraft ? "Draft: \(resolvedTitle)" : resolvedTitle,
             updatedAt: winner.doc.updatedAt
         )
+    }
+}
+
+/// One line of the History API's `/data/history/<dataset>/transactions` NDJSON
+/// response. Field names confirmed against Sanity's own
+/// `TransactionLogEvent` type (`@sanity/types`), not guessed.
+public struct RemoteRecentEdit: Sendable, Equatable {
+    public var authorId: String
+    public var updatedAt: Date
+}
+
+struct TransactionLogEntryDTO: Decodable, Sendable {
+    var author: String
+    var timestamp: Date
+}
+
+/// A malformed or error line (`{"error": {...}}`) in the transactions NDJSON
+/// stream — decoded separately so one bad line doesn't fail the whole batch.
+struct TransactionLogErrorDTO: Decodable, Sendable {
+    var error: ErrorBody
+
+    struct ErrorBody: Decodable, Sendable {
+        var type: String?
+        var description: String?
     }
 }
 

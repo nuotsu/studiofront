@@ -203,11 +203,13 @@ public struct AvatarStack: View {
         public var id: String
         public var initials: String
         public var color: Color
+        public var imageURL: URL?
 
-        public init(id: String, initials: String, color: Color) {
+        public init(id: String, initials: String, color: Color, imageURL: URL? = nil) {
             self.id = id
             self.initials = initials
             self.color = color
+            self.imageURL = imageURL
         }
     }
 
@@ -227,14 +229,8 @@ public struct AvatarStack: View {
             let overflow = items.count - visible.count
             HStack(spacing: 0) {
                 ForEach(Array(visible.enumerated()), id: \.element.id) { index, item in
-                    Text(item.initials)
-                        .font(theme.typography.presence)
-                        .foregroundStyle(.white)
-                        .frame(width: theme.metrics.presenceSize, height: theme.metrics.presenceSize)
-                        .background(Circle().fill(item.color))
-                        .overlay(Circle().stroke(theme.colors.ring, lineWidth: 1.5))
+                    avatarCircle(item)
                         .padding(.leading, index == 0 ? 0 : -4)
-                        .accessibilityLabel("\(item.initials) is editing now")
                 }
                 if overflow > 0 {
                     Text("+\(overflow)")
@@ -245,6 +241,33 @@ public struct AvatarStack: View {
             }
             .padding(.leading, 4)
         }
+    }
+
+    @ViewBuilder
+    private func avatarCircle(_ item: Item) -> some View {
+        Group {
+            if let imageURL = item.imageURL {
+                AsyncImage(url: imageURL) { image in
+                    image.resizable().scaledToFill()
+                } placeholder: {
+                    initialsCircle(item)
+                }
+            } else {
+                initialsCircle(item)
+            }
+        }
+        .frame(width: theme.metrics.presenceSize, height: theme.metrics.presenceSize)
+        .clipShape(Circle())
+        .overlay(Circle().stroke(theme.colors.ring, lineWidth: 1.5))
+        .accessibilityLabel("\(item.initials) is editing now")
+    }
+
+    private func initialsCircle(_ item: Item) -> some View {
+        Text(item.initials)
+            .font(theme.typography.presence)
+            .foregroundStyle(.white)
+            .frame(width: theme.metrics.presenceSize, height: theme.metrics.presenceSize)
+            .background(item.color)
     }
 }
 

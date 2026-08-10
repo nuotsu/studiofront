@@ -195,6 +195,29 @@ final class ProjectSyncService {
                 }
             }
 
+            var memberProfilesByProject: [String: [String: RemoteMemberProfile]] = [:]
+            for start in stride(from: 0, to: remote.count, by: limit) {
+                try Task.checkCancellation()
+                let slice = Array(remote[start..<min(start + limit, remote.count)])
+                await withTaskGroup(of: (String, [RemoteMemberProfile]).self) { group in
+                    for project in slice {
+                        let ids = project.members.map(\.id)
+                        group.addTask {
+                            guard !ids.isEmpty else { return (project.id, []) }
+                            let profiles = try? await client.projectMemberProfiles(
+                                token: token,
+                                projectId: project.id,
+                                ids: ids
+                            )
+                            return (project.id, profiles ?? [])
+                        }
+                    }
+                    for await (id, profiles) in group {
+                        memberProfilesByProject[id] = Dictionary(uniqueKeysWithValues: profiles.map { ($0.id, $0) })
+                    }
+                }
+            }
+
             let currentUserID = auth.signedInUser?.id
             snapshot.projects = remote.map { project in
                 SanityProject(
@@ -210,7 +233,13 @@ final class ProjectSyncService {
                     externalStudioHost: externalStudioHostsFromApps[project.id] ?? project.externalStudioHost,
                     datasets: datasetsByProject[project.id] ?? [],
                     members: project.members.map { member in
-                        Member(id: member.id, displayName: member.id, role: member.role)
+                        let profile = memberProfilesByProject[project.id]?[member.id]
+                        return Member(
+                            id: member.id,
+                            displayName: profile?.displayName ?? member.id,
+                            imageURL: profile?.imageURL,
+                            role: member.role
+                        )
                     },
                     currentUserRole: project.members.first(where: { $0.id == currentUserID })?.role,
                     createdAt: project.createdAt == .distantPast ? Date() : project.createdAt,
@@ -299,7 +328,9 @@ final class ProjectSyncService {
         return result
     }
 
-    private static func primaryDataset(from datasets: [Dataset]) -> String? {
+    /// Also used by `PresenceCoordinator` to pick a project's dataset for
+    /// presence connections/polls — kept as the one place this choice is made.
+    static func primaryDataset(from datasets: [Dataset]) -> String? {
         if datasets.contains(where: { $0.name == "production" }) { return "production" }
         return datasets.map(\.name).sorted().first
     }

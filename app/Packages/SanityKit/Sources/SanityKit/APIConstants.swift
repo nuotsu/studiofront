@@ -7,4 +7,11 @@ public enum SanityAPI {
     /// confirmed directly against the live API, not from docs alone.
     public static let userApplicationsVersion = "v2024-08-01"
     public static let baseURL = URL(string: "https://api.sanity.io")!
+
+    /// The API version Sanity Studio itself pins its presence websocket to
+    /// (`getBifurClient` in `@sanity/sanity`'s `prepareConfig.tsx`), confirmed
+    /// by reading Studio's own open-source client — independent of
+    /// `SanityAPI.version` used for the Management/data APIs.
+    public static let presenceVersion = "v2022-06-30"
+
 }

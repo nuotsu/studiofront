@@ -18,6 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
     let store = StudioStore()
     let auth = AuthSession()
     private(set) lazy var sync = ProjectSyncService(store: store, auth: auth)
+    private(set) lazy var presence = PresenceCoordinator(store: store, settings: settings)
 
     private var statusItem: NSStatusItem?
     private var popover: NSPopover?
@@ -52,6 +53,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         store.onRefreshRequested = { [weak self] in
             guard let self else { return }
             self.sync.refresh(force: true)
+        }
+        store.onRowsReplaced = { [weak self] in
+            self?.presence.refreshEligibleProjects()
         }
         auth.onStatusChange = { [weak self] in
             self?.sync.handleAuthChange()
@@ -392,11 +396,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
 
     func popoverWillShow(_ notification: Notification) {
         installKeyMonitor()
+        presence.willShow()
     }
 
     func popoverDidClose(_ notification: Notification) {
         removeKeyMonitor()
         sync.cancel()
+        presence.willHide()
         DispatchQueue.main.async { [weak self] in
             self?.applyActivationPolicy()
         }

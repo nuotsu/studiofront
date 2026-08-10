@@ -1,2 +1,2 @@
-/// Presence provider protocol and implementations. Implemented in Phase 6.
-public enum PresenceKit {}
+// Presence provider protocol and implementations — see `PresenceProvider.swift`,
+// `ActivityPresenceProvider.swift`, and `RealtimePresenceProvider.swift`.

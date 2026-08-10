@@ -10,7 +10,17 @@ let package = Package(
     products: [
         .library(name: "PresenceKit", targets: ["PresenceKit"]),
     ],
+    dependencies: [
+        .package(path: "../SanityKit"),
+        .package(path: "../StudioStore"),
+    ],
     targets: [
-        .target(name: "PresenceKit"),
+        .target(
+            name: "PresenceKit",
+            dependencies: [
+                .product(name: "SanityKit", package: "SanityKit"),
+                .product(name: "StudioStore", package: "StudioStore"),
+            ]
+        ),
     ]
 )
