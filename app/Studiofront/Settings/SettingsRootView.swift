@@ -12,7 +12,7 @@ struct SettingsRootView: View {
 
     @State private var query = ""
     @State private var selectedSearchID: String?
-    @FocusState private var searchFieldFocused: Bool
+    @State private var searchFieldFocused = false
     @State private var search = SettingsSearchState()
 
     var body: some View {
@@ -71,21 +71,32 @@ struct SettingsRootView: View {
         HStack(spacing: 6) {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(.secondary)
-            TextField("Search", text: $query)
-                .textFieldStyle(.plain)
-                .focused($searchFieldFocused)
-                .onSubmit { selectFirstMatch() }
-            if !query.isEmpty {
-                Button {
-                    query = ""
-                    selectedSearchID = nil
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Clear search")
+            // AppKit-backed field: SwiftUI `TextField` + `.focused` select-alls on
+            // every first-responder pass, and the first keystroke both swaps the
+            // sidebar `List` type and inserts the clear button — either of which
+            // can recreate the field mid-typing. This control keeps the caret at
+            // the end across those rebuilds instead of selecting the query.
+            SettingsSidebarSearchField(
+                text: $query,
+                isFocused: $searchFieldFocused,
+                onSubmit: selectFirstMatch
+            )
+            .frame(maxWidth: .infinity)
+            // Keep the clear control mounted so the first character doesn't
+            // change this HStack's child count and recreate the text field.
+            Button {
+                query = ""
+                selectedSearchID = nil
+                searchFieldFocused = true
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundStyle(.secondary)
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Clear search")
+            .opacity(query.isEmpty ? 0 : 1)
+            .disabled(query.isEmpty)
+            .allowsHitTesting(!query.isEmpty)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
@@ -105,18 +116,27 @@ struct SettingsRootView: View {
         .padding(.bottom, 8)
         .onChange(of: query) { _, _ in
             selectedSearchID = nil
-            // Switching the sidebar between browse and results mode rebuilds this
-            // field, so re-assert focus once that settles or typing drops it.
-            DispatchQueue.main.async { searchFieldFocused = true }
+            // Switching the sidebar between browse and results mode can still
+            // tear down this safe-area bar; reassert focus after that settles.
+            DispatchQueue.main.async {
+                searchFieldFocused = true
+            }
         }
     }
 
     private var sidebarList: some View {
-        sidebarContent
+        // `sidebarContent` is one of three differently-typed `List`s depending on
+        // query state. Even attaching `.safeAreaBar` "outside" that branch (rather
+        // than inside each arm) doesn't stop the rebuild: modifiers are generic
+        // over their base view's concrete type, so when that type changes here
+        // (e.g. on the query's empty <-> non-empty transition), the whole modified
+        // subtree — including the search field inside the bar — is torn down and
+        // recreated too, dropping its focus. Erasing the type with `AnyView` first
+        // keeps the base type stable across branches, so the bar (and the search
+        // field inside it) survives.
+        AnyView(sidebarContent)
             .listStyle(.sidebar)
             .scrollEdgeEffectStyle(.soft, for: .top)
-            // Attached once, outside the branches below: hanging it off each list
-            // rebuilt the text field on the first keystroke, which dropped focus.
             .safeAreaBar(edge: .top) {
                 searchField
             }
@@ -279,5 +299,90 @@ private struct SettingsSplitViewTuner: NSViewRepresentable {
             current = candidate.superview
         }
         return nil
+    }
+}
+
+/// Settings sidebar search field that keeps an insertion-point caret when
+/// AppKit would otherwise select-all on `becomeFirstResponder()` — which
+/// happens whenever SwiftUI rebuilds the surrounding sidebar mid-typing.
+private struct SettingsSidebarSearchField: NSViewRepresentable {
+    @Binding var text: String
+    @Binding var isFocused: Bool
+    var onSubmit: () -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
+
+    func makeNSView(context: Context) -> CaretPreservingTextField {
+        let field = CaretPreservingTextField()
+        field.placeholderString = "Search"
+        field.isBordered = false
+        field.isBezeled = false
+        field.drawsBackground = false
+        field.focusRingType = .none
+        field.font = .systemFont(ofSize: NSFont.systemFontSize)
+        field.delegate = context.coordinator
+        field.target = context.coordinator
+        field.action = #selector(Coordinator.submit(_:))
+        return field
+    }
+
+    func updateNSView(_ field: CaretPreservingTextField, context: Context) {
+        context.coordinator.parent = self
+        if field.stringValue != text {
+            field.stringValue = text
+            field.moveCaretToEnd()
+        }
+        let editorIsFirst = field.currentEditor() != nil
+            && field.window?.firstResponder === field.currentEditor()
+        if isFocused, !editorIsFirst {
+            DispatchQueue.main.async {
+                field.window?.makeFirstResponder(field)
+            }
+        }
+    }
+
+    final class Coordinator: NSObject, NSTextFieldDelegate {
+        var parent: SettingsSidebarSearchField
+
+        init(parent: SettingsSidebarSearchField) {
+            self.parent = parent
+        }
+
+        func controlTextDidChange(_ obj: Notification) {
+            guard let field = obj.object as? NSTextField else { return }
+            parent.text = field.stringValue
+        }
+
+        func controlTextDidBeginEditing(_ obj: Notification) {
+            parent.isFocused = true
+        }
+
+        func controlTextDidEndEditing(_ obj: Notification) {
+            parent.isFocused = false
+        }
+
+        @objc func submit(_ sender: NSTextField) {
+            parent.onSubmit()
+        }
+    }
+}
+
+private final class CaretPreservingTextField: NSTextField {
+    override func becomeFirstResponder() -> Bool {
+        let ok = super.becomeFirstResponder()
+        moveCaretToEnd()
+        // AppKit may finalize select-all after this returns; collapse again.
+        DispatchQueue.main.async { [weak self] in
+            self?.moveCaretToEnd()
+        }
+        return ok
+    }
+
+    func moveCaretToEnd() {
+        guard let editor = currentEditor() else { return }
+        let end = (stringValue as NSString).length
+        editor.selectedRange = NSRange(location: end, length: 0)
     }
 }
