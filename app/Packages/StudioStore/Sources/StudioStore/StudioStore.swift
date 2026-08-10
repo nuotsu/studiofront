@@ -165,7 +165,7 @@ public final class StudioStore {
         let ids = flatVisibleIDs
         guard !ids.isEmpty else { return }
         if let selectedID, let index = ids.firstIndex(of: selectedID) {
-            self.selectedID = ids[(index + 1) % ids.count]
+            self.selectedID = ids[min(index + 1, ids.count - 1)]
         } else {
             selectedID = ids.first
         }
@@ -175,7 +175,7 @@ public final class StudioStore {
         let ids = flatVisibleIDs
         guard !ids.isEmpty else { return }
         if let selectedID, let index = ids.firstIndex(of: selectedID) {
-            self.selectedID = ids[(index - 1 + ids.count) % ids.count]
+            self.selectedID = ids[max(index - 1, 0)]
         } else {
             selectedID = ids.last
         }
