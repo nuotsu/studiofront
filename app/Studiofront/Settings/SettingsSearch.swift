@@ -6,6 +6,7 @@ enum SettingsSearchTarget: String, Hashable, CaseIterable {
     case showInDock
     case refreshInterval
     case hideArchivedProjects
+    case presenceMode
     case menuBarIcon
     case theme
     case appearance
@@ -49,6 +50,13 @@ enum SettingsSearchIndex {
             pane: .general,
             target: .hideArchivedProjects,
             systemImage: "archivebox"
+        ),
+        SettingsSearchItem(
+            title: "Presence",
+            keywords: ["presence", "live", "editors", "avatars", "activity", "collaborators", "who's editing"],
+            pane: .general,
+            target: .presenceMode,
+            systemImage: "person.2"
         ),
         SettingsSearchItem(
             title: "Menubar icon",

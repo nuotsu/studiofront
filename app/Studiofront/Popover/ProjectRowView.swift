@@ -120,7 +120,8 @@ struct ProjectRowView: View {
                 AvatarStack.Item(
                     id: member.id,
                     initials: member.initials,
-                    color: PresenceSwatch.color(for: member.id)
+                    color: PresenceSwatch.color(for: member.id),
+                    imageURL: member.imageURL
                 )
             })
 

@@ -16,6 +16,10 @@ public final class StudioStore {
     public var hideArchivedProjects: Bool = true
     public var onCurationChanged: (() -> Void)?
     public var onRefreshRequested: (() -> Void)?
+    /// Fired after `replaceRows` — the only point at which the set of
+    /// eligible project ids for presence can change while the popover stays
+    /// open (no per-row visibility/hide toggle exists yet).
+    public var onRowsReplaced: (() -> Void)?
 
     private var copyResetTask: Task<Void, Never>?
 
@@ -140,10 +144,18 @@ public final class StudioStore {
             selectedID = rows.first(where: { $0.curation.isFavorite })?.id ?? rows.first?.id
         }
         reconcileSelection()
+        onRowsReplaced?()
     }
 
     public func clearLiveRows() {
         replaceRows([], organizations: [])
+    }
+
+    /// Updates one row's live presence in place, distinct from `replaceRows`,
+    /// so a presence push never disturbs selection/scroll reconciliation.
+    public func setActiveUsers(_ members: [Member], forProjectID id: String) {
+        guard let index = rows.firstIndex(where: { $0.id == id }) else { return }
+        rows[index].activity.activeUsers = members
     }
 
     public func prepareForOpen() {

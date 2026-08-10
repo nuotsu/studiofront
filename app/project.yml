@@ -41,6 +41,7 @@ targets:
       - package: ThemeKit
       - package: StudioStore
       - package: SanityKit
+      - package: PresenceKit
       - package: Sparkle
         product: Sparkle
     info:

@@ -59,6 +59,34 @@ public actor SanityClient {
         }
     }
 
+    /// Batched member-profile lookup for `Member.displayName`/`imageURL` — the
+    /// project members list itself carries only ids/roles, not names or
+    /// avatars. Chunked at 100 ids per call to match Sanity's own documented
+    /// batch limit for this endpoint.
+    public func projectMemberProfiles(
+        token: String,
+        projectId: String,
+        ids: [String]
+    ) async throws -> [RemoteMemberProfile] {
+        guard !ids.isEmpty else { return [] }
+        var result: [RemoteMemberProfile] = []
+        for start in stride(from: 0, to: ids.count, by: 100) {
+            let slice = Array(ids[start..<min(start + 100, ids.count)])
+            let dtos: [ProjectUserDTO] = try await get(
+                path: "\(SanityAPI.version)/projects/\(projectId)/users/\(slice.joined(separator: ","))",
+                token: token
+            )
+            result += dtos.map {
+                RemoteMemberProfile(
+                    id: $0.id,
+                    displayName: $0.displayName ?? $0.id,
+                    imageURL: $0.imageUrl.flatMap(URL.init(string:))
+                )
+            }
+        }
+        return result
+    }
+
     public func listOrganizations(token: String) async throws -> [RemoteOrganization] {
         let dtos: [OrganizationDTO] = try await get(
             path: "\(SanityAPI.version)/organizations",
@@ -116,6 +144,55 @@ public actor SanityClient {
         let result: SanityConditional<QueryEnvelope> = try await performGET(url: url, token: token, etag: etag)
         return result.map { envelope in
             RemoteEditedDocument.resolving(published: envelope.published, draft: envelope.draft)
+        }
+    }
+
+    /// The presence websocket URL, matching exactly what Sanity Studio itself
+    /// connects to (`getBifurClient` in `prepareConfig.tsx`): `wss://<projectId
+    /// >.api.sanity.io/<presenceVersion>/socket/<dataset>?tag=...`. Pure — does
+    /// not open a connection.
+    public nonisolated func socketURL(projectId: String, dataset: String) -> URL {
+        var components = URLComponents()
+        components.scheme = "wss"
+        components.host = "\(projectId).api.sanity.io"
+        components.path = "/\(SanityAPI.presenceVersion)/socket/\(dataset)"
+        components.queryItems = [URLQueryItem(name: "tag", value: "dev.nuotsu.studiofront.presence")]
+        guard let url = components.url else {
+            preconditionFailure("socketURL produced an invalid URL for project \(projectId)")
+        }
+        return url
+    }
+
+    /// Recent editors of a dataset over the documented History API's
+    /// transactions endpoint (§7.2's fallback presence source) — never the
+    /// CDN, since the History API isn't CDN-fronted. Real per-project API
+    /// quota per §6.2; callers should poll conservatively.
+    public func recentEditors(
+        token: String,
+        projectId: String,
+        dataset: String,
+        since: Date,
+        limit: Int = 50
+    ) async throws -> [RemoteRecentEdit] {
+        var components = URLComponents()
+        components.scheme = "https"
+        components.host = "\(projectId).api.sanity.io"
+        components.path = "/\(SanityAPI.version)/data/history/\(dataset)/transactions"
+        components.queryItems = [
+            URLQueryItem(name: "fromTime", value: ISO8601DateFormatter().string(from: since)),
+            URLQueryItem(name: "excludeContent", value: "true"),
+            URLQueryItem(name: "limit", value: String(limit)),
+            URLQueryItem(name: "tag", value: "dev.nuotsu.studiofront.presence"),
+        ]
+        guard let url = components.url else {
+            throw SanityError.transport("Couldn’t reach Sanity.")
+        }
+        let lines = try await performNDJSONGET(url: url, token: token)
+        return lines.compactMap { line in
+            guard let entry = try? SanityJSON.decoder.decode(TransactionLogEntryDTO.self, from: line) else {
+                return nil
+            }
+            return RemoteRecentEdit(authorId: entry.author, updatedAt: entry.timestamp)
         }
     }
 
@@ -194,6 +271,45 @@ public actor SanityClient {
             } catch {
                 throw SanityError.decoding
             }
+        case 401, 403:
+            throw SanityError.unauthorized
+        case 404:
+            throw SanityError.notFound
+        default:
+            throw SanityError.transport("Sanity returned an unexpected response.")
+        }
+    }
+
+    /// Fetches and splits an NDJSON response body into per-line `Data`. A line
+    /// that fails to decode downstream (including error lines, e.g.
+    /// `{"error": {...}}`) is simply dropped by the caller rather than failing
+    /// the whole batch.
+    private func performNDJSONGET(url: URL, token: String) async throws -> [Data] {
+        try Task.checkCancellation()
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/x-ndjson", forHTTPHeaderField: "Accept")
+
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch is CancellationError {
+            throw SanityError.cancelled
+        } catch let urlError as URLError where urlError.code == .cancelled {
+            throw SanityError.cancelled
+        } catch {
+            throw SanityError.transport("Couldn’t reach Sanity.")
+        }
+
+        guard let http = response as? HTTPURLResponse else {
+            throw SanityError.transport("Couldn’t reach Sanity.")
+        }
+
+        switch http.statusCode {
+        case 200:
+            return data.split(separator: UInt8(ascii: "\n")).map { Data($0) }
         case 401, 403:
             throw SanityError.unauthorized
         case 404:

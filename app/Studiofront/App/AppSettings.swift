@@ -35,6 +35,32 @@ enum AppearancePreference: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+/// §7.2: the activity-based mode must be labeled honestly as recent edit
+/// history, not live presence.
+enum PresenceMode: String, CaseIterable, Identifiable, Sendable {
+    case realtime
+    case activityOnly
+    case off
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .realtime: "Live presence"
+        case .activityOnly: "Recent activity"
+        case .off: "Off"
+        }
+    }
+
+    var caption: String? {
+        switch self {
+        case .realtime: nil
+        case .activityOnly: "Reflects recent edit history, not who's currently viewing."
+        case .off: nil
+        }
+    }
+}
+
 enum MenuBarIconPreference: String, CaseIterable, Identifiable, Sendable {
     case studiofront
     case sanity
@@ -86,6 +112,11 @@ final class AppSettings {
 
     var hideArchivedProjects: Bool {
         didSet { UserDefaults.standard.set(hideArchivedProjects, forKey: Keys.hideArchivedProjects) }
+    }
+
+    // TODO: move to Settings > Advanced once that tab exists (spec §10).
+    var presenceMode: PresenceMode {
+        didSet { UserDefaults.standard.set(presenceMode.rawValue, forKey: Keys.presenceMode) }
     }
 
     var openStudioKeyCode: Int {
@@ -156,6 +187,7 @@ final class AppSettings {
         showInDock: Bool = false,
         refreshIntervalMinutes: Int = 5,
         hideArchivedProjects: Bool = true,
+        presenceMode: PresenceMode = .realtime,
         openStudioKeyCode: Int = AppSettings.defaultOpenStudioKeyCode,
         openStudioModifierRawValue: Int = AppSettings.defaultOpenStudioModifierRawValue,
         openStudioCharacters: String = "",
@@ -169,6 +201,7 @@ final class AppSettings {
         self.showInDock = showInDock
         self.refreshIntervalMinutes = refreshIntervalMinutes
         self.hideArchivedProjects = hideArchivedProjects
+        self.presenceMode = presenceMode
         self.openStudioKeyCode = openStudioKeyCode
         self.openStudioModifierRawValue = openStudioModifierRawValue
         self.openStudioCharacters = openStudioCharacters
@@ -186,6 +219,7 @@ final class AppSettings {
         let storedInterval = defaults.object(forKey: Keys.refreshInterval) as? Int
         let refresh = Self.allowedRefreshIntervals.contains(storedInterval ?? -1) ? storedInterval! : 5
         let hideArchivedProjects = defaults.object(forKey: Keys.hideArchivedProjects) as? Bool ?? true
+        let presenceMode = PresenceMode(rawValue: defaults.string(forKey: Keys.presenceMode) ?? "") ?? .realtime
         let openStudioKeyCode = defaults.object(forKey: Keys.openStudioKeyCode) as? Int ?? Self.defaultOpenStudioKeyCode
         let openStudioModifierRawValue = defaults.object(forKey: Keys.openStudioModifierRawValue) as? Int ?? Self.defaultOpenStudioModifierRawValue
         let openStudioCharacters = defaults.string(forKey: Keys.openStudioCharacters) ?? ""
@@ -202,6 +236,7 @@ final class AppSettings {
             showInDock: showInDock,
             refreshIntervalMinutes: refresh,
             hideArchivedProjects: hideArchivedProjects,
+            presenceMode: presenceMode,
             openStudioKeyCode: openStudioKeyCode,
             openStudioModifierRawValue: openStudioModifierRawValue,
             openStudioCharacters: openStudioCharacters,
@@ -220,6 +255,7 @@ final class AppSettings {
         static let showInDock = "showInDock"
         static let refreshInterval = "refreshIntervalMinutes"
         static let hideArchivedProjects = "hideArchivedProjects"
+        static let presenceMode = "presenceMode"
         static let openStudioKeyCode = "openStudioKeyCode"
         static let openStudioModifierRawValue = "openStudioModifierRawValue"
         static let openStudioCharacters = "openStudioCharacters"
