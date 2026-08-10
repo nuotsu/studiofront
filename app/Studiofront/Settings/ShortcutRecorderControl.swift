@@ -59,6 +59,8 @@ private enum ReservedShortcut {
 /// by the caller so external actions (e.g. a "Reset" button) can end an in-progress
 /// recording — the monitor's lifecycle is driven entirely by changes to that binding.
 struct ShortcutRecorderControl: View {
+    @Environment(\.studioTheme) private var theme
+
     @Binding var keyCode: Int
     @Binding var modifierRawValue: Int
     @Binding var characters: String
@@ -84,10 +86,10 @@ struct ShortcutRecorderControl: View {
                 .frame(minHeight: 14)
                 .padding(.horizontal, 7)
                 .padding(.vertical, 3)
-                .background(Color.white)
+                .background(theme.colors.chipBackground)
                 .overlay(
                     RoundedRectangle(cornerRadius: 4, style: .continuous)
-                        .strokeBorder(isRecording ? Color.red.opacity(0.35) : Color.gray.opacity(0.25), lineWidth: 1)
+                        .strokeBorder(isRecording ? Color.red.opacity(0.35) : theme.colors.chipBorder, lineWidth: 1)
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
             }
@@ -131,6 +133,7 @@ struct ShortcutRecorderControl: View {
                 keyGlyphView(glyph)
             }
         }
+        .foregroundStyle(theme.colors.faint)
     }
 
     @ViewBuilder
