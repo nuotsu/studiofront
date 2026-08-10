@@ -42,49 +42,13 @@ struct AppearanceSettingsView: View {
     }
 }
 
-/// Shared chrome for a single-select preview tile: a small preview on top,
-/// a label below, selection shown via accent border/background (no radio glyph).
-private struct SettingsOptionTile<Preview: View>: View {
-    var label: String
-    var labelWidth: CGFloat
-    var isSelected: Bool
-    var action: () -> Void
-    @ViewBuilder var preview: () -> Preview
-
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 6) {
-                preview()
-                Text(label)
-                    .foregroundStyle(.primary)
-                    .frame(width: labelWidth)
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .contentShape(Rectangle())
-            .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(isSelected ? Color.accentColor.opacity(0.12) : Color.clear)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .strokeBorder(
-                        isSelected ? Color.accentColor : Color.primary.opacity(0.12),
-                        lineWidth: isSelected ? 1.5 : 1
-                    )
-            )
-        }
-        .buttonStyle(.plain)
-    }
-}
-
 // MARK: - Menu bar icon
 
 private struct MenuBarIconPicker: View {
     @Binding var selection: MenuBarIconPreference
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 2) {
             ForEach(MenuBarIconPreference.allCases) { preference in
                 SettingsOptionTile(
                     label: preference.title,
@@ -103,9 +67,47 @@ private struct MenuBarIconPicker: View {
                             .foregroundStyle(.primary)
                     }
                     .frame(width: 40, height: 24)
+                    .padding(6)
                 }
             }
         }
+    }
+}
+
+// MARK: - Preview tile (selection ring on the preview, not the label)
+
+/// Shared chrome for a single-select preview tile: a small preview on top,
+/// a label below. Selection shows as an accent ring around the preview;
+/// the label signals selection via text color/weight instead of a border.
+private struct SettingsOptionTile<Preview: View>: View {
+    var label: String
+    var labelWidth: CGFloat
+    var isSelected: Bool
+    var action: () -> Void
+    @ViewBuilder var preview: () -> Preview
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                preview()
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .strokeBorder(
+                                isSelected ? Color.accentColor : Color.primary.opacity(0.12),
+                                lineWidth: isSelected ? 1.5 : 1
+                            )
+                    )
+                    .frame(width: labelWidth, alignment: .trailing)
+                Text(label)
+                    .fontWeight(isSelected ? .semibold : .regular)
+                    .foregroundStyle(isSelected ? .primary : .secondary)
+                    .frame(width: labelWidth)
+            }
+            .padding(.horizontal, 6)
+            .padding(.vertical, 6)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -115,7 +117,7 @@ private struct ThemePicker: View {
     @Binding var selection: ThemePreference
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 2) {
             ForEach(ThemePreference.allCases) { preference in
                 SettingsOptionTile(
                     label: preference.title,
@@ -144,14 +146,14 @@ private struct ThemeSwatch: View {
                     .fill(theme.colors.panelFill)
             }
 
-            RoundedRectangle(cornerRadius: theme.cornerRadius(5), style: theme.cornerStyle)
+            RoundedRectangle(cornerRadius: preference == .sanityUI ? 2 : theme.cornerRadius(5), style: theme.cornerStyle)
                 .fill(theme.colors.primaryBackground)
                 .frame(width: 18, height: 10)
 
             RoundedRectangle(cornerRadius: 6, style: theme.cornerStyle)
                 .strokeBorder(theme.colors.panelBorder, lineWidth: 1)
         }
-        .frame(width: 40, height: 24)
+        .frame(width: 40, height: 28)
         .clipShape(RoundedRectangle(cornerRadius: 6, style: theme.cornerStyle))
     }
 }
@@ -162,7 +164,7 @@ private struct AppearancePicker: View {
     @Binding var selection: AppearancePreference
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 2) {
             ForEach(AppearancePreference.allCases) { preference in
                 SettingsOptionTile(
                     label: preference.title,
@@ -205,6 +207,7 @@ private struct AppearanceSwatch: View {
             RoundedRectangle(cornerRadius: 6, style: .continuous)
                 .strokeBorder(Color.primary.opacity(0.12), lineWidth: 1)
         )
+        .padding(8)
     }
 
     private func window(top: Color, body: Color) -> some View {
