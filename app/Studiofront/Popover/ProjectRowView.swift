@@ -10,6 +10,7 @@ struct ProjectRowView: View {
     var isSelected: Bool
 
     @State private var isHovered = false
+    @State private var isDocumentHovered = false
     @State private var favicon: Image?
 
     var body: some View {
@@ -94,21 +95,30 @@ struct ProjectRowView: View {
             }
 
             if let document = row.activity.lastEditedDocument {
-                HStack(spacing: 5) {
-                    Text(document.title)
-                        .font(theme.typography.meta)
-                        .foregroundStyle(theme.colors.sub)
-                        .lineLimit(1)
-                    HStack(spacing: 3) {
-                        Image(systemName: "pencil")
-                            .font(.system(size: 8, weight: .semibold))
-                        Text(RelativeTimestamp.string(from: document.editedAt))
+                Button {
+                    if let url = document.deepLinkURL {
+                        AppDelegate.shared?.openURL(url)
                     }
-                    .font(theme.typography.timestamp)
-                    .foregroundStyle(theme.colors.faint)
-                    .fixedSize()
-                    .accessibilityLabel("Last edited \(RelativeTimestamp.string(from: document.editedAt))")
+                } label: {
+                    HStack(spacing: 5) {
+                        Text(document.title)
+                            .font(theme.typography.meta)
+                            .foregroundStyle(isDocumentHovered ? theme.colors.text : theme.colors.sub)
+                            .lineLimit(1)
+                        HStack(spacing: 3) {
+                            Image(systemName: "pencil")
+                                .font(.system(size: 8, weight: .semibold))
+                            Text(RelativeTimestamp.string(from: document.editedAt))
+                        }
+                        .font(theme.typography.timestamp)
+                        .foregroundStyle(isDocumentHovered ? theme.colors.sub : theme.colors.faint)
+                        .fixedSize()
+                    }
                 }
+                .buttonStyle(.plain)
+                .disabled(document.deepLinkURL == nil)
+                .onHover { isDocumentHovered = $0 }
+                .accessibilityLabel("Open last edited document, \(document.title), edited \(RelativeTimestamp.string(from: document.editedAt))")
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -116,14 +126,22 @@ struct ProjectRowView: View {
 
     private var trailing: some View {
         HStack(spacing: 11) {
-            AvatarStack(items: row.activity.activeUsers.map { member in
-                AvatarStack.Item(
-                    id: member.id,
-                    initials: member.initials,
-                    color: PresenceSwatch.color(for: member.id),
-                    imageURL: member.imageURL
-                )
-            })
+            AvatarStack(
+                items: row.activity.activeUsers.map { member in
+                    AvatarStack.Item(
+                        id: member.id,
+                        initials: member.initials,
+                        color: PresenceSwatch.color(for: member.id),
+                        imageURL: member.imageURL,
+                        deepLinkURL: member.deepLinkURL
+                    )
+                },
+                onSelect: { item in
+                    if let url = item.deepLinkURL {
+                        AppDelegate.shared?.openURL(url)
+                    }
+                }
+            )
 
             HStack(spacing: 5) {
                 if let site = row.curation.primaryFrontendURL {

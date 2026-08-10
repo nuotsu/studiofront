@@ -100,14 +100,26 @@ public actor ActivityPresenceProvider: PresenceProvider {
                 dataset: dataset,
                 since: since
             )
-            let authorIds = Array(Set(edits.map(\.authorId)))
-            guard !authorIds.isEmpty else {
+            // One author can appear in several transactions within the window —
+            // surface the document from whichever was most recent.
+            var mostRecentByAuthor: [String: RemoteRecentEdit] = [:]
+            for edit in edits {
+                if let existing = mostRecentByAuthor[edit.authorId], existing.updatedAt >= edit.updatedAt {
+                    continue
+                }
+                mostRecentByAuthor[edit.authorId] = edit
+            }
+            guard !mostRecentByAuthor.isEmpty else {
                 emit([], for: projectId)
                 return
             }
             let roster = await rosterProvider(projectId)
             let byId = Dictionary(uniqueKeysWithValues: roster.map { ($0.id, $0) })
-            emit(authorIds.map { byId[$0] ?? Member(id: $0, displayName: $0) }, for: projectId)
+            emit(mostRecentByAuthor.map { authorId, edit in
+                var member = byId[authorId] ?? Member(id: authorId, displayName: "")
+                member.currentDocumentId = edit.documentIDs.first
+                return member
+            }, for: projectId)
         } catch {
             emit([], for: projectId)
         }

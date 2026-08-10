@@ -25,9 +25,9 @@ public actor RealtimePresenceProvider: PresenceProvider {
 
     private var continuations: [String: AsyncStream<[Member]>.Continuation] = [:]
     private var connections: [String: Task<Void, Never>] = [:]
-    /// Per project, the live sessions currently known from the socket: sessionId -> (userId, lastActiveAt).
+    /// Per project, the live sessions currently known from the socket: sessionId -> (userId, lastActiveAt, documentId).
     /// Keyed by session (not user) because one user can have multiple open tabs/sessions.
-    private var sessions: [String: [String: (userId: String, lastActiveAt: Date)]] = [:]
+    private var sessions: [String: [String: (userId: String, lastActiveAt: Date, documentId: String?)]] = [:]
     private var fallbackProjectIds: Set<String> = []
     private var tickerTask: Task<Void, Never>?
 
@@ -147,9 +147,9 @@ public actor RealtimePresenceProvider: PresenceProvider {
 
     private func handle(_ event: BifurPresenceSocket.WireEvent, for projectId: String) async {
         switch event {
-        case .state(let userId, let sessionId, let lastActiveAt):
+        case .state(let userId, let sessionId, let lastActiveAt, let documentId):
             var projectSessions = sessions[projectId] ?? [:]
-            projectSessions[sessionId] = (userId, lastActiveAt ?? Date())
+            projectSessions[sessionId] = (userId, lastActiveAt ?? Date(), documentId)
             sessions[projectId] = projectSessions
         case .disconnect(_, let sessionId):
             sessions[projectId]?[sessionId] = nil
@@ -158,14 +158,27 @@ public actor RealtimePresenceProvider: PresenceProvider {
     }
 
     private func emitCurrentMembers(for projectId: String) async {
-        let userIds = Set((sessions[projectId] ?? [:]).values.map(\.userId))
-        guard !userIds.isEmpty else {
+        let projectSessions = sessions[projectId] ?? [:]
+        guard !projectSessions.isEmpty else {
             continuations[projectId]?.yield([])
             return
         }
+        // One user can have several open sessions (tabs) — surface the
+        // document from whichever session was active most recently.
+        var mostRecentByUser: [String: (lastActiveAt: Date, documentId: String?)] = [:]
+        for session in projectSessions.values {
+            if let existing = mostRecentByUser[session.userId], existing.lastActiveAt >= session.lastActiveAt {
+                continue
+            }
+            mostRecentByUser[session.userId] = (session.lastActiveAt, session.documentId)
+        }
         let roster = await rosterProvider(projectId)
         let byId = Dictionary(uniqueKeysWithValues: roster.map { ($0.id, $0) })
-        continuations[projectId]?.yield(userIds.map { byId[$0] ?? Member(id: $0, displayName: $0) })
+        continuations[projectId]?.yield(mostRecentByUser.map { userId, info in
+            var member = byId[userId] ?? Member(id: userId, displayName: "")
+            member.currentDocumentId = info.documentId
+            return member
+        })
     }
 
     private func forwardFallback(for projectId: String) async {

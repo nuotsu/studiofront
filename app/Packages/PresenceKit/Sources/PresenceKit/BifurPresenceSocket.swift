@@ -10,7 +10,7 @@ import Foundation
 /// condition). That is a hard invariant, not a tuning choice.
 actor BifurPresenceSocket {
     enum WireEvent: Sendable {
-        case state(userId: String, sessionId: String, lastActiveAt: Date?)
+        case state(userId: String, sessionId: String, lastActiveAt: Date?, documentId: String?)
         case disconnect(userId: String, sessionId: String)
     }
 
@@ -139,7 +139,12 @@ actor BifurPresenceSocket {
             switch push.event.type {
             case "state":
                 if let userId = push.event.userId, let sessionId = push.event.sessionId {
-                    eventContinuation?.yield(.state(userId: userId, sessionId: sessionId, lastActiveAt: push.event.lastActiveAt))
+                    eventContinuation?.yield(.state(
+                        userId: userId,
+                        sessionId: sessionId,
+                        lastActiveAt: push.event.lastActiveAt,
+                        documentId: push.event.documentId
+                    ))
                 }
             case "disconnect":
                 if let userId = push.event.userId, let sessionId = push.event.sessionId {
@@ -191,6 +196,9 @@ actor BifurPresenceSocket {
         var userId: String?
         var sessionId: String?
         var lastActiveAt: Date?
+        /// From the most-recently-active `PresenceLocation` (Sanity Studio's
+        /// `presence-store.ts` type) — the exact document that session is on.
+        var documentId: String?
 
         private enum CodingKeys: String, CodingKey {
             case type, i, session, m
@@ -199,6 +207,7 @@ actor BifurPresenceSocket {
             case sessionId, session, locations
         }
         private struct LocationDTO: Decodable {
+            var documentId: String?
             var lastActiveAt: Date?
         }
 
@@ -209,7 +218,9 @@ actor BifurPresenceSocket {
             if let m = try? container.nestedContainer(keyedBy: MKeys.self, forKey: .m) {
                 sessionId = (try? m.decode(String.self, forKey: .sessionId)) ?? (try? m.decode(String.self, forKey: .session))
                 if let locations = try? m.decode([LocationDTO].self, forKey: .locations) {
-                    lastActiveAt = locations.compactMap(\.lastActiveAt).max()
+                    let mostRecent = locations.max { ($0.lastActiveAt ?? .distantPast) < ($1.lastActiveAt ?? .distantPast) }
+                    lastActiveAt = mostRecent?.lastActiveAt
+                    documentId = mostRecent?.documentId
                 }
             } else {
                 sessionId = try? container.decode(String.self, forKey: .session)

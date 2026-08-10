@@ -47,13 +47,17 @@ public struct SanityProject: Sendable, Identifiable, Hashable, Codable {
         self.brandColorHex = brandColorHex
     }
 
-    public var studioURL: URL? {
+    /// Where the "Studio" button — and any deep link into a specific document —
+    /// should actually go: a deployed `.sanity.studio` subdomain first, then the
+    /// project's own domain if the Studio is embedded there (`externalStudioHost`),
+    /// else the Manage page as last resort.
+    public var resolvedStudioURL: URL? {
         if let studioHost, !studioHost.isEmpty,
            let url = URL(string: "https://\(studioHost).sanity.studio")
         {
             return url
         }
-        return manageURL
+        return externalStudioHost ?? manageURL
     }
 
     public var manageURL: URL? {
@@ -77,18 +81,31 @@ public struct Member: Sendable, Identifiable, Hashable, Codable {
     public var imageURL: URL?
     public var initials: String
     public var role: String?
+    /// The document this member is currently on, from presence data — set
+    /// only by the presence pipeline (`PresenceProvider` implementations),
+    /// never by roster-building. Raw, pre-resolution: no schema type is
+    /// known yet, so it isn't openable on its own. See `deepLinkURL`.
+    public var currentDocumentId: String?
+    /// Resolved from `currentDocumentId` once its schema type is known —
+    /// see `PresenceCoordinator`. `nil` until resolved, or if there's no
+    /// current document.
+    public var deepLinkURL: URL?
 
     public init(
         id: String,
         displayName: String,
         imageURL: URL? = nil,
         initials: String? = nil,
-        role: String? = nil
+        role: String? = nil,
+        currentDocumentId: String? = nil,
+        deepLinkURL: URL? = nil
     ) {
         self.id = id
         self.displayName = displayName
         self.imageURL = imageURL
         self.role = role
+        self.currentDocumentId = currentDocumentId
+        self.deepLinkURL = deepLinkURL
         if let initials {
             self.initials = initials
         } else {
@@ -199,17 +216,7 @@ public struct ProjectRow: Sendable, Identifiable, Hashable {
         curation.nickname ?? project.displayName
     }
 
-    /// Where the "Studio" button should actually go: a deployed `.sanity.studio`
-    /// subdomain first, then the project's own domain if the Studio is embedded
-    /// there (`metadata.externalStudioHost`), else the Manage page as last resort.
-    public var resolvedStudioURL: URL? {
-        if let studioHost = project.studioHost, !studioHost.isEmpty,
-           let url = URL(string: "https://\(studioHost).sanity.studio")
-        {
-            return url
-        }
-        return project.externalStudioHost ?? project.manageURL
-    }
+    public var resolvedStudioURL: URL? { project.resolvedStudioURL }
 }
 
 public enum GroupBy: String, CaseIterable, Identifiable, Sendable {

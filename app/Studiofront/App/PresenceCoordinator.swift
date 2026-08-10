@@ -20,6 +20,11 @@ final class PresenceCoordinator {
     private var forwardingTasks: [String: Task<Void, Never>] = [:]
     /// Per-project stable display order — see `reorderStably`.
     private var order: [String: [String]] = [:]
+    /// Per-project cache of document id -> resolved schema type, so an
+    /// already-seen document never needs a second network round trip for the
+    /// rest of the popover session. Presence data never carries schema type
+    /// (only a document id) — see `attachDeepLinks`.
+    private var documentTypeCache: [String: [String: String]] = [:]
     private var isActive = false
 
     init(store: StudioStore, settings: AppSettings, client: SanityClient = .shared) {
@@ -66,6 +71,7 @@ final class PresenceCoordinator {
         for task in forwardingTasks.values { task.cancel() }
         forwardingTasks.removeAll()
         order.removeAll()
+        documentTypeCache.removeAll()
         let outgoing = provider
         provider = nil
         Task { await outgoing?.stopAll() }
@@ -85,7 +91,10 @@ final class PresenceCoordinator {
                 for await members in await provider.presence(for: id) {
                     guard !Task.isCancelled else { return }
                     guard let self else { return }
-                    self.store.setActiveUsers(self.reorderStably(members, forProjectID: id), forProjectID: id)
+                    let ordered = self.reorderStably(members, forProjectID: id)
+                    let resolved = await self.attachDeepLinks(to: ordered, forProjectID: id)
+                    guard !Task.isCancelled else { return }
+                    self.store.setActiveUsers(resolved, forProjectID: id)
                 }
             }
         }
@@ -93,6 +102,7 @@ final class PresenceCoordinator {
             forwardingTasks[id]?.cancel()
             forwardingTasks[id] = nil
             order[id] = nil
+            documentTypeCache[id] = nil
             store.setActiveUsers([], forProjectID: id)
         }
     }
@@ -115,6 +125,38 @@ final class PresenceCoordinator {
         let updated = newlyActive + stillActive
         order[id] = updated
         return updated.compactMap { byId[$0] }
+    }
+
+    /// Resolves each member's `currentDocumentId` (raw, from presence data)
+    /// into a real `deepLinkURL`, fetching schema types only for ids not
+    /// already in `documentTypeCache` — a document already seen this session
+    /// resolves instantly on every later tick.
+    private func attachDeepLinks(to members: [Member], forProjectID id: String) async -> [Member] {
+        let documentIds = Set(members.compactMap(\.currentDocumentId))
+        guard !documentIds.isEmpty else { return members }
+
+        var cache = documentTypeCache[id] ?? [:]
+        let missing = documentIds.subtracting(cache.keys)
+        if !missing.isEmpty, let token = await currentToken(), let dataset = await primaryDataset(for: id) {
+            if let resolved = try? await client.documentTypes(
+                token: token,
+                projectId: id,
+                dataset: dataset,
+                ids: Array(missing)
+            ) {
+                for (docId, typeName) in resolved { cache[docId] = typeName }
+                documentTypeCache[id] = cache
+            }
+        }
+
+        guard let studioURL = store.rows.first(where: { $0.id == id })?.resolvedStudioURL else { return members }
+        return members.map { member in
+            var member = member
+            if let docId = member.currentDocumentId, let typeName = cache[docId] {
+                member.deepLinkURL = ProjectSyncService.editIntentURL(studioURL: studioURL, documentId: docId, typeName: typeName)
+            }
+            return member
+        }
     }
 
     /// Same eligibility as `ProjectSyncService.fetchActivity` (visible, not

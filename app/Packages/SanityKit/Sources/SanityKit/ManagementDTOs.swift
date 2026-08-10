@@ -152,11 +152,13 @@ public struct RemoteEditedDocument: Sendable, Equatable {
 public struct RemoteRecentEdit: Sendable, Equatable {
     public var authorId: String
     public var updatedAt: Date
+    public var documentIDs: [String]
 }
 
 struct TransactionLogEntryDTO: Decodable, Sendable {
     var author: String
     var timestamp: Date
+    var documentIDs: [String]
 }
 
 /// A malformed or error line (`{"error": {...}}`) in the transactions NDJSON
@@ -168,6 +170,13 @@ struct TransactionLogErrorDTO: Decodable, Sendable {
         var type: String?
         var description: String?
     }
+}
+
+/// The Query API's generic response shape (`{"query": ..., "result": [...], "ms": ...}`)
+/// for queries whose result is a plain array, rather than `QueryEnvelope`'s
+/// fixed `{published, draft}` object shape.
+struct ArrayQueryEnvelope<Element: Decodable & Sendable>: Decodable, Sendable {
+    var result: [Element]
 }
 
 struct QueryEnvelope: Decodable, Sendable {
@@ -191,6 +200,19 @@ struct QueryEnvelope: Decodable, Sendable {
     private struct ResultContainer: Decodable {
         var published: DocumentProjectionDTO?
         var draft: DocumentProjectionDTO?
+    }
+}
+
+/// `{_id, _type}` for a batch of ids — resolves the one thing presence data
+/// never carries: a document's schema type, needed to build its edit-intent
+/// URL (`SanityAPI` docs' `id=...;type=...` format has no id-only form).
+struct DocumentTypeProjectionDTO: Decodable, Sendable {
+    var id: String
+    var type: String
+
+    enum CodingKeys: String, CodingKey {
+        case id = "_id"
+        case type = "_type"
     }
 }
 

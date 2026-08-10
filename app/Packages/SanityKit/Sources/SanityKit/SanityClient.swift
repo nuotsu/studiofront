@@ -192,8 +192,41 @@ public actor SanityClient {
             guard let entry = try? SanityJSON.decoder.decode(TransactionLogEntryDTO.self, from: line) else {
                 return nil
             }
-            return RemoteRecentEdit(authorId: entry.author, updatedAt: entry.timestamp)
+            return RemoteRecentEdit(authorId: entry.author, updatedAt: entry.timestamp, documentIDs: entry.documentIDs)
         }
+    }
+
+    /// Batched `{_id, _type}` lookup for building edit-intent links — presence
+    /// data (both the realtime socket and the History API) carries a
+    /// document's id but never its schema type. CDN-fronted like
+    /// `lastEditedDocument`, since this is read-only lookup data, not
+    /// something that needs to bypass caching.
+    public func documentTypes(
+        token: String,
+        projectId: String,
+        dataset: String,
+        ids: [String]
+    ) async throws -> [String: String] {
+        guard !ids.isEmpty else { return [:] }
+        let groq = "*[_id in $ids]{_id, _type}"
+        guard var components = URLComponents(
+            url: URL(string: "https://\(projectId).apicdn.sanity.io")!,
+            resolvingAgainstBaseURL: false
+        ) else {
+            throw SanityError.transport("Couldn’t reach Sanity.")
+        }
+        components.path = "/\(SanityAPI.version)/data/query/\(dataset)"
+        let idsParam = "[" + ids.map { "\"\($0)\"" }.joined(separator: ",") + "]"
+        components.queryItems = [
+            URLQueryItem(name: "query", value: groq),
+            URLQueryItem(name: "$ids", value: idsParam),
+        ]
+        guard let url = components.url else {
+            throw SanityError.transport("Couldn’t reach Sanity.")
+        }
+        let conditional: SanityConditional<ArrayQueryEnvelope<DocumentTypeProjectionDTO>> = try await performGET(url: url, token: token, etag: nil)
+        guard let envelope = conditional.value else { throw SanityError.decoding }
+        return Dictionary(uniqueKeysWithValues: envelope.result.map { ($0.id, $0.type) })
     }
 
     // MARK: - HTTP

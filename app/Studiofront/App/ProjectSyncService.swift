@@ -236,7 +236,7 @@ final class ProjectSyncService {
                         let profile = memberProfilesByProject[project.id]?[member.id]
                         return Member(
                             id: member.id,
-                            displayName: profile?.displayName ?? member.id,
+                            displayName: profile?.displayName ?? "",
                             imageURL: profile?.imageURL,
                             role: member.role
                         )
@@ -252,10 +252,14 @@ final class ProjectSyncService {
 
             let curationByID = Dictionary(uniqueKeysWithValues: snapshot.curation.map { ($0.projectId, $0) })
             let eligibleIDs = projectIDs.filter { !(curationByID[$0]?.isHidden ?? false) }
+            let studioURLByProject = Dictionary(uniqueKeysWithValues: snapshot.projects.compactMap { project in
+                project.resolvedStudioURL.map { (project.id, $0) }
+            })
             snapshot.activity = await fetchActivity(
                 token: token,
                 projectIDs: eligibleIDs,
                 datasetsByProject: datasetsByProject,
+                studioURLByProject: studioURLByProject,
                 previous: snapshot.activity
             )
 
@@ -281,6 +285,7 @@ final class ProjectSyncService {
         token: String,
         projectIDs: [String],
         datasetsByProject: [String: [Dataset]],
+        studioURLByProject: [String: URL],
         previous: [String: ProjectActivity]
     ) async -> [String: ProjectActivity] {
         var result = previous
@@ -302,11 +307,15 @@ final class ProjectSyncService {
                             )
                             let doc: RemoteEditedDocument? = conditional.value ?? nil
                             guard let doc else { return (id, ProjectActivity()) }
+                            let deepLinkURL = studioURLByProject[id].flatMap {
+                                Self.editIntentURL(studioURL: $0, documentId: doc.id, typeName: doc.typeName)
+                            }
                             return (id, ProjectActivity(
                                 lastEditedDocument: EditedDocument(
                                     title: doc.title,
                                     typeName: doc.typeName,
-                                    editedAt: doc.updatedAt
+                                    editedAt: doc.updatedAt,
+                                    deepLinkURL: deepLinkURL
                                 )
                             ))
                         } catch is CancellationError {
@@ -326,6 +335,20 @@ final class ProjectSyncService {
             }
         }
         return result
+    }
+
+    /// Sanity's documented edit-intent URL format:
+    /// `<studioURL>/intent/edit/id=<id>;type=<type>`. Drafts are stored under
+    /// `drafts.<id>` — Studio's editor resolves either draft or published from
+    /// the bare id, so the prefix is stripped before building the link.
+    /// Also used by `PresenceCoordinator` to build deep links for presence
+    /// avatars — kept as the one place this URL format is built.
+    nonisolated static func editIntentURL(studioURL: URL, documentId: String, typeName: String) -> URL? {
+        let draftsPrefix = "drafts."
+        let canonicalId = documentId.hasPrefix(draftsPrefix) ? String(documentId.dropFirst(draftsPrefix.count)) : documentId
+        var string = studioURL.absoluteString
+        if string.hasSuffix("/") { string.removeLast() }
+        return URL(string: "\(string)/intent/edit/id=\(canonicalId);type=\(typeName)")
     }
 
     /// Also used by `PresenceCoordinator` to pick a project's dataset for

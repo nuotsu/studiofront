@@ -204,21 +204,27 @@ public struct AvatarStack: View {
         public var initials: String
         public var color: Color
         public var imageURL: URL?
+        public var deepLinkURL: URL?
 
-        public init(id: String, initials: String, color: Color, imageURL: URL? = nil) {
+        public init(id: String, initials: String, color: Color, imageURL: URL? = nil, deepLinkURL: URL? = nil) {
             self.id = id
             self.initials = initials
             self.color = color
             self.imageURL = imageURL
+            self.deepLinkURL = deepLinkURL
         }
     }
 
     var items: [Item]
     var maxVisible: Int
+    var onSelect: (Item) -> Void
 
-    public init(items: [Item], maxVisible: Int = 3) {
+    @State private var hoveredID: String?
+
+    public init(items: [Item], maxVisible: Int = 3, onSelect: @escaping (Item) -> Void = { _ in }) {
         self.items = items
         self.maxVisible = maxVisible
+        self.onSelect = onSelect
     }
 
     public var body: some View {
@@ -229,8 +235,21 @@ public struct AvatarStack: View {
             let overflow = items.count - visible.count
             HStack(spacing: 0) {
                 ForEach(Array(visible.enumerated()), id: \.element.id) { index, item in
-                    avatarCircle(item)
-                        .padding(.leading, index == 0 ? 0 : -4)
+                    Button {
+                        onSelect(item)
+                    } label: {
+                        avatarCircle(item)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(item.deepLinkURL == nil)
+                    .padding(.leading, index == 0 ? 0 : -4)
+                    // Raised above overlapping neighbors on hover so the
+                    // whole circle is visible rather than clipped by
+                    // whichever avatar is stacked on top of it.
+                    .zIndex(hoveredID == item.id ? 1 : 0)
+                    .onHover { isHovered in
+                        hoveredID = isHovered ? item.id : (hoveredID == item.id ? nil : hoveredID)
+                    }
                 }
                 if overflow > 0 {
                     Text("+\(overflow)")
@@ -259,9 +278,12 @@ public struct AvatarStack: View {
         .frame(width: theme.metrics.presenceSize, height: theme.metrics.presenceSize)
         .clipShape(Circle())
         .overlay(Circle().stroke(theme.colors.ring, lineWidth: 1.5))
-        .accessibilityLabel("\(item.initials) is editing now")
+        .accessibilityLabel(item.initials.isEmpty ? "Someone is editing now" : "\(item.initials) is editing now")
     }
 
+    /// Blank (no letter) rather than guessing from a raw id — `item.initials`
+    /// is empty until the member's real name/photo has actually loaded (see
+    /// `Member.initials(from:)` on an empty `displayName`).
     private func initialsCircle(_ item: Item) -> some View {
         Text(item.initials)
             .font(theme.typography.presence)
