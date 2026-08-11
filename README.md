@@ -1,6 +1,6 @@
 # Studiofront
 
-A native macOS menu bar app for agency developers and editors who manage many Sanity Studios across multiple client organizations. It's a fast switcher, not a management console: open it, find the right client Studio, jump there.
+A native macOS menu bar app to manage Sanity Studios across organizations. It's a fast switcher, not a management console: open it, find the right client Studio, jump there.
 
 ## Requirements
 
