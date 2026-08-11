@@ -3,6 +3,7 @@ import Observation
 import SwiftUI
 
 enum SettingsSearchTarget: String, Hashable, CaseIterable {
+    case launchAtLogin
     case showInDock
     case refreshInterval
     case hideArchivedProjects
@@ -17,6 +18,7 @@ enum SettingsSearchTarget: String, Hashable, CaseIterable {
     case keybindingsOverview
     case openStudioShortcut
     case openStudiofrontShortcut
+    case about
 }
 
 struct SettingsSearchItem: Identifiable, Hashable {
@@ -30,6 +32,13 @@ struct SettingsSearchItem: Identifiable, Hashable {
 
 enum SettingsSearchIndex {
     static let all: [SettingsSearchItem] = [
+        SettingsSearchItem(
+            title: "Launch at Login",
+            keywords: ["launch", "login", "startup", "start up", "boot"],
+            pane: .general,
+            target: .launchAtLogin,
+            systemImage: "power"
+        ),
         SettingsSearchItem(
             title: "Show in Dock",
             keywords: ["dock", "show", "icon", "menubar", "menu bar"],
@@ -127,6 +136,13 @@ enum SettingsSearchIndex {
             pane: .keybindings,
             target: .openStudiofrontShortcut,
             systemImage: "keyboard"
+        ),
+        SettingsSearchItem(
+            title: "About",
+            keywords: ["about", "version", "credits", "update", "updates", "repo", "repository", "homepage", "docs"],
+            pane: .about,
+            target: .about,
+            systemImage: "info.circle"
         ),
     ]
 

@@ -9,6 +9,8 @@ struct GeneralSettingsView: View {
         SettingsPaneChrome(title: SettingsPane.general.title) {
             Form {
                 Section {
+                    Toggle("Launch at Login", isOn: $settings.launchAtLogin)
+                        .settingsHighlight(.launchAtLogin)
                     Toggle("Show in Dock", isOn: $settings.showInDock)
                         .settingsHighlight(.showInDock)
                 }

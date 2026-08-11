@@ -1,5 +1,6 @@
 import AppKit
 import Observation
+import ServiceManagement
 import SwiftUI
 import ThemeKit
 
@@ -104,6 +105,23 @@ final class AppSettings {
 
     var showInDock: Bool {
         didSet { UserDefaults.standard.set(showInDock, forKey: Keys.showInDock) }
+    }
+
+    /// `SMAppService` persists this itself, so there's no `UserDefaults` key here —
+    /// the getter always reflects the OS's actual login-item registration.
+    var launchAtLogin: Bool {
+        get { SMAppService.mainApp.status == .enabled }
+        set {
+            do {
+                if newValue {
+                    try SMAppService.mainApp.register()
+                } else {
+                    try SMAppService.mainApp.unregister()
+                }
+            } catch {
+                // The toggle will simply reflect the unchanged status on next read.
+            }
+        }
     }
 
     var refreshIntervalMinutes: Int {
