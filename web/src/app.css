@@ -165,8 +165,8 @@
 	justify-content: center;
 	text-align: center;
 	gap: 0.5em;
-	padding: 0.25em 0.5em;
-	@apply active:scale-98 transition-all;
+	padding: 0.4em 1em;
+	@apply active:scale-98 transition-all rounded-full;
 }
 
 @utility action {
