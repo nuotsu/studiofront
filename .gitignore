@@ -13,8 +13,11 @@ app/xcuserdata/
 app/.swiftpm/
 app/.build/
 
-# Local signing (Team ID) — copy from app/Config/Signing.local.xcconfig.example
+# Local signing (Team ID), copy from app/Config/Signing.local.xcconfig.example
 app/Config/Signing.local.xcconfig
+
+# Release artifacts (DMG, appcast, dSYM zip): scripts/release-dmg.sh output
+/dist/
 
 # macOS
 .DS_Store
