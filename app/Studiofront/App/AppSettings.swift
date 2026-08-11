@@ -146,6 +146,18 @@ final class AppSettings {
         didSet { UserDefaults.standard.set(openStudiofrontCharacters, forKey: Keys.openStudiofrontCharacters) }
     }
 
+    var favoriteToggleKeyCode: Int {
+        didSet { UserDefaults.standard.set(favoriteToggleKeyCode, forKey: Keys.favoriteToggleKeyCode) }
+    }
+
+    var favoriteToggleModifierRawValue: Int {
+        didSet { UserDefaults.standard.set(favoriteToggleModifierRawValue, forKey: Keys.favoriteToggleModifierRawValue) }
+    }
+
+    var favoriteToggleCharacters: String {
+        didSet { UserDefaults.standard.set(favoriteToggleCharacters, forKey: Keys.favoriteToggleCharacters) }
+    }
+
     var refreshInterval: TimeInterval {
         TimeInterval(max(1, refreshIntervalMinutes) * 60)
     }
@@ -180,6 +192,15 @@ final class AppSettings {
     )
     nonisolated static let defaultOpenStudiofrontCharacters = "s"
 
+    var favoriteToggleModifierFlags: NSEvent.ModifierFlags {
+        NSEvent.ModifierFlags(rawValue: UInt(favoriteToggleModifierRawValue))
+            .intersection(.deviceIndependentFlagsMask)
+    }
+
+    nonisolated static let defaultFavoriteToggleKeyCode = 3 // kVK_ANSI_F
+    nonisolated static let defaultFavoriteToggleModifierRawValue = Int(NSEvent.ModifierFlags.command.rawValue)
+    nonisolated static let defaultFavoriteToggleCharacters = "f"
+
     init(
         themePreference: ThemePreference = .liquidGlass,
         appearancePreference: AppearancePreference = .system,
@@ -193,7 +214,10 @@ final class AppSettings {
         openStudioCharacters: String = "",
         openStudiofrontKeyCode: Int = AppSettings.defaultOpenStudiofrontKeyCode,
         openStudiofrontModifierRawValue: Int = AppSettings.defaultOpenStudiofrontModifierRawValue,
-        openStudiofrontCharacters: String = AppSettings.defaultOpenStudiofrontCharacters
+        openStudiofrontCharacters: String = AppSettings.defaultOpenStudiofrontCharacters,
+        favoriteToggleKeyCode: Int = AppSettings.defaultFavoriteToggleKeyCode,
+        favoriteToggleModifierRawValue: Int = AppSettings.defaultFavoriteToggleModifierRawValue,
+        favoriteToggleCharacters: String = AppSettings.defaultFavoriteToggleCharacters
     ) {
         self.themePreference = themePreference
         self.appearancePreference = appearancePreference
@@ -208,6 +232,9 @@ final class AppSettings {
         self.openStudiofrontKeyCode = openStudiofrontKeyCode
         self.openStudiofrontModifierRawValue = openStudiofrontModifierRawValue
         self.openStudiofrontCharacters = openStudiofrontCharacters
+        self.favoriteToggleKeyCode = favoriteToggleKeyCode
+        self.favoriteToggleModifierRawValue = favoriteToggleModifierRawValue
+        self.favoriteToggleCharacters = favoriteToggleCharacters
     }
 
     static func load() -> AppSettings {
@@ -229,6 +256,12 @@ final class AppSettings {
             ?? Self.defaultOpenStudiofrontModifierRawValue
         let openStudiofrontCharacters = defaults.string(forKey: Keys.openStudiofrontCharacters)
             ?? Self.defaultOpenStudiofrontCharacters
+        let favoriteToggleKeyCode = defaults.object(forKey: Keys.favoriteToggleKeyCode) as? Int
+            ?? Self.defaultFavoriteToggleKeyCode
+        let favoriteToggleModifierRawValue = defaults.object(forKey: Keys.favoriteToggleModifierRawValue) as? Int
+            ?? Self.defaultFavoriteToggleModifierRawValue
+        let favoriteToggleCharacters = defaults.string(forKey: Keys.favoriteToggleCharacters)
+            ?? Self.defaultFavoriteToggleCharacters
         return AppSettings(
             themePreference: theme,
             appearancePreference: appearance,
@@ -242,7 +275,10 @@ final class AppSettings {
             openStudioCharacters: openStudioCharacters,
             openStudiofrontKeyCode: openStudiofrontKeyCode,
             openStudiofrontModifierRawValue: openStudiofrontModifierRawValue,
-            openStudiofrontCharacters: openStudiofrontCharacters
+            openStudiofrontCharacters: openStudiofrontCharacters,
+            favoriteToggleKeyCode: favoriteToggleKeyCode,
+            favoriteToggleModifierRawValue: favoriteToggleModifierRawValue,
+            favoriteToggleCharacters: favoriteToggleCharacters
         )
     }
 
@@ -262,5 +298,8 @@ final class AppSettings {
         static let openStudiofrontKeyCode = "openStudiofrontKeyCode"
         static let openStudiofrontModifierRawValue = "openStudiofrontModifierRawValue"
         static let openStudiofrontCharacters = "openStudiofrontCharacters"
+        static let favoriteToggleKeyCode = "favoriteToggleKeyCode"
+        static let favoriteToggleModifierRawValue = "favoriteToggleModifierRawValue"
+        static let favoriteToggleCharacters = "favoriteToggleCharacters"
     }
 }

@@ -35,7 +35,6 @@ private enum ReservedShortcut {
         if command {
             switch characters.lowercased() {
             case "c": return "Already used by ⌘C — Copy project ID"
-            case "f": return "Already used by ⌘F — Toggle favorite"
             case "r": return "Already used by ⌘R — Refresh"
             case ",": return "Already used by ⌘, — Open Settings"
             case "k": return "Already used by ⌘K — Focus search"

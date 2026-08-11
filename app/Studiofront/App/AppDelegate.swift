@@ -471,15 +471,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
             openSelectedStudio()
             return true
         }
+        if matchesFavoriteToggleBinding(keyCode: keyCode, flags: flags) {
+            store.toggleFavoriteOnSelection()
+            return true
+        }
 
         if flags.contains(.command) {
             let character = characters.lowercased()
             switch character {
             case "c":
                 store.copySelectedProjectID()
-                return true
-            case "f":
-                store.toggleFavoriteOnSelection()
                 return true
             case "r":
                 store.refresh()
@@ -521,5 +522,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         let pressed = AppSettings.normalizedOpenStudioKeyCode(keyCode)
         let bound = AppSettings.normalizedOpenStudioKeyCode(UInt16(settings.openStudioKeyCode))
         return pressed == bound && flags == settings.openStudioModifierFlags
+    }
+
+    private func matchesFavoriteToggleBinding(keyCode: UInt16, flags: NSEvent.ModifierFlags) -> Bool {
+        keyCode == UInt16(settings.favoriteToggleKeyCode) && flags == settings.favoriteToggleModifierFlags
     }
 }
