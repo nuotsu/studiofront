@@ -52,7 +52,7 @@ export default function ({
 				{accordions?.map((accordion, i) => (
 					<details
 						key={`${accordion._key}-${i}`}
-						className="accordion border-stroke not-last:border-b"
+						className="accordion bg-foreground/5 px-em hover:bg-foreground/10 open:bg-foreground/10 mb-1 not-hover:transition-colors"
 						name={exclusive ? _module_key : undefined}
 						open={accordion.open}
 						{...(enableSchema && {

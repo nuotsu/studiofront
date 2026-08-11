@@ -22,7 +22,14 @@ export default function ({
 			{(eyebrow || intro) && (
 				<header className="prose mx-auto max-w-3xl text-center">
 					<Eyebrow value={eyebrow} />
-					<PortableText value={intro ?? []} />
+					<PortableText
+						value={intro ?? []}
+						components={{
+							marks: {
+								underline: ({ children }) => <u>{children}</u>,
+							},
+						}}
+					/>
 				</header>
 			)}
 
