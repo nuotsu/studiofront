@@ -32,15 +32,6 @@ public final class StudioStore {
         self.selectedID = rows.first(where: { $0.curation.isFavorite })?.id ?? rows.first?.id
     }
 
-    public static func fixtures() -> StudioStore {
-        StudioStore(
-            rows: FixtureData.rows(),
-            organizations: FixtureData.organizationOrder.map {
-                OrganizationRecord(id: $0.id, name: $0.name)
-            }
-        )
-    }
-
     public var totalCount: Int { rows.filter { !$0.curation.isHidden && !isArchivedAndHidden($0) }.count }
 
     public var visibleRows: [ProjectRow] {
