@@ -1,6 +1,6 @@
 .list {
 	--width: 1px;
-	border-left: var(--width) solid var(--color-stroke);
+	border-left: var(--width) solid color-mix(in srgb, var(--color-stroke) 25%, transparent);
 
 	&::before {
 		content: '';
@@ -9,7 +9,7 @@
 		top: anchor(top);
 		bottom: anchor(bottom);
 		left: calc(anchor(left) - var(--width));
-		border-left: var(--width) solid currentColor;
+		border-left: var(--width) solid var(--color-primary);
 		transition: var(--default-transition-duration) ease-in-out;
 		transition-property: top, bottom;
 	}
