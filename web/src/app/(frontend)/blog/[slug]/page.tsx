@@ -104,11 +104,15 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export async function generateStaticParams() {
-	return (await sanityFetchStaticParams({
+	const slugs = (await sanityFetchStaticParams({
 		query: groq`*[_type == 'blog.post' && defined(metadata.slug.current)]{
-			'slug': '/' + metadata.slug.current
+			'slug': metadata.slug.current
 		}`,
 	})) as { slug: string }[]
+
+	// Cache Components requires at least one param; fall back to a
+	// placeholder that resolves to notFound() until a post exists.
+	return slugs.length ? slugs : [{ slug: '__placeholder__' }]
 }
 
 async function getPost({
