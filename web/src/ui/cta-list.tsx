@@ -22,6 +22,7 @@ export default function ({
 				<SanityLink
 					link={cta.link as SanityLinkType}
 					className={stegaClean(cta.theme)}
+					showIcon
 					key={`${cta._key}-${i}`}
 				/>
 			))}

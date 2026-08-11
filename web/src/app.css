@@ -170,7 +170,7 @@
 }
 
 @utility action {
-	@apply action-base bg-primary text-background;
+	@apply action-base border border-primary bg-primary text-background;
 }
 
 @utility action-outline {
