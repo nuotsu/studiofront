@@ -179,7 +179,7 @@
 }
 
 @utility ghost {
-	@apply action-base bg-current/2 text-inherit hover:bg-current/5;
+	@apply action-base bg-current/5 text-inherit hover:bg-current/10;
 }
 
 @utility link {
