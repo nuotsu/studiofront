@@ -515,6 +515,15 @@ export type HeroSplit = {
 				_type: 'block'
 				_key: string
 		  }
+		| {
+				asset?: SanityImageAssetReference
+				media?: unknown
+				hotspot?: SanityImageHotspot
+				crop?: SanityImageCrop
+				alt?: string
+				_type: 'image'
+				_key: string
+		  }
 		| ({
 				_key: string
 		  } & CustomHtml)
@@ -2645,6 +2654,15 @@ export type PAGE_QUERY_RESULT = {
 							_type: 'block'
 							_key: string
 					  }
+					| {
+							asset?: SanityImageAssetReference
+							media?: unknown
+							hotspot?: SanityImageHotspot
+							crop?: SanityImageCrop
+							alt?: string
+							_type: 'image'
+							_key: string
+					  }
 				>
 				ctas: Array<{
 					_key: string
@@ -4469,6 +4487,15 @@ export type BLOG_POST_QUERY_RESULT = {
 							_type: 'block'
 							_key: string
 					  }
+					| {
+							asset?: SanityImageAssetReference
+							media?: unknown
+							hotspot?: SanityImageHotspot
+							crop?: SanityImageCrop
+							alt?: string
+							_type: 'image'
+							_key: string
+					  }
 				>
 				ctas: Array<{
 					_key: string
@@ -6126,6 +6153,15 @@ export type NOT_FOUND_QUERY_RESULT = {
 							}>
 							level?: number
 							_type: 'block'
+							_key: string
+					  }
+					| {
+							asset?: SanityImageAssetReference
+							media?: unknown
+							hotspot?: SanityImageHotspot
+							crop?: SanityImageCrop
+							alt?: string
+							_type: 'image'
 							_key: string
 					  }
 				>

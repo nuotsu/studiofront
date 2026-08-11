@@ -39,6 +39,16 @@ export default function ({
 					value={content}
 					components={{
 						types: {
+							image: ({ value }) => (
+								<figure>
+									<Img
+										className="w-full"
+										image={value}
+										width={1000}
+										alt={value.alt ?? ''}
+									/>
+								</figure>
+							),
 							'custom-html': ({ value }) => <CustomHTML {...value} />,
 						},
 					}}
