@@ -1,0 +1,26 @@
+import { ROUTES } from '@/lib/env'
+
+export default function resolveSlug({
+	_type,
+	internal,
+	params,
+	external,
+}: {
+	// internal
+	_type?: string
+	internal?: string
+	params?: string
+	// external
+	external?: string
+}) {
+	if (external) return external
+
+	if (internal) {
+		const segment = _type === 'blog.post' ? `/${ROUTES.blog}/` : '/'
+		const path = internal === 'index' ? null : internal
+
+		return [segment, path, params].filter(Boolean).join('')
+	}
+
+	return undefined
+}

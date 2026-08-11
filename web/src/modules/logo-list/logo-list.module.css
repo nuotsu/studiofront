@@ -1,0 +1,20 @@
+.track {
+	&>* {
+		--xi: calc((var(--count) - var(--index)) * 100%);
+		--xf: calc((var(--index) + 1) * -100%);
+
+		translate: var(--xi) 0;
+		animation: scroll var(--duration) linear infinite;
+		animation-delay: calc(var(--duration) / var(--count) * var(--index) - var(--count) * 2s);
+	}
+
+	&:hover>* {
+		animation-play-state: paused;
+	}
+}
+
+@keyframes scroll {
+	to {
+		translate: var(--xf) 0;
+	}
+}

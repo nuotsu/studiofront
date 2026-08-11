@@ -1,0 +1,22 @@
+.list {
+	--width: 1px;
+	border-left: var(--width) solid var(--color-stroke);
+
+	&::before {
+		content: '';
+		position: absolute;
+		position-anchor: --table-of-contents;
+		top: anchor(top);
+		bottom: anchor(bottom);
+		left: calc(anchor(left) - var(--width));
+		border-left: var(--width) solid currentColor;
+		transition: var(--default-transition-duration) ease-in-out;
+		transition-property: top, bottom;
+	}
+}
+
+@media (width >=48rem) {
+	.inView:not(:has(~ .inView)) {
+		anchor-name: --table-of-contents;
+	}
+}

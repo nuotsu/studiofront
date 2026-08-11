@@ -1,0 +1,20 @@
+{
+	"semi": false,
+	"useTabs": true,
+	"singleQuote": true,
+	"trailingComma": "all",
+	"plugins": [
+		"@ianvs/prettier-plugin-sort-imports",
+		"prettier-plugin-tailwindcss"
+	],
+	"importOrder": [
+		"<BUILTIN_MODULES>",
+		"^sanity(/|$)",
+		"^@sanity",
+		"^sanity-",
+		"<THIRD_PARTY_MODULES>",
+		"^@/(.*)$",
+		"^[./]"
+	],
+	"importOrderTypeScriptVersion": "5.0.0"
+}

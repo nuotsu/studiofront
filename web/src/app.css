@@ -1,0 +1,440 @@
+@import 'tailwindcss';
+
+@theme {
+	--font-sans: 'Geist', sans-serif;
+
+	--color-background: #000;
+	--color-foreground: #fff;
+	--color-stroke: var(--color-neutral-200);
+
+	--color-primary: #ff4100;
+
+	--spacing-lh: 1lh;
+	--spacing-ch: 1ch;
+}
+
+@custom-variant hover (&:hover);
+
+@custom-variant header-open (body:has(#header-open:checked) &);
+@custom-variant header-not-open (body:has(#header-open:not(:checked)) &);
+
+@custom-variant headings (& :is(h1, h2, h3, h4, h5, h6));
+
+@layer base {
+	:root {
+		--drop-shadow:
+			0 1px 1px hsl(0deg 0% 100% / 0.075),
+			0 2px 2px hsl(0deg 0% 100% / 0.075),
+			0 4px 4px hsl(0deg 0% 100% / 0.075),
+			0 8px 8px hsl(0deg 0% 100% / 0.075),
+			0 16px 16px hsl(0deg 0% 100% / 0.075);
+
+		@supports (interpolate-size: allow-keywords) {
+			interpolate-size: allow-keywords;
+		}
+	}
+
+
+	:target {
+		scroll-margin-top: var(--header-height);
+
+		&:is(h1, h2, h3, h4, h5, h6) {
+			animation: anchored-heading 2s ease-in-out forwards;
+		}
+	}
+
+	@keyframes anchored-heading {
+
+		0%,
+		50% {
+			background-color: color-mix(in oklab,
+					var(--color-amber-400) 50%,
+					transparent);
+		}
+	}
+
+	* {
+		min-width: 0;
+	}
+
+	html {
+		scroll-behavior: smooth;
+		@apply accent-primary caret-primary;
+	}
+
+	body {
+		&:has(#header-open:checked):has(.layout-header nav > details:open) {
+			overflow: hidden;
+		}
+	}
+
+	details {
+		--details-duration: var(--default-transition-duration);
+
+		display: grid;
+		grid-template-rows: auto 0fr;
+		align-content: start;
+		transition: grid-template-rows var(--details-duration) var(--default-transition-timing-function);
+
+		&::details-content {
+			content-visibility: visible;
+			overflow: clip;
+			min-block-size: 0;
+		}
+
+		>:not(summary) {
+			transition: visibility var(--details-duration);
+		}
+
+		&:not(:is([open], :open))>:not(summary) {
+			visibility: hidden;
+		}
+
+		&:is([open], :open) {
+			grid-template-rows: auto 1fr;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+
+		details,
+		details::details-content,
+		details>:not(summary) {
+			transition-duration: 0s;
+		}
+	}
+
+	summary,
+	label {
+		cursor: pointer;
+	}
+
+	a {
+		color: revert;
+	}
+
+	cite {
+		font-style: normal;
+	}
+}
+
+/* typography */
+
+@utility h-base {
+	@apply font-bold;
+}
+
+@utility h0 {
+	@apply h-base text-7xl leading-[1.1];
+}
+
+@utility h1 {
+	@apply h-base text-5xl;
+}
+
+@utility h2 {
+	@apply h-base text-4xl;
+}
+
+@utility h3 {
+	@apply h-base text-3xl;
+}
+
+@utility h4 {
+	@apply h-base text-2xl;
+}
+
+@utility h5 {
+	@apply h-base text-lg;
+}
+
+@utility h6 {
+	@apply h-base text-base;
+}
+
+@utility technical {
+	@apply font-mono font-bold tracking-widest uppercase;
+}
+
+/* ctas, links */
+
+@utility action-base {
+	cursor: pointer;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	text-align: center;
+	gap: 0.5em;
+	padding: 0.25em 0.5em;
+	@apply active:scale-98 transition-all;
+}
+
+@utility action {
+	@apply action-base bg-primary text-background;
+}
+
+@utility action-outline {
+	@apply action-base bg-background border-stroke text-foreground border hover:border-current;
+}
+
+@utility ghost {
+	@apply action-base bg-current/2 text-inherit hover:bg-current/5;
+}
+
+@utility link {
+	@apply text-primary cursor-pointer underline hover:decoration-2;
+}
+
+@utility input {
+	padding: 0.25em 0.5em;
+	@apply bg-background border-foreground/10 focus-within:border-foreground/30 border leading-normal;
+}
+
+/* components */
+
+@utility section {
+	@apply mx-auto w-full max-w-7xl px-4 py-12 md:px-8;
+}
+
+@utility prose {
+	@apply space-y-4 leading-relaxed;
+
+	& h1 {
+		@apply h1;
+	}
+
+	& h2 {
+		@apply h2;
+	}
+
+	& h3 {
+		@apply h3;
+	}
+
+	& h4 {
+		@apply h4;
+	}
+
+	& h5 {
+		@apply h5;
+	}
+
+	& h6 {
+		@apply h6;
+	}
+
+	& :is(ul, ol) {
+		list-style: revert;
+		padding-left: 1.5em;
+
+		&>li>ol {
+			list-style: lower-alpha;
+		}
+	}
+
+	& .cta-list {
+		@apply mt-6;
+	}
+
+	& a:not([class]) {
+		@apply link;
+	}
+
+	& blockquote {
+		@apply border-stroke border-l-4 pl-4;
+	}
+
+	& :not(pre)>code {
+		padding-inline: 0.25em;
+		font-size: 0.875em;
+		@apply bg-foreground/5 rounded-sm;
+	}
+
+	& pre {
+		overflow-x: auto;
+		font-size: 0.875em;
+	}
+
+	& table {
+		min-width: 100%;
+		display: block;
+		overflow-x: auto;
+		line-height: 1.3;
+
+		@apply max-md:full-bleed;
+
+		& :is(th, td) {
+			padding: 0.5lh 1em;
+		}
+
+		& tbody tr:nth-child(odd) {
+			@apply bg-foreground/5;
+		}
+	}
+}
+
+@utility carousel {
+	--anchor-name: attr(data-anchor-name type(<custom-ident>), --carousel);
+	anchor-name: var(--anchor-name);
+	display: grid;
+	grid-auto-flow: column;
+	grid-auto-columns: min(var(--container-xs), 80vw);
+	overflow-x: auto;
+	scroll-behavior: smooth;
+	scroll-snap-type: x mandatory;
+
+	@apply *:md:snap-start *:snap-center;
+}
+
+@utility carousel-scroll-buttons {
+	@supports (position-anchor: var(--anchor-name)) {
+		@apply no-scrollbar;
+
+		&::scroll-button(*) {
+			cursor: pointer;
+			position: absolute;
+			position-anchor: var(--anchor-name);
+			z-index: 1;
+			display: block;
+			aspect-ratio: 1;
+			width: 1.5lh;
+			margin-inline: -100%;
+			background-color: currentColor;
+		}
+
+		&::scroll-button(left) {
+			content: '' / 'Scroll left';
+			position-area: center start;
+			mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Cpath fill='%23fff' d='M256 48C141.13 48 48 141.13 48 256s93.13 208 208 208 208-93.13 208-208S370.87 48 256 48zm62.63 304L296 374.63 177.37 256 296 137.37 318.63 160l-96 96z'/%3E%3C/svg%3E") center / cover;
+		}
+
+		&::scroll-button(right) {
+			content: '' / 'Scroll right';
+			position-area: center end;
+			mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Cpath fill='%23fff' d='M256 48C141.13 48 48 141.13 48 256s93.13 208 208 208 208-93.13 208-208S370.87 48 256 48zm-40 326.63L193.37 352l96-96-96-96L216 137.37 334.63 256z'/%3E%3C/svg%3E") center / cover;
+		}
+	}
+}
+
+@utility carousel-scroll-marker {
+	--size: 12px;
+	scroll-marker-group: after;
+
+	&::scroll-marker-group {
+		position: absolute;
+		position-anchor: var(--anchor-name);
+		top: calc(anchor(bottom) + 1rem);
+		justify-self: center;
+		display: flex;
+		align-items: center;
+		gap: 0.5ch;
+	}
+
+	&>* {
+		&::scroll-marker {
+			content: '';
+			@apply bg-foreground/25 block size-1 rounded-full;
+		}
+
+		&::scroll-marker:target-current {
+			@apply bg-foreground w-[2ch] opacity-100;
+		}
+	}
+}
+
+@utility accordion {
+	&>summary {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.5em;
+
+		& svg {
+			@apply shrink-0 transition-[rotate];
+		}
+	}
+
+	&:open>summary svg {
+		rotate: .5turn;
+	}
+}
+
+@utility dropdown {
+	summary {
+		anchor-name: var(--anchor-name);
+	}
+
+	> :not(summary) {
+		position-anchor: var(--anchor-name);
+		position-area: end span-end;
+		position-try-fallbacks: end span-start, flip-block;
+		position-try: end span-start, flip-block;
+
+		transition: var(--default-transition-duration) var(--default-transition-timing-function);
+		transition-property: opacity, translate, scale, visibility;
+
+		@apply fixed z-1 min-w-max bg-background shadow-lg origin-top;
+	}
+
+	&:not(:open)>:not(summary) {
+		@apply -translate-y-1 scale-95 opacity-0;
+	}
+}
+
+@utility skeleton {
+	@apply bg-foreground/5 block h-lh;
+}
+
+/* utilities */
+
+@utility full-bleed {
+	width: 100vw;
+	margin-inline: calc(50% - 50vw);
+}
+
+@utility no-scrollbar {
+	-webkit-overflow-scrolling: touch;
+	scrollbar-width: none;
+
+	&::-webkit-scrollbar {
+		display: none;
+	}
+}
+
+@utility sticky-below-header {
+	position: sticky;
+	top: calc(var(--header-height) + var(--offset, 0px));
+}
+
+/* anims */
+
+@utility anim-fade {
+	transition: var(--default-transition-duration) var(--default-transition-timing-function);
+	transition-property: opacity, translate, scale;
+	@apply starting:opacity-0;
+}
+
+@utility anim-fade-to-l {
+	@apply anim-fade starting:translate-x-4;
+}
+
+@utility anim-fade-to-r {
+	@apply anim-fade starting:-translate-x-4;
+}
+
+@utility anim-fade-to-t {
+	@apply anim-fade starting:translate-y-4;
+}
+
+@utility anim-fade-to-b {
+	@apply anim-fade starting:-translate-y-4;
+}
+
+@utility anim-toggle {
+	transition: var(--default-transition-duration) var(--default-transition-timing-function);
+	transition-property: opacity, translate, scale, visibility;
+
+	:where(details:not(:open))>& {
+		@apply -translate-y-4 opacity-0;
+	}
+}

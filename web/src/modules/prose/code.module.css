@@ -1,0 +1,39 @@
+.code:has(:global(.line + .line)) {
+	counter-reset: step;
+	counter-increment: step 0;
+
+	& :global(.line)::before {
+		content: counter(step);
+		counter-increment: step;
+		width: 2ch;
+		margin-right: 2ch;
+		display: inline-block;
+		text-align: right;
+		font-variant: tabular-nums;
+		opacity: 0.2;
+	}
+}
+
+.code :global(.highlight) {
+	position: relative;
+
+	& > * {
+		position: relative;
+		z-index: 1;
+	}
+
+	&:not(:empty)::after {
+		content: '';
+		position: absolute;
+		z-index: 0;
+		inset-block: -2px;
+		inset-inline: -1.6ch -0.5ch;
+		border-radius: 0 0.25rem 0.25rem 0;
+		border-inline-start: 4px solid var(--highlight-color);
+		background-color: color-mix(
+			in oklab,
+			var(--highlight-color) 20%,
+			transparent
+		);
+	}
+}
