@@ -35,6 +35,8 @@ struct SettingsRootView: View {
                     AccountSettingsView()
                 case .keybindings:
                     KeybindingsSettingsView()
+                case .about:
+                    AboutSettingsView()
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
