@@ -65,6 +65,10 @@ struct ProjectRowView: View {
         store.rows.first(where: { $0.id == row.id })?.curation.isFavorite ?? row.curation.isFavorite
     }
 
+    private var favoriteIndex: Int? {
+        store.favoriteIndex(forRowID: row.id)
+    }
+
     private var favoriteButton: some View {
         Button {
             store.toggleFavorite(row.id)
@@ -81,6 +85,9 @@ struct ProjectRowView: View {
     private var identity: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
+                if let favoriteIndex {
+                    KeycapLegend([.symbol("command"), .text("\(favoriteIndex)")], compact: true)
+                }
                 Text(row.displayTitle)
                     .font(theme.typography.projectName)
                     .foregroundStyle(theme.colors.text)

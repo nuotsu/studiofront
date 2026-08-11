@@ -42,7 +42,16 @@ struct KeybindingsSettingsView: View {
                     )
                     .settingsHighlight(.openStudioShortcut)
                     KeybindingRow(label: "Copy project ID", glyphs: [.symbol("command"), .text("C")])
-                    KeybindingRow(label: "Toggle favorite", glyphs: [.symbol("command"), .text("F")])
+                    ConfigurableKeybindingRow(
+                        label: "Toggle favorite",
+                        keyCode: $settings.favoriteToggleKeyCode,
+                        modifierRawValue: $settings.favoriteToggleModifierRawValue,
+                        characters: $settings.favoriteToggleCharacters,
+                        defaultKeyCode: AppSettings.defaultFavoriteToggleKeyCode,
+                        defaultModifierRawValue: AppSettings.defaultFavoriteToggleModifierRawValue,
+                        defaultCharacters: AppSettings.defaultFavoriteToggleCharacters
+                    )
+                    .settingsHighlight(.favoriteToggleShortcut)
                     KeybindingRow(label: "Refresh", glyphs: [.symbol("command"), .text("R")])
                     KeybindingRow(label: "Jump to favorite", glyphs: [.symbol("command"), .text("1–9")])
                 }

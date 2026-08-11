@@ -18,6 +18,7 @@ enum SettingsSearchTarget: String, Hashable, CaseIterable {
     case keybindingsOverview
     case openStudioShortcut
     case openStudiofrontShortcut
+    case favoriteToggleShortcut
     case about
 }
 
@@ -135,6 +136,13 @@ enum SettingsSearchIndex {
             keywords: ["open studiofront", "global", "hotkey", "summon", "rebind", "record"],
             pane: .keybindings,
             target: .openStudiofrontShortcut,
+            systemImage: "keyboard"
+        ),
+        SettingsSearchItem(
+            title: "Toggle favorite shortcut",
+            keywords: ["toggle favorite", "star", "favorite", "rebind", "record"],
+            pane: .keybindings,
+            target: .favoriteToggleShortcut,
             systemImage: "keyboard"
         ),
         SettingsSearchItem(

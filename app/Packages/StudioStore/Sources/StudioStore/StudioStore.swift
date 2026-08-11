@@ -50,13 +50,19 @@ public final class StudioStore {
         organizations.map { PersistedOrganization(id: $0.id, name: $0.name, isFavorite: $0.isFavorite) }
     }
 
+    /// The single source of truth for favorites order — shared by `groups` (what renders)
+    /// and `jumpToFavorite` (what Cmd+N selects), so the two can never diverge.
+    public var sortedFavorites: [ProjectRow] {
+        sortedByRecency(visibleRows.filter(\.curation.isFavorite))
+    }
+
     public var groups: [ProjectGroup] {
         let visible = visibleRows
         var result: [ProjectGroup] = []
 
-        let favorites = visible.filter(\.curation.isFavorite)
+        let favorites = sortedFavorites
         if !favorites.isEmpty {
-            result.append(ProjectGroup(id: "favorites", title: "Favorites", items: sortedByRecency(favorites)))
+            result.append(ProjectGroup(id: "favorites", title: "Favorites", items: favorites))
         }
 
         let rest = visible.filter { !$0.curation.isFavorite }
@@ -219,8 +225,17 @@ public final class StudioStore {
         onCurationChanged?()
     }
 
+    /// 1-based Cmd+N legend index for a row, or nil if it's not a favorite or falls
+    /// beyond the Cmd+1...Cmd+9 range. Reads `sortedFavorites` directly (rather than
+    /// having callers pass down a position computed elsewhere) so the legend can't
+    /// go stale relative to the underlying favorite/order state.
+    public func favoriteIndex(forRowID id: String) -> Int? {
+        guard let index = sortedFavorites.firstIndex(where: { $0.id == id }), index < 9 else { return nil }
+        return index + 1
+    }
+
     public func jumpToFavorite(_ oneBasedIndex: Int) {
-        let favorites = visibleRows.filter(\.curation.isFavorite)
+        let favorites = sortedFavorites
         guard favorites.indices.contains(oneBasedIndex - 1) else { return }
         selectedID = favorites[oneBasedIndex - 1].id
     }
