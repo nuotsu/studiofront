@@ -1,7 +1,6 @@
 import { groq } from 'next-sanity'
 import { ImageResponse } from 'next/og'
 import { ROUTES } from '@/lib/env'
-import { cn } from '@/lib/utils'
 import {
 	getDynamicFetchOptions,
 	sanityFetch,
@@ -20,7 +19,6 @@ const OG_QUERY = groq`*[_type == $type && metadata.slug.current == $slug][0]{
 export async function GET(request: Request) {
 	const { searchParams } = new URL(request.url)
 	const slug = searchParams.get('slug') ?? 'index'
-	const invert = ['1', 'true'].includes(searchParams.get('invert')!)
 
 	const type = slug.startsWith(blogDir) ? 'blog.post' : 'page'
 
@@ -42,25 +40,11 @@ export async function GET(request: Request) {
 	const text = [...new Set([...h1, ...h2, ...hostname])].join('')
 
 	return new ImageResponse(
-		<div
-			tw={cn(
-				'flex h-full w-full flex-col justify-between px-24 py-20',
-				invert ? 'bg-white text-black' : 'bg-black text-white',
-			)}
-		>
+		<div tw="flex h-full w-full flex-col justify-between bg-black px-24 py-20 text-white">
 			<div tw="flex h-2 w-16 rounded-full bg-[#ff4100]" />
 			<hgroup tw="flex flex-col">
 				<h1 tw="text-7xl leading-[1.1] font-bold">{h1}</h1>
-				{h2 && (
-					<h2
-						tw={cn(
-							'mt-4 text-4xl',
-							invert ? 'text-neutral-600' : 'text-neutral-400',
-						)}
-					>
-						{h2}
-					</h2>
-				)}
+				{h2 && <h2 tw="mt-4 text-4xl text-neutral-400">{h2}</h2>}
 			</hgroup>
 			<p tw="text-4xl font-bold text-[#ff4100]">{hostname}</p>
 		</div>,

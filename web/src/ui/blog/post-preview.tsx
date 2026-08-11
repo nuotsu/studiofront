@@ -27,7 +27,7 @@ export default function ({
 					/>
 				) : (
 					<Image
-						src={`/api/og?slug=${ROUTES.blog}/${post.metadata?.slug?.current}&invert=1`}
+						src={`/api/og?slug=${ROUTES.blog}/${post.metadata?.slug?.current}`}
 						className="aspect-video w-full object-cover"
 						alt={post.title ?? ''}
 						width={400}
