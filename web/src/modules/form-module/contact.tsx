@@ -1,8 +1,20 @@
+'use client'
+
+import posthog from 'posthog-js'
 import type { Form } from '@/sanity/types'
 
 export default function ({ form }: { form: Form }) {
 	return (
-		<form className="gap-ch grid" action={form.endpoint} method="POST">
+		<form
+			className="gap-ch grid"
+			action={form.endpoint}
+			method="POST"
+			onSubmit={() => {
+				posthog.capture('form_submission_started', {
+					form_identifier: form.identifier,
+				})
+			}}
+		>
 			<label>
 				<span>Name</span>
 				<input
