@@ -116,7 +116,8 @@ struct PopoverRootView: View {
                         options: [
                             (.organization, "Org"),
                             (.lastEdited, "Last edited"),
-                        ]
+                        ],
+                        legend: groupByCycleGlyphs
                     )
                 }
 
@@ -259,6 +260,14 @@ struct PopoverRootView: View {
     private var openStudioGlyphs: [KeyGlyph] {
         let modifierGlyphs = KeyGlyphMapping.modifierGlyphs(settings.openStudioModifierFlags)
         let keyGlyph = KeyGlyphMapping.glyph(forKeyCode: UInt16(settings.openStudioKeyCode), characters: settings.openStudioCharacters)
+        return modifierGlyphs + [keyGlyph]
+    }
+
+    /// Reflects the user's current "Cycle group by" binding (default ⌘/, or whatever
+    /// they recorded in Settings → Keybindings) so this legend never drifts from reality.
+    private var groupByCycleGlyphs: [KeyGlyph] {
+        let modifierGlyphs = KeyGlyphMapping.modifierGlyphs(settings.groupByCycleModifierFlags)
+        let keyGlyph = KeyGlyphMapping.glyph(forKeyCode: UInt16(settings.groupByCycleKeyCode), characters: settings.groupByCycleCharacters)
         return modifierGlyphs + [keyGlyph]
     }
 

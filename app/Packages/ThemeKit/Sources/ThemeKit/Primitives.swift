@@ -412,12 +412,14 @@ public struct GroupByControl<Value: Hashable>: View {
     @Environment(\.studioTheme) private var theme
     var selection: Binding<Value>
     var options: [(Value, String)]
+    var legend: [KeyGlyph]
 
     @State private var isHovered = false
 
-    public init(selection: Binding<Value>, options: [(Value, String)]) {
+    public init(selection: Binding<Value>, options: [(Value, String)], legend: [KeyGlyph] = []) {
         self.selection = selection
         self.options = options
+        self.legend = legend
     }
 
     private var selectedTitle: String {
@@ -425,24 +427,30 @@ public struct GroupByControl<Value: Hashable>: View {
     }
 
     public var body: some View {
-        Menu {
-            ForEach(options, id: \.0) { value, title in
-                Button(title) {
-                    selection.wrappedValue = value
+        HStack(spacing: 6) {
+            Menu {
+                ForEach(options, id: \.0) { value, title in
+                    Button(title) {
+                        selection.wrappedValue = value
+                    }
                 }
+            } label: {
+                Text(selectedTitle)
+                    .font(.system(size: 9.5, weight: .regular))
+                    .foregroundStyle(theme.colors.faint)
+                    .lineLimit(1)
             }
-        } label: {
-            Text(selectedTitle)
-                .font(.system(size: 9.5, weight: .regular))
-                .foregroundStyle(theme.colors.faint)
-                .lineLimit(1)
+            .menuStyle(.borderlessButton)
+            .controlSize(.small)
+            .tint(theme.colors.faint)
+            .fixedSize()
+
+            if !legend.isEmpty {
+                KeycapLegend(legend, compact: true)
+            }
         }
-        .menuStyle(.borderlessButton)
-        .controlSize(.small)
-        .tint(theme.colors.faint)
-        .fixedSize()
         .padding(.horizontal, 6)
-        .padding(.vertical, 2)
+        .padding(.vertical, 3)
         .background(
             ZStack {
                 theme.colors.chipBackground

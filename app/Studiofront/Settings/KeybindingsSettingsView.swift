@@ -52,6 +52,16 @@ struct KeybindingsSettingsView: View {
                         defaultCharacters: AppSettings.defaultFavoriteToggleCharacters
                     )
                     .settingsHighlight(.favoriteToggleShortcut)
+                    ConfigurableKeybindingRow(
+                        label: "Cycle group by",
+                        keyCode: $settings.groupByCycleKeyCode,
+                        modifierRawValue: $settings.groupByCycleModifierRawValue,
+                        characters: $settings.groupByCycleCharacters,
+                        defaultKeyCode: AppSettings.defaultGroupByCycleKeyCode,
+                        defaultModifierRawValue: AppSettings.defaultGroupByCycleModifierRawValue,
+                        defaultCharacters: AppSettings.defaultGroupByCycleCharacters
+                    )
+                    .settingsHighlight(.groupByCycleShortcut)
                     KeybindingRow(label: "Refresh", glyphs: [.symbol("command"), .text("R")])
                     KeybindingRow(label: "Jump to favorite", glyphs: [.symbol("command"), .text("1–9")])
                 }

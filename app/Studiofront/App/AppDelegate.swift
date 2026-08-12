@@ -475,6 +475,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
             store.toggleFavoriteOnSelection()
             return true
         }
+        if matchesGroupByCycleBinding(keyCode: keyCode, flags: flags) {
+            store.cycleGroupBy()
+            return true
+        }
 
         if flags.contains(.command) {
             let character = characters.lowercased()
@@ -526,5 +530,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
 
     private func matchesFavoriteToggleBinding(keyCode: UInt16, flags: NSEvent.ModifierFlags) -> Bool {
         keyCode == UInt16(settings.favoriteToggleKeyCode) && flags == settings.favoriteToggleModifierFlags
+    }
+
+    private func matchesGroupByCycleBinding(keyCode: UInt16, flags: NSEvent.ModifierFlags) -> Bool {
+        keyCode == UInt16(settings.groupByCycleKeyCode) && flags == settings.groupByCycleModifierFlags
     }
 }

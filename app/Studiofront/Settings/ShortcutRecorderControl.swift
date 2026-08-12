@@ -59,6 +59,7 @@ private enum ReservedShortcut {
 /// recording — the monitor's lifecycle is driven entirely by changes to that binding.
 struct ShortcutRecorderControl: View {
     @Environment(\.studioTheme) private var theme
+    @Environment(\.colorScheme) private var colorScheme
 
     @Binding var keyCode: Int
     @Binding var modifierRawValue: Int
@@ -85,7 +86,9 @@ struct ShortcutRecorderControl: View {
                 .frame(minHeight: 14)
                 .padding(.horizontal, 7)
                 .padding(.vertical, 3)
-                .background(theme.colors.chipBackground)
+                // Distinguishes a rebindable key from the fixed, non-configurable
+                // ones rendered by plain `KeycapLegend` elsewhere in Settings.
+                .background(colorScheme == .light ? Color.white : theme.colors.chipBackground)
                 .overlay(
                     RoundedRectangle(cornerRadius: 4, style: .continuous)
                         .strokeBorder(isRecording ? Color.red.opacity(0.35) : theme.colors.chipBorder, lineWidth: 1)
@@ -132,7 +135,9 @@ struct ShortcutRecorderControl: View {
                 keyGlyphView(glyph)
             }
         }
-        .foregroundStyle(theme.colors.faint)
+        // Higher-contrast than `theme.colors.faint` so a rebindable key reads as
+        // distinct from the fixed, non-configurable ones shown via plain `KeycapLegend`.
+        .foregroundStyle(theme.colors.text)
     }
 
     @ViewBuilder

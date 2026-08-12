@@ -19,6 +19,7 @@ enum SettingsSearchTarget: String, Hashable, CaseIterable {
     case openStudioShortcut
     case openStudiofrontShortcut
     case favoriteToggleShortcut
+    case groupByCycleShortcut
     case about
 }
 
@@ -143,6 +144,13 @@ enum SettingsSearchIndex {
             keywords: ["toggle favorite", "star", "favorite", "rebind", "record"],
             pane: .keybindings,
             target: .favoriteToggleShortcut,
+            systemImage: "keyboard"
+        ),
+        SettingsSearchItem(
+            title: "Cycle group by shortcut",
+            keywords: ["group by", "cycle", "org", "last edited", "rebind", "record"],
+            pane: .keybindings,
+            target: .groupByCycleShortcut,
             systemImage: "keyboard"
         ),
         SettingsSearchItem(

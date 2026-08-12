@@ -176,6 +176,18 @@ final class AppSettings {
         didSet { UserDefaults.standard.set(favoriteToggleCharacters, forKey: Keys.favoriteToggleCharacters) }
     }
 
+    var groupByCycleKeyCode: Int {
+        didSet { UserDefaults.standard.set(groupByCycleKeyCode, forKey: Keys.groupByCycleKeyCode) }
+    }
+
+    var groupByCycleModifierRawValue: Int {
+        didSet { UserDefaults.standard.set(groupByCycleModifierRawValue, forKey: Keys.groupByCycleModifierRawValue) }
+    }
+
+    var groupByCycleCharacters: String {
+        didSet { UserDefaults.standard.set(groupByCycleCharacters, forKey: Keys.groupByCycleCharacters) }
+    }
+
     var refreshInterval: TimeInterval {
         TimeInterval(max(1, refreshIntervalMinutes) * 60)
     }
@@ -219,6 +231,15 @@ final class AppSettings {
     nonisolated static let defaultFavoriteToggleModifierRawValue = Int(NSEvent.ModifierFlags.command.rawValue)
     nonisolated static let defaultFavoriteToggleCharacters = "f"
 
+    var groupByCycleModifierFlags: NSEvent.ModifierFlags {
+        NSEvent.ModifierFlags(rawValue: UInt(groupByCycleModifierRawValue))
+            .intersection(.deviceIndependentFlagsMask)
+    }
+
+    nonisolated static let defaultGroupByCycleKeyCode = 44 // kVK_ANSI_Slash
+    nonisolated static let defaultGroupByCycleModifierRawValue = Int(NSEvent.ModifierFlags.command.rawValue)
+    nonisolated static let defaultGroupByCycleCharacters = "/"
+
     init(
         themePreference: ThemePreference = .liquidGlass,
         appearancePreference: AppearancePreference = .system,
@@ -235,7 +256,10 @@ final class AppSettings {
         openStudiofrontCharacters: String = AppSettings.defaultOpenStudiofrontCharacters,
         favoriteToggleKeyCode: Int = AppSettings.defaultFavoriteToggleKeyCode,
         favoriteToggleModifierRawValue: Int = AppSettings.defaultFavoriteToggleModifierRawValue,
-        favoriteToggleCharacters: String = AppSettings.defaultFavoriteToggleCharacters
+        favoriteToggleCharacters: String = AppSettings.defaultFavoriteToggleCharacters,
+        groupByCycleKeyCode: Int = AppSettings.defaultGroupByCycleKeyCode,
+        groupByCycleModifierRawValue: Int = AppSettings.defaultGroupByCycleModifierRawValue,
+        groupByCycleCharacters: String = AppSettings.defaultGroupByCycleCharacters
     ) {
         self.themePreference = themePreference
         self.appearancePreference = appearancePreference
@@ -253,6 +277,9 @@ final class AppSettings {
         self.favoriteToggleKeyCode = favoriteToggleKeyCode
         self.favoriteToggleModifierRawValue = favoriteToggleModifierRawValue
         self.favoriteToggleCharacters = favoriteToggleCharacters
+        self.groupByCycleKeyCode = groupByCycleKeyCode
+        self.groupByCycleModifierRawValue = groupByCycleModifierRawValue
+        self.groupByCycleCharacters = groupByCycleCharacters
     }
 
     static func load() -> AppSettings {
@@ -280,6 +307,12 @@ final class AppSettings {
             ?? Self.defaultFavoriteToggleModifierRawValue
         let favoriteToggleCharacters = defaults.string(forKey: Keys.favoriteToggleCharacters)
             ?? Self.defaultFavoriteToggleCharacters
+        let groupByCycleKeyCode = defaults.object(forKey: Keys.groupByCycleKeyCode) as? Int
+            ?? Self.defaultGroupByCycleKeyCode
+        let groupByCycleModifierRawValue = defaults.object(forKey: Keys.groupByCycleModifierRawValue) as? Int
+            ?? Self.defaultGroupByCycleModifierRawValue
+        let groupByCycleCharacters = defaults.string(forKey: Keys.groupByCycleCharacters)
+            ?? Self.defaultGroupByCycleCharacters
         return AppSettings(
             themePreference: theme,
             appearancePreference: appearance,
@@ -296,7 +329,10 @@ final class AppSettings {
             openStudiofrontCharacters: openStudiofrontCharacters,
             favoriteToggleKeyCode: favoriteToggleKeyCode,
             favoriteToggleModifierRawValue: favoriteToggleModifierRawValue,
-            favoriteToggleCharacters: favoriteToggleCharacters
+            favoriteToggleCharacters: favoriteToggleCharacters,
+            groupByCycleKeyCode: groupByCycleKeyCode,
+            groupByCycleModifierRawValue: groupByCycleModifierRawValue,
+            groupByCycleCharacters: groupByCycleCharacters
         )
     }
 
@@ -319,5 +355,8 @@ final class AppSettings {
         static let favoriteToggleKeyCode = "favoriteToggleKeyCode"
         static let favoriteToggleModifierRawValue = "favoriteToggleModifierRawValue"
         static let favoriteToggleCharacters = "favoriteToggleCharacters"
+        static let groupByCycleKeyCode = "groupByCycleKeyCode"
+        static let groupByCycleModifierRawValue = "groupByCycleModifierRawValue"
+        static let groupByCycleCharacters = "groupByCycleCharacters"
     }
 }

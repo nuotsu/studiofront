@@ -208,6 +208,12 @@ public final class StudioStore {
         toggleFavorite(selectedID)
     }
 
+    public func cycleGroupBy() {
+        let all = GroupBy.allCases
+        guard let index = all.firstIndex(of: groupBy) else { return }
+        groupBy = all[(index + 1) % all.count]
+    }
+
     public func isOrganizationFavorite(_ id: String) -> Bool {
         organizations.first(where: { $0.id == id })?.isFavorite ?? false
     }
