@@ -244,7 +244,7 @@ final class AppSettings {
         themePreference: ThemePreference = .liquidGlass,
         appearancePreference: AppearancePreference = .system,
         menuBarIconPreference: MenuBarIconPreference = .studiofront,
-        showInDock: Bool = false,
+        showInDock: Bool = true,
         refreshIntervalMinutes: Int = 5,
         hideArchivedProjects: Bool = true,
         presenceMode: PresenceMode = .realtime,
@@ -287,7 +287,7 @@ final class AppSettings {
         let theme = ThemePreference(rawValue: defaults.string(forKey: Keys.theme) ?? "") ?? .liquidGlass
         let appearance = AppearancePreference(rawValue: defaults.string(forKey: Keys.appearance) ?? "") ?? .system
         let menuBarIcon = MenuBarIconPreference(rawValue: defaults.string(forKey: Keys.menuBarIcon) ?? "") ?? .studiofront
-        let showInDock = defaults.object(forKey: Keys.showInDock) as? Bool ?? false
+        let showInDock = defaults.object(forKey: Keys.showInDock) as? Bool ?? true
         let storedInterval = defaults.object(forKey: Keys.refreshInterval) as? Int
         let refresh = Self.allowedRefreshIntervals.contains(storedInterval ?? -1) ? storedInterval! : 5
         let hideArchivedProjects = defaults.object(forKey: Keys.hideArchivedProjects) as? Bool ?? true
