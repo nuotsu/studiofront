@@ -3,9 +3,10 @@ name: ship-release
 description: >-
   Ships a Studiofront macOS release end-to-end: draft GitHub release notes
   and a CHANGELOG entry for review, bump version, Release build, sign and
-  notarize the DMG, generate the Sparkle appcast, archive the dSYM, then
-  tag and publish on GitHub. Use when the user asks to release, ship, cut a
-  version, or write a changelog for the Studiofront macOS app.
+  notarize the DMG, generate the Sparkle appcast, archive the dSYM, sync
+  the version string in Sanity Studio content, then tag and publish on
+  GitHub. Use when the user asks to release, ship, cut a version, or write
+  a changelog for the Studiofront macOS app.
 ---
 
 # Ship Studiofront Release
@@ -25,7 +26,8 @@ Release progress:
 - [ ] 3. Bump version files + xcodegen
 - [ ] 4. Release build → sign/notarize DMG → generate appcast → archive dSYM
 - [ ] 5. Commit, push, tag, gh release (DMG + appcast + dSYM)
-- [ ] 6. Verify GitHub release assets + Sparkle feed
+- [ ] 6. Sync version string in Sanity Studio content (footer blurb + docs callout eyebrow)
+- [ ] 7. Verify GitHub release assets + Sparkle feed
 ```
 
 ## Step 1: Gather
@@ -111,7 +113,17 @@ Repo: `nuotsu/studiofront`
 
 All three assets ship every release. Never force-push tags. Never `--no-verify`.
 
-## Step 6: Verify
+## Step 6: Sync version in Sanity Studio content
+
+Two documents in the `production` dataset (project `zd7g2ch2`) hardcode the current version as a `vX.Y.Z` string and must be updated every release. Exact IDs and field paths in [reference.md](reference.md#sanity-version-fields) — do not re-derive them by searching the schema each time.
+
+1. `patch_documents` both documents, setting the version field to the new `vX.Y.Z`.
+2. `publish_documents` both draft IDs so the change goes live immediately (these are marketing-site content, not app code — no separate approval gate beyond the Step 2 version approval already given).
+3. Verify with a GROQ query on the `published` perspective that both fields read the new version.
+
+If a future release adds another version mention in Sanity content, add it to the reference table and this step — don't let new ones drift out of sync like the first two did (both were still `v0.0.1` after the `0.0.2` release).
+
+## Step 7: Verify
 
 - `gh release view vX.Y.Z --json assets --jq '.assets[].name'` lists exactly `Studiofront.dmg`, `appcast.xml`, `Studiofront-X.Y.Z.dSYM.zip`
 - Confirm the appcast's `sparkle:shortVersionString` / `sparkle:version` match `vX.Y.Z`
@@ -130,4 +142,4 @@ If opening a local build after ship:
 - Changing Sparkle keys, signing identity, or notary credentials
 - README rewrites (unless the user asks)
 - Force-push / history rewrite
-- Any website/Sanity version sync: Studiofront's marketing site has no live version string or docs page today
+- Any Sanity Studio content changes beyond the version string fields listed in [reference.md](reference.md#sanity-version-fields) (e.g. rewriting docs prose, adding screenshots, editing other footer content)

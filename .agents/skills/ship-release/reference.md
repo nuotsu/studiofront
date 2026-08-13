@@ -167,6 +167,23 @@ curl -sS 'https://github.com/nuotsu/studiofront/releases/latest/download/Studiof
 gh release view vX.Y.Z --json assets --jq '.assets[].name'
 ```
 
+## Sanity version fields
+
+Project `zd7g2ch2`, dataset `production`. Both documents are published (no draft-vs-published divergence to worry about going in); patching creates a draft that must be published to go live.
+
+| Location | Document `_id` | `_type` | Field path | Value shape |
+|---|---|---|---|---|
+| Footer blurb | `20ce5d95-4d07-4ecd-ae3e-c552d57a46ad` | `navigation` (title "Footer", referenced by `site.footer`) | `blurb[_key=="9992ba33a1c8"].children[_key=="76103c3bdc4f"].text` | Portable text span, rendered as inline code (`marks: ["code"]`). Plain string like `"v0.0.3"`, no `v` omitted. |
+| Docs page callout eyebrow | `9171cccd-52fb-4180-8359-52c1d2d58edd` | `page` (slug `docs`) | `modules[_key=="231e3b03035a"].eyebrow` | Plain string field on the `callout` module. |
+
+Use the Sanity MCP tools:
+
+1. `patch_documents` with `resource: {projectId: "zd7g2ch2", dataset: "production"}`, one entry per document ID above, each with a single `set` patch on the field path with the new `vX.Y.Z` string. Pass `ifRevisionId` from a fresh `get_document` read if you want optimistic-lock safety.
+2. `publish_documents` with `ids: [<both document _ids>]` (published IDs, not `drafts.` prefixed) to make the change live.
+3. Confirm with `query_documents`, `perspective: "published"`, e.g. `*[_id in [<ids>]]{_id, "blurbText": pt::text(blurb), "eyebrow": modules[_type=="callout"][0].eyebrow}`.
+
+If the field `_key`s above ever stop matching (schema restructure, content re-authored from scratch), re-locate them with a targeted `query_documents` sweep rather than guessing — don't skip the sync silently.
+
 ## Local open after ship
 
 ```bash
