@@ -8,6 +8,7 @@ struct ProjectRowView: View {
 
     var row: ProjectRow
     var isSelected: Bool
+    var favoriteIndex: Int?
 
     @State private var isHovered = false
     @State private var isDocumentHovered = false
@@ -62,11 +63,7 @@ struct ProjectRowView: View {
     }
 
     private var isFavorite: Bool {
-        store.rows.first(where: { $0.id == row.id })?.curation.isFavorite ?? row.curation.isFavorite
-    }
-
-    private var favoriteIndex: Int? {
-        store.favoriteIndex(forRowID: row.id)
+        row.curation.isFavorite
     }
 
     private var favoriteButton: some View {

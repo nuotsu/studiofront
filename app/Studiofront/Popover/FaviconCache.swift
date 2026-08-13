@@ -7,16 +7,21 @@ import AppKit
 final class FaviconCache {
     static let shared = FaviconCache()
 
-    private var cache: [String: NSImage?] = [:]
+    // NSCache rather than a plain dictionary: bounds memory automatically under
+    // pressure, and — crucially — only ever holds successful fetches, so a
+    // transient failure (timeout, DNS hiccup) doesn't permanently disable a
+    // project's favicon for the rest of the process lifetime.
+    private let cache = NSCache<NSString, NSImage>()
 
     private init() {}
 
     func favicon(forHost host: String) async -> NSImage? {
-        if let cached = cache[host] {
+        let key = host as NSString
+        if let cached = cache.object(forKey: key) {
             return cached
         }
-        let image = await Self.fetch(host: host)
-        cache[host] = image
+        guard let image = await Self.fetch(host: host) else { return nil }
+        cache.setObject(image, forKey: key)
         return image
     }
 

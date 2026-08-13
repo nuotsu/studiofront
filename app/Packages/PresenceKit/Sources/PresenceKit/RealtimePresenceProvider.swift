@@ -52,6 +52,9 @@ public actor RealtimePresenceProvider: PresenceProvider {
     public func presence(for projectId: String) async -> AsyncStream<[Member]> {
         AsyncStream { continuation in
             self.attach(continuation, for: projectId)
+            continuation.onTermination = { [weak self] _ in
+                Task { await self?.detach(projectId) }
+            }
         }
     }
 
@@ -65,6 +68,8 @@ public actor RealtimePresenceProvider: PresenceProvider {
             connections[id] = nil
             sessions[id] = nil
             fallbackProjectIds.remove(id)
+            continuations[id]?.finish()
+            continuations[id] = nil
         }
         if !removed.isEmpty {
             await fallback.start(projectIds: Array(fallbackProjectIds))
@@ -96,7 +101,15 @@ public actor RealtimePresenceProvider: PresenceProvider {
     }
 
     private func attach(_ continuation: AsyncStream<[Member]>.Continuation, for projectId: String) {
+        // Finish any prior continuation for this project before replacing it —
+        // otherwise its consumer's `for await` loop would hang forever, waiting
+        // on a stream that will never receive another value or terminate.
+        continuations[projectId]?.finish()
         continuations[projectId] = continuation
+    }
+
+    private func detach(_ projectId: String) {
+        continuations[projectId] = nil
     }
 
     private func ensureTicker() {

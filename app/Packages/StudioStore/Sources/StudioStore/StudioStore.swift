@@ -53,14 +53,30 @@ public final class StudioStore {
     /// The single source of truth for favorites order — shared by `groups` (what renders)
     /// and `jumpToFavorite` (what Cmd+N selects), so the two can never diverge.
     public var sortedFavorites: [ProjectRow] {
-        sortedByRecency(visibleRows.filter(\.curation.isFavorite))
+        sortedFavorites(from: visibleRows)
+    }
+
+    private func sortedFavorites(from visible: [ProjectRow]) -> [ProjectRow] {
+        sortedByRecency(visible.filter(\.curation.isFavorite))
+    }
+
+    /// 1-based Cmd+N legend index for every current favorite, keyed by row id.
+    /// Callers rendering many rows should read this once per list build rather than
+    /// calling `favoriteIndex(forRowID:)` per row, which would recompute `sortedFavorites`
+    /// (a full filter + sort over all rows) for every row instead of once for the list.
+    public var favoriteIndexByID: [String: Int] {
+        var map: [String: Int] = [:]
+        for (index, row) in sortedFavorites.enumerated() where index < 9 {
+            map[row.id] = index + 1
+        }
+        return map
     }
 
     public var groups: [ProjectGroup] {
         let visible = visibleRows
         var result: [ProjectGroup] = []
 
-        let favorites = sortedFavorites
+        let favorites = sortedFavorites(from: visible)
         if !favorites.isEmpty {
             result.append(ProjectGroup(id: "favorites", title: "Favorites", items: favorites))
         }

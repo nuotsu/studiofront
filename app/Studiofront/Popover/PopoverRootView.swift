@@ -178,11 +178,17 @@ struct PopoverRootView: View {
         let theme = settings.resolvedTheme
         return ScrollViewReader { proxy in
             ScrollView {
+                let groups = store.groups
+                let favoriteIndexByID = store.favoriteIndexByID
                 LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
-                    ForEach(Array(store.groups.enumerated()), id: \.element.id) { index, group in
+                    ForEach(Array(groups.enumerated()), id: \.element.id) { index, group in
                         Section {
                             ForEach(group.items) { row in
-                                ProjectRowView(row: row, isSelected: store.selectedID == row.id)
+                                ProjectRowView(
+                                    row: row,
+                                    isSelected: store.selectedID == row.id,
+                                    favoriteIndex: favoriteIndexByID[row.id]
+                                )
                                     .id(row.id)
                             }
                             // Gap before the next group's label. It lives in the
@@ -190,7 +196,7 @@ struct PopoverRootView: View {
                             // there leaves a transparent strip with rows sliding
                             // through it while pinned, and an offset to close that
                             // strip stops the header pinning at all.
-                            if index < store.groups.count - 1 {
+                            if index < groups.count - 1 {
                                 Color.clear.frame(height: 4)
                             }
                         } header: {
@@ -210,7 +216,7 @@ struct PopoverRootView: View {
                         }
                     }
 
-                    if store.visibleRows.isEmpty {
+                    if groups.isEmpty {
                         Text(emptyListMessage)
                             .font(.system(size: 11))
                             .foregroundStyle(theme.colors.faint)

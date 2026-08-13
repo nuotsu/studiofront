@@ -17,10 +17,10 @@ final class ProjectSyncService {
         self.client = client
     }
 
-    func loadCache(applyToStore: Bool = true) {
+    func loadCache(applyToStore: Bool = true) async {
         let liveCuration = store.curationSnapshot
         let liveOrgs = store.organizationSnapshot
-        if let loaded = PersistenceStore.load() {
+        if let loaded = await PersistenceStore.load() {
             snapshot = loaded
             if !liveCuration.isEmpty {
                 var byID = Dictionary(uniqueKeysWithValues: snapshot.curation.map { ($0.projectId, $0) })
@@ -47,15 +47,15 @@ final class ProjectSyncService {
         }
     }
 
-    func handleAuthChange() {
+    func handleAuthChange() async {
         switch auth.status {
         case .signedIn:
-            loadCache()
+            await loadCache()
         case .signedOut:
             persistCuration()
             store.clearLiveRows()
         case .reconnectRequired:
-            loadCache()
+            await loadCache()
         case .connecting:
             break
         }
@@ -96,14 +96,14 @@ final class ProjectSyncService {
         let generation = refreshGeneration
         store.isRefreshing = true
         inFlight = Task {
-            await self.performRefresh(force: force)
+            await self.performRefresh(force: force, generation: generation)
             guard generation == self.refreshGeneration else { return }
             self.store.isRefreshing = false
             self.inFlight = nil
         }
     }
 
-    private func performRefresh(force: Bool) async {
+    private func performRefresh(force: Bool, generation: Int) async {
         guard let token = try? TokenStore.shared.load(), !token.isEmpty else {
             auth.markReconnectRequired()
             return
@@ -119,6 +119,7 @@ final class ProjectSyncService {
             if projectsResult.notModified, !snapshot.projects.isEmpty, !force {
                 snapshot.cachedAt = Date()
                 if let etag = projectsResult.etag { snapshot.etags["projects"] = etag }
+                guard generation == refreshGeneration else { return }
                 persistCuration()
                 applySnapshotToStore()
                 return
@@ -129,7 +130,7 @@ final class ProjectSyncService {
                 snapshot.etags["projects"] = etag
             }
 
-            var orgNames = Dictionary(uniqueKeysWithValues: snapshot.organizations.map { ($0.id, $0.name) })
+            var orgNames: [String: String]
             if let orgs = try? await client.listOrganizations(token: token) {
                 orgNames = Dictionary(uniqueKeysWithValues: orgs.map { ($0.id, $0.name) })
                 let existingFavorites = Dictionary(uniqueKeysWithValues: snapshot.organizations.map { ($0.id, $0.isFavorite) })
@@ -141,6 +142,8 @@ final class ProjectSyncService {
                         isFavorite: liveFavorites[remote.id] ?? existingFavorites[remote.id] ?? false
                     )
                 }
+            } else {
+                orgNames = Dictionary(uniqueKeysWithValues: snapshot.organizations.map { ($0.id, $0.name) })
             }
 
             var studioHosts: [String: String] = [:]
@@ -194,6 +197,15 @@ final class ProjectSyncService {
                     }
                 }
             }
+
+            // Drop cached etags/activity for projects no longer in `remote` (deleted,
+            // moved, or access revoked) so the persisted snapshot doesn't grow forever.
+            let validProjectIDs = Set(projectIDs)
+            snapshot.etags = snapshot.etags.filter { key, _ in
+                guard key.hasPrefix("datasets:") else { return true }
+                return validProjectIDs.contains(String(key.dropFirst("datasets:".count)))
+            }
+            snapshot.activity = snapshot.activity.filter { validProjectIDs.contains($0.key) }
 
             var memberProfilesByProject: [String: [String: RemoteMemberProfile]] = [:]
             for start in stride(from: 0, to: remote.count, by: limit) {
@@ -263,6 +275,7 @@ final class ProjectSyncService {
                 previous: snapshot.activity
             )
 
+            guard generation == refreshGeneration else { return }
             PersistenceStore.save(snapshot)
             applySnapshotToStore()
         } catch is CancellationError {
@@ -272,6 +285,7 @@ final class ProjectSyncService {
         } catch SanityError.unauthorized {
             auth.markReconnectRequired()
         } catch {
+            guard generation == refreshGeneration else { return }
             applySnapshotToStore()
         }
     }

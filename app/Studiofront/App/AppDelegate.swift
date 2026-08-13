@@ -58,11 +58,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
             self?.presence.refreshEligibleProjects()
         }
         auth.onStatusChange = { [weak self] in
-            self?.sync.handleAuthChange()
+            Task { await self?.sync.handleAuthChange() }
         }
         Task {
             await auth.restoreOnLaunch()
-            self.sync.loadCache()
+            await self.sync.loadCache()
         }
         // Start Sparkle after launch so the first-run permission prompt is not buried.
         _ = AppUpdater.shared

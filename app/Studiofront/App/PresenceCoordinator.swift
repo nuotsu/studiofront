@@ -50,7 +50,7 @@ final class PresenceCoordinator {
 
         switch settings.presenceMode {
         case .off:
-            provider = nil
+            break // unreachable: guarded above
         case .activityOnly:
             provider = activity
         case .realtime:

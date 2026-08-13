@@ -62,22 +62,37 @@ public enum PersistenceStore {
         directoryURL.appending(path: fileName)
     }
 
-    public static func load() -> PersistedSnapshot? {
-        guard let data = try? Data(contentsOf: fileURL) else { return nil }
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        guard let snapshot = try? decoder.decode(PersistedSnapshot.self, from: data),
-              snapshot.schemaVersion == PersistedSnapshot.currentSchemaVersion
-        else { return nil }
-        return snapshot
+    /// Runs the actual encode/decode/disk I/O off the main actor, and serializes
+    /// it so concurrent `save()` calls (e.g. rapid favorite toggles) can't
+    /// interleave writes to the same file.
+    private actor IO {
+        static let shared = IO()
+
+        func load() -> PersistedSnapshot? {
+            guard let data = try? Data(contentsOf: PersistenceStore.fileURL) else { return nil }
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            guard let snapshot = try? decoder.decode(PersistedSnapshot.self, from: data),
+                  snapshot.schemaVersion == PersistedSnapshot.currentSchemaVersion
+            else { return nil }
+            return snapshot
+        }
+
+        func save(_ snapshot: PersistedSnapshot) {
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            encoder.outputFormatting = [.sortedKeys]
+            guard let data = try? encoder.encode(snapshot) else { return }
+            try? FileManager.default.createDirectory(at: PersistenceStore.directoryURL, withIntermediateDirectories: true)
+            try? data.write(to: PersistenceStore.fileURL, options: .atomic)
+        }
+    }
+
+    public static func load() async -> PersistedSnapshot? {
+        await IO.shared.load()
     }
 
     public static func save(_ snapshot: PersistedSnapshot) {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        encoder.outputFormatting = [.sortedKeys]
-        guard let data = try? encoder.encode(snapshot) else { return }
-        try? FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
-        try? data.write(to: fileURL, options: .atomic)
+        Task { await IO.shared.save(snapshot) }
     }
 }
