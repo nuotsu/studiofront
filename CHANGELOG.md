@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.0.3] - 2026-08-13
+
+- Add configurable ⌘/ shortcut to cycle Group by
+- Enable Show in Dock by default for new installations
+- Fix perf/correctness bugs: O(n²) row rendering, blocking disk I/O, stale-refresh race, favicon negative-cache bug, leaked presence continuations
+
 ## [0.0.2] - 2026-08-11
 
 - Add Launch at Login toggle
