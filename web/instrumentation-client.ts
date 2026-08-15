@@ -1,7 +1,9 @@
 import posthog from 'posthog-js'
+import { ROUTES } from '@/lib/env'
 
 const projectToken = process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN
 const host = process.env.NEXT_PUBLIC_POSTHOG_HOST
+const isStudioRoute = window.location.pathname.startsWith(`/${ROUTES.studio}`)
 
 if (!projectToken || !host) {
 	if (process.env.NODE_ENV === 'development') {
@@ -13,7 +15,7 @@ if (!projectToken || !host) {
 			`${missingVariable} variable required by PostHog is missing or un-configured, this causes events to be silently missed. This error stops appearing once ${missingVariable} is configured`,
 		)
 	}
-} else {
+} else if (!isStudioRoute) {
 	posthog.init(projectToken, {
 		api_host: host,
 		defaults: '2026-01-30',
