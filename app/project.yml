@@ -47,8 +47,8 @@ targets:
     info:
       path: Studiofront/Resources/Info.plist
       properties:
-        CFBundleShortVersionString: "0.0.4"
-        CFBundleVersion: "4"
+        CFBundleShortVersionString: "0.0.5"
+        CFBundleVersion: "5"
         SUFeedURL: https://github.com/nuotsu/studiofront/releases/latest/download/appcast.xml
         SUPublicEDKey: v/SVpv1UO0YocJuBwLCj9eF9DV5SooDM3VxnarGWJf0=
         SUEnableInstallerLauncherService: true
@@ -58,8 +58,8 @@ targets:
       base:
         PRODUCT_NAME: Studiofront
         PRODUCT_BUNDLE_IDENTIFIER: dev.nuotsu.Studiofront
-        MARKETING_VERSION: "0.0.4"
-        CURRENT_PROJECT_VERSION: "4"
+        MARKETING_VERSION: "0.0.5"
+        CURRENT_PROJECT_VERSION: "5"
         GENERATE_INFOPLIST_FILE: YES
         CODE_SIGN_ENTITLEMENTS: Studiofront/Resources/Studiofront.entitlements
         OTHER_CODE_SIGN_FLAGS: "--timestamp"

@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.0.5] - 2026-08-17
+
+- Fix Settings window opening more than once
+
 ## [0.0.4] - 2026-08-17
 
 - Scope starred projects and pinned orgs to the signed-in Sanity account, fixing favorites leaking between accounts that share a project id
