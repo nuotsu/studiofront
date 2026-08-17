@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.0.4] - 2026-08-17
+
+- Scope starred projects and pinned orgs to the signed-in Sanity account, fixing favorites leaking between accounts that share a project id
+- Fix star icon not updating to gold when toggling a favorite
+- Fix Personal Token guidance to point to the correct docs anchor and explain sanity login / sanity debug --secrets
+- Fix Settings sidebar toggle not doing anything
+- Rename "Presence" setting to "Editor Avatars" with clearer option captions
+
 ## [0.0.3] - 2026-08-13
 
 - Add configurable ⌘/ shortcut to cycle Group by
