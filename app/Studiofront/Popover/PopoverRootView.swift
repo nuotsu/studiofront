@@ -189,7 +189,8 @@ struct PopoverRootView: View {
                                     isSelected: store.selectedID == row.id,
                                     favoriteIndex: favoriteIndexByID[row.id]
                                 )
-                                    .id(row.id)
+                                    // Favorite toggling moves the row across Section boundaries (into/out of the "Favorites" group), which LazyVStack can repaint stale on macOS unless the identity itself changes.
+                                    .id("\(row.id)-\(row.curation.isFavorite)")
                             }
                             // Gap before the next group's label. It lives in the
                             // scrolling content rather than on the header: padding
