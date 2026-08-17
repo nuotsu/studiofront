@@ -14,10 +14,11 @@ struct SettingsRootView: View {
     @State private var selectedSearchID: String?
     @State private var searchFieldFocused = false
     @State private var search = SettingsSearchState()
+    @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
     var body: some View {
         @Bindable var auth = auth
-        NavigationSplitView(columnVisibility: .constant(.all)) {
+        NavigationSplitView(columnVisibility: $columnVisibility) {
             sidebarList
                 .navigationSplitViewColumnWidth(
                     min: Self.sidebarWidth,
@@ -51,7 +52,6 @@ struct SettingsRootView: View {
         .toolbar {
             ToolbarSpacer(.flexible)
         }
-        .toolbar(removing: .sidebarToggle)
         .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
         .background(SettingsSplitViewTuner())
         .environment(search)
@@ -212,7 +212,7 @@ struct SettingsRootView: View {
 
 /// Pins the Tahoe floating sidebar to a fixed leading column and stretches it
 /// full-height under the titlebar so traffic lights sit inside the glass.
-private struct SettingsSplitViewTuner: NSViewRepresentable {
+struct SettingsSplitViewTuner: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView {
         let view = NSView(frame: .zero)
         view.isHidden = true
@@ -235,7 +235,7 @@ private struct SettingsSplitViewTuner: NSViewRepresentable {
                 item.maximumThickness = SettingsRootView.sidebarWidth
                 item.preferredThicknessFraction = NSSplitViewItem.unspecifiedDimension
                 item.holdingPriority = .defaultHigh
-                item.canCollapse = false
+                item.canCollapse = true
                 item.canCollapseFromWindowResize = false
                 item.allowsFullHeightLayout = true
                 item.titlebarSeparatorStyle = .none
@@ -281,12 +281,20 @@ private struct SettingsSplitViewTuner: NSViewRepresentable {
         removeSidebarToggleItems(from: window)
     }
 
-    /// SwiftUI's `.toolbar(removing: .sidebarToggle)` doesn't reliably remove
-    /// AppKit's automatic sidebar toggle button from this forced NSToolbar, so
-    /// strip it directly whenever the toolbar is (re)built.
-    private static func removeSidebarToggleItems(from window: NSWindow) {
+    /// The visible toggle button next to the traffic lights isn't actually an
+    /// `NSToolbarItem` on macOS 26 (confirmed by logging `toolbar.items` at
+    /// runtime — it only ever contained our own `ToolbarSpacer`); it's drawn
+    /// by AppKit's floating-sidebar window chrome, which has no public API to
+    /// suppress. Rather than fight it, `columnVisibility` above is now a real
+    /// binding and `canCollapse` is `true`, so the button actually works. This
+    /// removal is kept as a defensive no-op for the (currently theoretical)
+    /// case where a toolbar item under this identifier does exist.
+    static func removeSidebarToggleItems(from window: NSWindow) {
         guard let toolbar = window.toolbar else { return }
-        while let index = toolbar.items.firstIndex(where: { $0.itemIdentifier == .toggleSidebar }) {
+        while let index = toolbar.items.firstIndex(where: {
+            $0.itemIdentifier == .toggleSidebar
+                || $0.itemIdentifier.rawValue.localizedCaseInsensitiveContains("togglesidebar")
+        }) {
             toolbar.removeItem(at: index)
         }
     }

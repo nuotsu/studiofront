@@ -47,17 +47,17 @@ enum PresenceMode: String, CaseIterable, Identifiable, Sendable {
 
     var title: String {
         switch self {
-        case .realtime: "Live presence"
-        case .activityOnly: "Recent activity"
+        case .realtime: "Currently editing"
+        case .activityOnly: "Recently edited"
         case .off: "Off"
         }
     }
 
-    var caption: String? {
+    var caption: String {
         switch self {
-        case .realtime: nil
+        case .realtime: "Shows who's currently viewing or editing, updated in real time."
         case .activityOnly: "Reflects recent edit history, not who's currently viewing."
-        case .off: nil
+        case .off: "No collaborator activity is shown."
         }
     }
 }

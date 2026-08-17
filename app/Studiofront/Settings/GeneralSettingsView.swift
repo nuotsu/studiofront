@@ -28,17 +28,15 @@ struct GeneralSettingsView: View {
                 }
 
                 Section {
-                    Picker("Presence", selection: $settings.presenceMode) {
+                    Picker("Editor Avatars", selection: $settings.presenceMode) {
                         ForEach(PresenceMode.allCases) { mode in
                             Text(mode.title).tag(mode)
                         }
                     }
                     .settingsHighlight(.presenceMode)
-                    if let caption = settings.presenceMode.caption {
-                        Text(caption)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
+                    Text(settings.presenceMode.caption)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
             }
             .formStyle(.grouped)

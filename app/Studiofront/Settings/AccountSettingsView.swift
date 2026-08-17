@@ -106,7 +106,16 @@ struct AccountSettingsView: View {
 
     private var manualSection: some View {
         Section("Personal token") {
-            SecureField("Personal token", text: $tokenDraft)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Personal tokens aren’t created on a page. They’re what the CLI calls your “Auth token.” Run one of these in Terminal:")
+                Text("`sanity login` (create one)")
+                Text("`sanity debug --secrets` (reveal existing)")
+            }
+            .foregroundStyle(.secondary)
+            SecureField(text: $tokenDraft, prompt: Text("Paste your Sanity personal token")) {
+                Text("Personal token")
+            }
+            .textFieldStyle(.roundedBorder)
             Button("Save token") {
                 let token = tokenDraft
                 tokenDraft = ""
@@ -115,7 +124,7 @@ struct AccountSettingsView: View {
             .disabled(tokenDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             Link(
                 "How to create a token",
-                destination: URL(string: "https://www.sanity.io/docs/content-lake/http-auth")!
+                destination: URL(string: "https://www.sanity.io/docs/content-lake/http-auth#personal-tokens")!
             )
         }
         .settingsHighlight(.personalToken)

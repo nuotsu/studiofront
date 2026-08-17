@@ -220,6 +220,7 @@ struct PopoverRootView: View {
                         Text(emptyListMessage)
                             .font(.system(size: 11))
                             .foregroundStyle(theme.colors.faint)
+                            .multilineTextAlignment(.center)
                             .frame(maxWidth: .infinity)
                             .padding(.horizontal, theme.metrics.listPadding.leading)
                             .padding(.vertical, 26)
@@ -253,7 +254,7 @@ struct PopoverRootView: View {
             return "No projects match “\(store.query)”"
         }
         if store.isRefreshing, auth.isSignedIn {
-            return "Loading projects…"
+            return "Fetching your projects… This can take a couple of minutes for larger accounts."
         }
         if auth.isSignedIn {
             return "No projects yet"

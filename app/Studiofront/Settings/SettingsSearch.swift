@@ -63,7 +63,7 @@ enum SettingsSearchIndex {
             systemImage: "archivebox"
         ),
         SettingsSearchItem(
-            title: "Presence",
+            title: "Editor Avatars",
             keywords: ["presence", "live", "editors", "avatars", "activity", "collaborators", "who's editing"],
             pane: .general,
             target: .presenceMode,
