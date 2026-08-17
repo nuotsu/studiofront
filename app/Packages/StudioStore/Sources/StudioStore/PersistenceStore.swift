@@ -20,13 +20,22 @@ public struct PersistedOrganization: Sendable, Codable, Hashable, Identifiable {
 }
 
 public struct PersistedSnapshot: Sendable, Codable {
-    public static let currentSchemaVersion = 2
+    public static let currentSchemaVersion = 3
 
     public var schemaVersion: Int
     public var cachedAt: Date?
     public var projects: [SanityProject]
     public var organizations: [PersistedOrganization]
-    public var curation: [ProjectCuration]
+    /// Project curation (favorites, hidden, nickname, links, sort order),
+    /// scoped per Sanity user id — never shared across accounts, even when
+    /// two accounts see the same project id.
+    public var curationByUser: [String: [ProjectCuration]]
+    /// Pinned organization ids, scoped per Sanity user id for the same reason.
+    public var organizationFavoritesByUser: [String: Set<String>]
+    /// Most recently signed-in user id, used to keep curation/pins resolvable
+    /// while `AuthSession.status == .reconnectRequired` (same account, no
+    /// live `signedInUser` until the token is revalidated).
+    public var lastActiveUserID: String?
     public var etags: [String: String]
     public var activity: [String: ProjectActivity]
 
@@ -35,7 +44,9 @@ public struct PersistedSnapshot: Sendable, Codable {
         cachedAt: Date? = nil,
         projects: [SanityProject] = [],
         organizations: [PersistedOrganization] = [],
-        curation: [ProjectCuration] = [],
+        curationByUser: [String: [ProjectCuration]] = [:],
+        organizationFavoritesByUser: [String: Set<String>] = [:],
+        lastActiveUserID: String? = nil,
         etags: [String: String] = [:],
         activity: [String: ProjectActivity] = [:]
     ) {
@@ -43,7 +54,9 @@ public struct PersistedSnapshot: Sendable, Codable {
         self.cachedAt = cachedAt
         self.projects = projects
         self.organizations = organizations
-        self.curation = curation
+        self.curationByUser = curationByUser
+        self.organizationFavoritesByUser = organizationFavoritesByUser
+        self.lastActiveUserID = lastActiveUserID
         self.etags = etags
         self.activity = activity
     }

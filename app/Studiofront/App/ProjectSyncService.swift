@@ -10,6 +10,15 @@ final class ProjectSyncService {
     private var snapshot = PersistedSnapshot()
     private var inFlight: Task<Void, Never>?
     private var refreshGeneration = 0
+    /// Which user's data `store.rows`/`store.organizations` currently reflect.
+    /// Lets `loadCache`/`persistCuration` tell live in-memory edits apart from
+    /// a *different* account's leftover state instead of assuming they always
+    /// belong to whoever is signed in right now.
+    private var liveUserID: String?
+
+    private var currentUserID: String? {
+        auth.signedInUser?.id ?? (auth.needsReconnect ? snapshot.lastActiveUserID : nil)
+    }
 
     init(store: StudioStore, auth: AuthSession, client: SanityClient = .shared) {
         self.store = store
@@ -18,26 +27,19 @@ final class ProjectSyncService {
     }
 
     func loadCache(applyToStore: Bool = true) async {
-        let liveCuration = store.curationSnapshot
-        let liveOrgs = store.organizationSnapshot
+        let userID = currentUserID
+        let liveMatchesUser = userID != nil && liveUserID == userID
+        let liveCuration = liveMatchesUser ? store.curationSnapshot : []
+        let liveOrgs = liveMatchesUser ? store.organizationSnapshot : []
+
         if let loaded = await PersistenceStore.load() {
             snapshot = loaded
-            if !liveCuration.isEmpty {
-                var byID = Dictionary(uniqueKeysWithValues: snapshot.curation.map { ($0.projectId, $0) })
-                for item in liveCuration { byID[item.projectId] = item }
-                snapshot.curation = Array(byID.values)
-            }
-            if !liveOrgs.isEmpty {
-                let liveFavorites = Dictionary(uniqueKeysWithValues: liveOrgs.map { ($0.id, $0.isFavorite) })
-                snapshot.organizations = snapshot.organizations.map { org in
-                    var copy = org
-                    if let favorite = liveFavorites[org.id] { copy.isFavorite = favorite }
-                    return copy
-                }
-            }
-        } else if !liveCuration.isEmpty || !liveOrgs.isEmpty {
-            if !liveCuration.isEmpty { snapshot.curation = liveCuration }
-            if !liveOrgs.isEmpty { snapshot.organizations = liveOrgs }
+        }
+        if let signedInID = auth.signedInUser?.id {
+            snapshot.lastActiveUserID = signedInID
+        }
+        if let userID {
+            mergeLiveCurationAndOrgs(curation: liveCuration, orgs: liveOrgs, into: userID)
         }
         guard applyToStore else { return }
         if auth.isSignedIn || auth.needsReconnect {
@@ -54,6 +56,7 @@ final class ProjectSyncService {
         case .signedOut:
             persistCuration()
             store.clearLiveRows()
+            liveUserID = nil
         case .reconnectRequired:
             await loadCache()
         case .connecting:
@@ -62,9 +65,27 @@ final class ProjectSyncService {
     }
 
     func persistCuration() {
-        snapshot.curation = store.curationSnapshot
-        snapshot.organizations = store.organizationSnapshot.isEmpty ? snapshot.organizations : store.organizationSnapshot
+        guard let userID = currentUserID ?? liveUserID else { return }
+        mergeLiveCurationAndOrgs(curation: store.curationSnapshot, orgs: store.organizationSnapshot, into: userID)
         PersistenceStore.save(snapshot)
+    }
+
+    /// Folds the store's currently live curation/org-favorite state (if any)
+    /// into `snapshot`, scoped to `userID`. Org id/name stay in the shared
+    /// `snapshot.organizations` directory; only the favorite/pin flag is
+    /// per-user.
+    private func mergeLiveCurationAndOrgs(curation liveCuration: [ProjectCuration], orgs liveOrgs: [PersistedOrganization], into userID: String) {
+        if !liveCuration.isEmpty {
+            var byID = Dictionary(uniqueKeysWithValues: (snapshot.curationByUser[userID] ?? []).map { ($0.projectId, $0) })
+            for item in liveCuration { byID[item.projectId] = item }
+            snapshot.curationByUser[userID] = Array(byID.values)
+        }
+        if !liveOrgs.isEmpty {
+            var byID = Dictionary(uniqueKeysWithValues: snapshot.organizations.map { ($0.id, $0) })
+            for org in liveOrgs { byID[org.id] = PersistedOrganization(id: org.id, name: org.name) }
+            snapshot.organizations = Array(byID.values)
+            snapshot.organizationFavoritesByUser[userID] = Set(liveOrgs.filter(\.isFavorite).map(\.id))
+        }
     }
 
     func cancel() {
@@ -108,6 +129,10 @@ final class ProjectSyncService {
             auth.markReconnectRequired()
             return
         }
+        guard let userID = auth.signedInUser?.id else {
+            auth.markReconnectRequired()
+            return
+        }
 
         do {
             try Task.checkCancellation()
@@ -133,15 +158,15 @@ final class ProjectSyncService {
             var orgNames: [String: String]
             if let orgs = try? await client.listOrganizations(token: token) {
                 orgNames = Dictionary(uniqueKeysWithValues: orgs.map { ($0.id, $0.name) })
-                let existingFavorites = Dictionary(uniqueKeysWithValues: snapshot.organizations.map { ($0.id, $0.isFavorite) })
+                snapshot.organizations = orgs.map { PersistedOrganization(id: $0.id, name: $0.name) }
+                let existingFavorites = snapshot.organizationFavoritesByUser[userID] ?? []
                 let liveFavorites = Dictionary(uniqueKeysWithValues: store.organizationSnapshot.map { ($0.id, $0.isFavorite) })
-                snapshot.organizations = orgs.map { remote in
-                    PersistedOrganization(
-                        id: remote.id,
-                        name: remote.name,
-                        isFavorite: liveFavorites[remote.id] ?? existingFavorites[remote.id] ?? false
-                    )
+                var favoriteIDs = existingFavorites
+                for org in orgs {
+                    guard let live = liveFavorites[org.id] else { continue }
+                    if live { favoriteIDs.insert(org.id) } else { favoriteIDs.remove(org.id) }
                 }
+                snapshot.organizationFavoritesByUser[userID] = favoriteIDs
             } else {
                 orgNames = Dictionary(uniqueKeysWithValues: snapshot.organizations.map { ($0.id, $0.name) })
             }
@@ -230,7 +255,6 @@ final class ProjectSyncService {
                 }
             }
 
-            let currentUserID = auth.signedInUser?.id
             snapshot.projects = remote.map { project in
                 SanityProject(
                     id: project.id,
@@ -253,16 +277,17 @@ final class ProjectSyncService {
                             role: member.role
                         )
                     },
-                    currentUserRole: project.members.first(where: { $0.id == currentUserID })?.role,
+                    currentUserRole: project.members.first(where: { $0.id == userID })?.role,
                     createdAt: project.createdAt == .distantPast ? Date() : project.createdAt,
                     brandColorHex: project.color.flatMap(Self.normalizedHex),
                     isArchived: project.isArchived
                 )
             }
             snapshot.cachedAt = Date()
-            snapshot.curation = mergedCuration(with: remote.map(\.id))
+            let curation = mergedCuration(with: remote.map(\.id), userID: userID)
+            snapshot.curationByUser[userID] = curation
 
-            let curationByID = Dictionary(uniqueKeysWithValues: snapshot.curation.map { ($0.projectId, $0) })
+            let curationByID = Dictionary(uniqueKeysWithValues: curation.map { ($0.projectId, $0) })
             let eligibleIDs = projectIDs.filter { !(curationByID[$0]?.isHidden ?? false) }
             let studioURLByProject = Dictionary(uniqueKeysWithValues: snapshot.projects.compactMap { project in
                 project.resolvedStudioURL.map { (project.id, $0) }
@@ -372,8 +397,8 @@ final class ProjectSyncService {
         return datasets.map(\.name).sorted().first
     }
 
-    private func mergedCuration(with remoteIDs: [String]) -> [ProjectCuration] {
-        var byID = Dictionary(uniqueKeysWithValues: snapshot.curation.map { ($0.projectId, $0) })
+    private func mergedCuration(with remoteIDs: [String], userID: String) -> [ProjectCuration] {
+        var byID = Dictionary(uniqueKeysWithValues: (snapshot.curationByUser[userID] ?? []).map { ($0.projectId, $0) })
         for id in remoteIDs where byID[id] == nil {
             byID[id] = ProjectCuration(projectId: id)
         }
@@ -384,7 +409,10 @@ final class ProjectSyncService {
     }
 
     private func applySnapshotToStore() {
-        let curationByID = Dictionary(uniqueKeysWithValues: snapshot.curation.map { ($0.projectId, $0) })
+        let userID = currentUserID
+        let curation = userID.flatMap { snapshot.curationByUser[$0] } ?? []
+        let favoriteOrgIDs = userID.flatMap { snapshot.organizationFavoritesByUser[$0] } ?? []
+        let curationByID = Dictionary(uniqueKeysWithValues: curation.map { ($0.projectId, $0) })
         let remoteIDs = Set(snapshot.projects.map(\.id))
         var rows: [ProjectRow] = snapshot.projects.map { project in
             ProjectRow(
@@ -395,7 +423,7 @@ final class ProjectSyncService {
             )
         }
 
-        for curation in snapshot.curation where !remoteIDs.contains(curation.projectId) {
+        for curation in curation where !remoteIDs.contains(curation.projectId) {
             let kept = curation.isFavorite || curation.nickname != nil
                 || !curation.frontendLinks.isEmpty || !curation.extraStudioLinks.isEmpty
             guard kept else { continue }
@@ -413,18 +441,19 @@ final class ProjectSyncService {
         }
 
         var organizations = snapshot.organizations.map {
-            OrganizationRecord(id: $0.id, name: $0.name, isFavorite: $0.isFavorite)
+            OrganizationRecord(id: $0.id, name: $0.name, isFavorite: favoriteOrgIDs.contains($0.id))
         }
         var knownIDs = Set(organizations.map(\.id))
         for project in snapshot.projects {
             guard let id = project.organizationId, !knownIDs.contains(id) else { continue }
             knownIDs.insert(id)
             organizations.append(
-                OrganizationRecord(id: id, name: project.organizationName ?? id, isFavorite: false)
+                OrganizationRecord(id: id, name: project.organizationName ?? id, isFavorite: favoriteOrgIDs.contains(id))
             )
         }
 
         store.replaceRows(rows, organizations: organizations)
+        liveUserID = userID
     }
 
     private static func normalizedHex(_ raw: String) -> String? {
