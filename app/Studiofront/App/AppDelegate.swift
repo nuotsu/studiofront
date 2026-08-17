@@ -24,6 +24,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
     private var popover: NSPopover?
     private var keyMonitor: Any?
     private var settingsWindowController: NSWindowController?
+    private var isSettingsWindowOpen = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppDelegate.shared = self
@@ -324,6 +325,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         auth.selectedSettingsPane = pane
         applyActivationPolicy()
         NSApp.activate(ignoringOtherApps: true)
+
+        if isSettingsWindowOpen {
+            orderSettingsFront()
+            return
+        }
+
         // Post while the popover is still mounted so SwiftUI `openWindow` can run.
         NotificationCenter.default.post(name: .openSettingsRequested, object: nil)
 
@@ -339,6 +346,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
 
     func configureOpenSettingsWindow() {
         guard let window = NSApp.windows.first(where: Self.isSettingsWindow) else { return }
+        isSettingsWindowOpen = true
+        window.delegate = self
         configureSettingsWindowChrome(window)
     }
 
@@ -401,10 +410,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         let controller = NSWindowController(window: window)
         settingsWindowController = controller
         controller.showWindow(nil)
+        isSettingsWindowOpen = true
         NSApp.activate(ignoringOtherApps: true)
     }
 
     func windowWillClose(_ notification: Notification) {
+        if let window = notification.object as? NSWindow, Self.isSettingsWindow(window) {
+            isSettingsWindowOpen = false
+            if settingsWindowController?.window === window {
+                settingsWindowController = nil
+            }
+        }
         DispatchQueue.main.async { [weak self] in
             self?.applyActivationPolicy()
         }
