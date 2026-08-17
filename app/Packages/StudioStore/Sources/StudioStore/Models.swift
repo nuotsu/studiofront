@@ -1,5 +1,28 @@
 import Foundation
 
+/// One Studio deployment registered against a project — either the default
+/// `<slug>.sanity.studio` subdomain, or a Studio embedded on the developer's
+/// own domain. A project can have more than one (e.g. multiple external
+/// Studio deployments), which is what the Studio button's dropdown lists.
+public struct StudioApp: Sendable, Codable, Hashable, Identifiable {
+    public var id: String { "\(host)-\(isExternal)" }
+    /// A bare `.sanity.studio` subdomain slug when `isExternal` is false,
+    /// else a full URL string pointing at the developer's own domain.
+    public var host: String
+    public var isExternal: Bool
+    public var title: String?
+
+    public init(host: String, isExternal: Bool, title: String? = nil) {
+        self.host = host
+        self.isExternal = isExternal
+        self.title = title
+    }
+
+    public var resolvedURL: URL? {
+        isExternal ? URL(string: host) : URL(string: "https://\(host).sanity.studio")
+    }
+}
+
 public struct SanityProject: Sendable, Identifiable, Hashable, Codable {
     public let id: String
     public var displayName: String
@@ -18,6 +41,10 @@ public struct SanityProject: Sendable, Identifiable, Hashable, Codable {
     public var brandColorHex: String?
     /// From `isDisabledByUser` — Sanity Manage's "Archived" state.
     public var isArchived: Bool
+    /// Every registered Studio app for this project, from `/user-applications`
+    /// (falling back to the deprecated single-value fields when that endpoint
+    /// has nothing) — the full list backing the Studio button's dropdown.
+    public var studioApps: [StudioApp]
 
     public init(
         id: String,
@@ -31,7 +58,8 @@ public struct SanityProject: Sendable, Identifiable, Hashable, Codable {
         currentUserRole: String? = nil,
         createdAt: Date = Date(),
         brandColorHex: String? = nil,
-        isArchived: Bool = false
+        isArchived: Bool = false,
+        studioApps: [StudioApp] = []
     ) {
         self.id = id
         self.displayName = displayName
@@ -45,19 +73,41 @@ public struct SanityProject: Sendable, Identifiable, Hashable, Codable {
         self.createdAt = createdAt
         self.isArchived = isArchived
         self.brandColorHex = brandColorHex
+        self.studioApps = studioApps
+    }
+
+    /// Decoded manually so cached JSON written before `studioApps` existed
+    /// (`PersistenceStore`'s `cache-v1.json`) still decodes — matching the
+    /// same forward-compatible pattern as `PersistedOrganization`.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        displayName = try container.decode(String.self, forKey: .displayName)
+        organizationId = try container.decodeIfPresent(String.self, forKey: .organizationId)
+        organizationName = try container.decodeIfPresent(String.self, forKey: .organizationName)
+        studioHost = try container.decodeIfPresent(String.self, forKey: .studioHost)
+        externalStudioHost = try container.decodeIfPresent(URL.self, forKey: .externalStudioHost)
+        datasets = try container.decode([Dataset].self, forKey: .datasets)
+        members = try container.decode([Member].self, forKey: .members)
+        currentUserRole = try container.decodeIfPresent(String.self, forKey: .currentUserRole)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        brandColorHex = try container.decodeIfPresent(String.self, forKey: .brandColorHex)
+        isArchived = try container.decode(Bool.self, forKey: .isArchived)
+        studioApps = try container.decodeIfPresent([StudioApp].self, forKey: .studioApps) ?? []
     }
 
     /// Where the "Studio" button — and any deep link into a specific document —
-    /// should actually go: a deployed `.sanity.studio` subdomain first, then the
-    /// project's own domain if the Studio is embedded there (`externalStudioHost`),
-    /// else the Manage page as last resort.
-    public var resolvedStudioURL: URL? {
-        if let studioHost, !studioHost.isEmpty,
-           let url = URL(string: "https://\(studioHost).sanity.studio")
-        {
-            return url
+    /// should actually go, honoring the user's `StudioURLPreference`: whichever
+    /// kind is preferred, falling back to the other kind, then the Manage page
+    /// as last resort.
+    public func resolvedStudioURL(preferExternal: Bool) -> URL? {
+        let sanityStudioURL = studioHost.flatMap { host -> URL? in
+            guard !host.isEmpty else { return nil }
+            return URL(string: "https://\(host).sanity.studio")
         }
-        return externalStudioHost ?? manageURL
+        return preferExternal
+            ? (externalStudioHost ?? sanityStudioURL ?? manageURL)
+            : (sanityStudioURL ?? externalStudioHost ?? manageURL)
     }
 
     public var manageURL: URL? {
@@ -216,7 +266,9 @@ public struct ProjectRow: Sendable, Identifiable, Hashable {
         curation.nickname ?? project.displayName
     }
 
-    public var resolvedStudioURL: URL? { project.resolvedStudioURL }
+    public func resolvedStudioURL(preferExternal: Bool) -> URL? {
+        project.resolvedStudioURL(preferExternal: preferExternal)
+    }
 }
 
 public enum GroupBy: String, CaseIterable, Identifiable, Sendable {

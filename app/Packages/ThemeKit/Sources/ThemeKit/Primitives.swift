@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 public struct RowContainer<Content: View>: View {
@@ -77,14 +78,157 @@ public struct PrimaryButton: View {
     }
 }
 
-public struct IconButton: View {
+/// A `PrimaryButton` pill with an optional attached caret segment that opens
+/// a menu of alternate destinations — `[title|⌄]` as one pill, divided by a
+/// hairline. The caret is omitted entirely when `menuItems` is empty.
+public struct SplitPrimaryButton: View {
+    public struct MenuItem: Identifiable {
+        public var id: String
+        public var title: String
+        public var action: () -> Void
+
+        public init(id: String, title: String, action: @escaping () -> Void) {
+            self.id = id
+            self.title = title
+            self.action = action
+        }
+    }
+
     @Environment(\.studioTheme) private var theme
-    var systemName: String
+    var title: String
+    var action: () -> Void
+    var menuItems: [MenuItem]
+
+    @State private var menuAnchor: NSView?
+    @State private var activeMenuRouter: MenuActionRouter?
+
+    public init(_ title: String, action: @escaping () -> Void, menuItems: [MenuItem] = []) {
+        self.title = title
+        self.action = action
+        self.menuItems = menuItems
+    }
+
+    public var body: some View {
+        HStack(spacing: 0) {
+            Button(action: action) {
+                Text(title)
+                    .font(theme.typography.button)
+                    .foregroundStyle(theme.colors.primaryText)
+                    .padding(.leading, 9)
+                    .padding(.trailing, menuItems.isEmpty ? 9 : 7)
+                    .padding(.vertical, 4)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(title)
+
+            if !menuItems.isEmpty {
+                Rectangle()
+                    .fill(theme.colors.primaryText.opacity(0.3))
+                    .frame(width: 1, height: 11)
+
+                Button {
+                    showMenu()
+                } label: {
+                    Image(systemName: "chevron.down")
+                        .resizable()
+                        .scaledToFit()
+                        .fontWeight(.semibold)
+                        .frame(width: 6, height: 6)
+                        .foregroundStyle(theme.colors.primaryText)
+                        .padding(.vertical, 4)
+                        .background(MenuAnchorView(anchor: $menuAnchor))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("More Studio URLs")
+                .padding(.horizontal, 6)
+            }
+        }
+        .background(theme.colors.primaryBackground)
+        .clipShape(RoundedRectangle(cornerRadius: theme.cornerRadius(6), style: theme.cornerStyle))
+        .accessibilityElement(children: .contain)
+    }
+
+    /// Shown natively via `NSMenu` rather than SwiftUI's `Menu` — the latter always
+    /// draws its own disclosure indicator alongside a custom label (even with
+    /// `.menuIndicator(.hidden)`), which read as a distracting "double caret" next
+    /// to our own chevron.
+    private func showMenu() {
+        guard let menuAnchor else { return }
+        let menu = NSMenu()
+
+        let header = NSMenuItem(title: "Studio URL", action: nil, keyEquivalent: "")
+        header.isEnabled = false
+        menu.addItem(header)
+        menu.addItem(.separator())
+
+        let router = MenuActionRouter()
+        for item in menuItems {
+            router.addItem(to: menu, title: item.title, action: item.action)
+        }
+        // NSMenuItem.target is unretained — hold the router in @State so its
+        // action closures survive through popUp (which blocks until dismissal).
+        activeMenuRouter = router
+
+        // `at:` is the menu's top-left corner in the (non-flipped) anchor's own
+        // coordinate space, where the menu always extends downward from there —
+        // a small negative y drops that corner just below the anchor's bottom
+        // edge, instead of overlapping the button by aligning it to the top.
+        menu.popUp(positioning: nil, at: NSPoint(x: 0, y: -4), in: menuAnchor)
+    }
+}
+
+/// An invisible `NSView` used only to capture a stable AppKit anchor for
+/// `NSMenu.popUp(positioning:at:in:)`, since SwiftUI has no public API to
+/// present a menu without a user-initiated click on it.
+private struct MenuAnchorView: NSViewRepresentable {
+    @Binding var anchor: NSView?
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async { anchor = view }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {}
+}
+
+private final class MenuActionRouter: NSObject {
+    private var actions: [() -> Void] = []
+
+    func addItem(to menu: NSMenu, title: String, action: @escaping () -> Void) {
+        let index = actions.count
+        actions.append(action)
+        let item = NSMenuItem(title: title, action: #selector(invoke(_:)), keyEquivalent: "")
+        item.target = self
+        item.tag = index
+        menu.addItem(item)
+    }
+
+    @objc private func invoke(_ sender: NSMenuItem) {
+        actions[sender.tag]()
+    }
+}
+
+public struct IconButton: View {
+    private enum Source {
+        case system(String)
+        /// A template-rendered asset from the app's own asset catalog (e.g. a Sanity icon).
+        case asset(String)
+    }
+
+    @Environment(\.studioTheme) private var theme
+    private var source: Source
     var accessibilityLabel: String
     var action: () -> Void
 
     public init(systemName: String, accessibilityLabel: String, action: @escaping () -> Void) {
-        self.systemName = systemName
+        self.source = .system(systemName)
+        self.accessibilityLabel = accessibilityLabel
+        self.action = action
+    }
+
+    public init(imageName: String, accessibilityLabel: String, action: @escaping () -> Void) {
+        self.source = .asset(imageName)
         self.accessibilityLabel = accessibilityLabel
         self.action = action
     }
@@ -92,8 +236,7 @@ public struct IconButton: View {
     public var body: some View {
         let metrics = theme.metrics
         Button(action: action) {
-            Image(systemName: systemName)
-                .font(.system(size: 11, weight: .medium))
+            icon
                 .foregroundStyle(theme.colors.buttonText)
                 .frame(width: metrics.iconButtonSize.width, height: metrics.iconButtonSize.height)
                 .background(theme.colors.buttonBackground)
@@ -105,6 +248,21 @@ public struct IconButton: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(accessibilityLabel)
+    }
+
+    @ViewBuilder
+    private var icon: some View {
+        switch source {
+        case .system(let name):
+            Image(systemName: name)
+                .font(.system(size: 11, weight: .medium))
+        case .asset(let name):
+            Image(name)
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 16, height: 16)
+        }
     }
 }
 
@@ -201,13 +359,15 @@ public struct AvatarStack: View {
 
     public struct Item: Identifiable, Sendable {
         public var id: String
+        public var name: String
         public var initials: String
         public var color: Color
         public var imageURL: URL?
         public var deepLinkURL: URL?
 
-        public init(id: String, initials: String, color: Color, imageURL: URL? = nil, deepLinkURL: URL? = nil) {
+        public init(id: String, name: String, initials: String, color: Color, imageURL: URL? = nil, deepLinkURL: URL? = nil) {
             self.id = id
+            self.name = name
             self.initials = initials
             self.color = color
             self.imageURL = imageURL
@@ -220,6 +380,16 @@ public struct AvatarStack: View {
     var onSelect: (Item) -> Void
 
     @State private var hoveredID: String?
+    /// The item the tooltip renders — kept alive (unlike `hoveredID`) once the
+    /// mouse leaves the stack so the fade-out animates its last content instead
+    /// of jumping to blank.
+    @State private var displayedItem: Item?
+    @State private var isTooltipVisible = false
+    @State private var avatarFrames: [String: CGRect] = [:]
+    @State private var tooltipSize: CGSize = .zero
+    @State private var showTask: Task<Void, Never>?
+
+    private static let coordinateSpaceName = "avatarStack"
 
     public init(items: [Item], maxVisible: Int = 3, onSelect: @escaping (Item) -> Void = { _ in }) {
         self.items = items
@@ -247,9 +417,14 @@ public struct AvatarStack: View {
                     // whole circle is visible rather than clipped by
                     // whichever avatar is stacked on top of it.
                     .zIndex(hoveredID == item.id ? 1 : 0)
-                    .onHover { isHovered in
-                        hoveredID = isHovered ? item.id : (hoveredID == item.id ? nil : hoveredID)
-                    }
+                    .background(
+                        GeometryReader { proxy in
+                            Color.clear.preference(
+                                key: AvatarFramePreferenceKey.self,
+                                value: [item.id: proxy.frame(in: .named(Self.coordinateSpaceName))]
+                            )
+                        }
+                    )
                 }
                 if overflow > 0 {
                     Text("+\(overflow)")
@@ -259,7 +434,75 @@ public struct AvatarStack: View {
                 }
             }
             .padding(.leading, 4)
+            .coordinateSpace(name: Self.coordinateSpaceName)
+            // A single continuous-hover region (rather than per-avatar `onHover`)
+            // avoids the flicker of one avatar's hover-exit racing another's
+            // hover-enter as the mouse crosses their overlapping edge.
+            .onContinuousHover(coordinateSpace: .named(Self.coordinateSpaceName)) { phase in
+                handleHover(phase, visible: visible)
+            }
+            // `.overlay` never contributes to this HStack's reported size, unlike a
+            // ZStack sibling — the tooltip can render (and stay retained through its
+            // fade-out) without permanently reserving space and pushing later
+            // siblings (Manage icon, Studio button) out of place.
+            .overlay(alignment: .topLeading) {
+                if let displayedItem, let frame = avatarFrames[displayedItem.id] {
+                    AvatarTooltip(name: displayedItem.name)
+                        .background(
+                            GeometryReader { proxy in
+                                Color.clear.preference(key: TooltipSizePreferenceKey.self, value: proxy.size)
+                            }
+                        )
+                        .offset(
+                            x: frame.midX - tooltipSize.width / 2,
+                            y: frame.minY - tooltipSize.height - 6
+                        )
+                        // Position always snaps regardless of any ambient
+                        // animation (e.g. the fade below) — only opacity animates.
+                        .transaction { $0.animation = nil }
+                        .opacity(isTooltipVisible ? 1 : 0)
+                        .allowsHitTesting(false)
+                        .zIndex(1000)
+                }
+            }
+            .onPreferenceChange(AvatarFramePreferenceKey.self) { avatarFrames = $0 }
+            .onPreferenceChange(TooltipSizePreferenceKey.self) { tooltipSize = $0 }
         }
+    }
+
+    private func handleHover(_ phase: HoverPhase, visible: [Item]) {
+        switch phase {
+        case .active(let location):
+            guard let hit = visible.reversed().first(where: { avatarFrames[$0.id]?.contains(location) == true }) else {
+                hideTooltip()
+                return
+            }
+            guard hoveredID != hit.id else { return }
+            let wasHidden = hoveredID == nil
+            // Snap instantly — no animation — while moving between touching avatars.
+            hoveredID = hit.id
+            displayedItem = hit
+            if wasHidden {
+                // Only the very first avatar of a session waits — matches how a
+                // native tooltip delays before appearing, but not before updating.
+                showTask?.cancel()
+                showTask = Task {
+                    try? await Task.sleep(for: .milliseconds(500))
+                    guard !Task.isCancelled else { return }
+                    withAnimation(.easeOut(duration: 0.12)) { isTooltipVisible = true }
+                }
+            }
+        case .ended:
+            hideTooltip()
+        }
+    }
+
+    private func hideTooltip() {
+        guard hoveredID != nil else { return }
+        showTask?.cancel()
+        showTask = nil
+        hoveredID = nil
+        withAnimation(.easeOut(duration: 0.12)) { isTooltipVisible = false }
     }
 
     @ViewBuilder
@@ -290,6 +533,46 @@ public struct AvatarStack: View {
             .foregroundStyle(.white)
             .frame(width: theme.metrics.presenceSize, height: theme.metrics.presenceSize)
             .background(item.color)
+    }
+}
+
+private struct AvatarFramePreferenceKey: PreferenceKey {
+    static let defaultValue: [String: CGRect] = [:]
+    static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) {
+        value.merge(nextValue(), uniquingKeysWith: { _, new in new })
+    }
+}
+
+private struct TooltipSizePreferenceKey: PreferenceKey {
+    static let defaultValue: CGSize = .zero
+    static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
+        value = nextValue()
+    }
+}
+
+/// Custom (non-native) tooltip bubble for `AvatarStack`'s hover.
+private struct AvatarTooltip: View {
+    @Environment(\.studioTheme) private var theme
+    var name: String
+
+    var body: some View {
+        Text(name)
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(theme.colors.text)
+            .lineLimit(1)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(theme.colors.panelFill)
+            .clipShape(RoundedRectangle(cornerRadius: 2, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 2, style: .continuous)
+                    .strokeBorder(theme.colors.chipBorder, lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
+            // `.overlay(alignment:)` on the avatar stack proposes the stack's own
+            // (narrow) width to this tooltip — without this it would get squeezed
+            // into that width instead of sizing to fit the name.
+            .fixedSize()
     }
 }
 

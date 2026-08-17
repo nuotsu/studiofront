@@ -62,6 +62,20 @@ enum PresenceMode: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+enum StudioURLPreference: String, CaseIterable, Identifiable, Sendable {
+    case external
+    case sanityStudio
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .external: "External Studio"
+        case .sanityStudio: "Sanity-hosted"
+        }
+    }
+}
+
 enum MenuBarIconPreference: String, CaseIterable, Identifiable, Sendable {
     case studiofront
     case sanity
@@ -130,6 +144,10 @@ final class AppSettings {
 
     var hideArchivedProjects: Bool {
         didSet { UserDefaults.standard.set(hideArchivedProjects, forKey: Keys.hideArchivedProjects) }
+    }
+
+    var studioURLPreference: StudioURLPreference {
+        didSet { UserDefaults.standard.set(studioURLPreference.rawValue, forKey: Keys.studioURLPreference) }
     }
 
     // TODO: move to Settings > Advanced once that tab exists (spec §10).
@@ -247,6 +265,7 @@ final class AppSettings {
         showInDock: Bool = true,
         refreshIntervalMinutes: Int = 5,
         hideArchivedProjects: Bool = true,
+        studioURLPreference: StudioURLPreference = .external,
         presenceMode: PresenceMode = .realtime,
         openStudioKeyCode: Int = AppSettings.defaultOpenStudioKeyCode,
         openStudioModifierRawValue: Int = AppSettings.defaultOpenStudioModifierRawValue,
@@ -267,6 +286,7 @@ final class AppSettings {
         self.showInDock = showInDock
         self.refreshIntervalMinutes = refreshIntervalMinutes
         self.hideArchivedProjects = hideArchivedProjects
+        self.studioURLPreference = studioURLPreference
         self.presenceMode = presenceMode
         self.openStudioKeyCode = openStudioKeyCode
         self.openStudioModifierRawValue = openStudioModifierRawValue
@@ -291,6 +311,7 @@ final class AppSettings {
         let storedInterval = defaults.object(forKey: Keys.refreshInterval) as? Int
         let refresh = Self.allowedRefreshIntervals.contains(storedInterval ?? -1) ? storedInterval! : 5
         let hideArchivedProjects = defaults.object(forKey: Keys.hideArchivedProjects) as? Bool ?? true
+        let studioURLPreference = StudioURLPreference(rawValue: defaults.string(forKey: Keys.studioURLPreference) ?? "") ?? .external
         let presenceMode = PresenceMode(rawValue: defaults.string(forKey: Keys.presenceMode) ?? "") ?? .realtime
         let openStudioKeyCode = defaults.object(forKey: Keys.openStudioKeyCode) as? Int ?? Self.defaultOpenStudioKeyCode
         let openStudioModifierRawValue = defaults.object(forKey: Keys.openStudioModifierRawValue) as? Int ?? Self.defaultOpenStudioModifierRawValue
@@ -320,6 +341,7 @@ final class AppSettings {
             showInDock: showInDock,
             refreshIntervalMinutes: refresh,
             hideArchivedProjects: hideArchivedProjects,
+            studioURLPreference: studioURLPreference,
             presenceMode: presenceMode,
             openStudioKeyCode: openStudioKeyCode,
             openStudioModifierRawValue: openStudioModifierRawValue,
@@ -345,6 +367,7 @@ final class AppSettings {
         static let showInDock = "showInDock"
         static let refreshInterval = "refreshIntervalMinutes"
         static let hideArchivedProjects = "hideArchivedProjects"
+        static let studioURLPreference = "studioURLPreference"
         static let presenceMode = "presenceMode"
         static let openStudioKeyCode = "openStudioKeyCode"
         static let openStudioModifierRawValue = "openStudioModifierRawValue"

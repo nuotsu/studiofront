@@ -23,6 +23,20 @@ struct GeneralSettingsView: View {
                     }
                     .settingsHighlight(.refreshInterval)
 
+                    Picker(selection: $settings.studioURLPreference) {
+                        ForEach(StudioURLPreference.allCases) { preference in
+                            Text(preference.title).tag(preference)
+                        }
+                    } label: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Studio URL Preference")
+                            Text("When a project has both a custom-domain Studio and a default *.sanity.studio URL, this decides which one the Studio button opens.")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .settingsHighlight(.studioURLPreference)
+
                     Toggle("Hide archived projects", isOn: $settings.hideArchivedProjects)
                         .settingsHighlight(.hideArchivedProjects)
                 }

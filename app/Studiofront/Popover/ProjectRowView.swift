@@ -5,6 +5,7 @@ import StudioStore
 struct ProjectRowView: View {
     @Environment(\.studioTheme) private var theme
     @Environment(StudioStore.self) private var store
+    @Environment(AppSettings.self) private var settings
 
     var row: ProjectRow
     var isSelected: Bool
@@ -134,6 +135,7 @@ struct ProjectRowView: View {
                 items: row.activity.activeUsers.map { member in
                     AvatarStack.Item(
                         id: member.id,
+                        name: member.displayName,
                         initials: member.initials,
                         color: PresenceSwatch.color(for: member.id),
                         imageURL: member.imageURL,
@@ -154,14 +156,34 @@ struct ProjectRowView: View {
                     }
                 }
                 if let manage = row.project.manageURL {
-                    IconButton(systemName: "gearshape", accessibilityLabel: "Open in Sanity Manage") {
+                    IconButton(imageName: "MasterDetail", accessibilityLabel: "Open in Sanity Manage") {
                         AppDelegate.shared?.openURL(manage)
                     }
                 }
+                studioButton
+            }
+        }
+    }
+
+    private var studioButton: some View {
+        let preferExternal = settings.studioURLPreference == .external
+        let primaryURL = row.project.resolvedStudioURL(preferExternal: preferExternal)
+        let menuItems: [SplitPrimaryButton.MenuItem] = row.project.studioApps.compactMap { app in
+            guard let url = app.resolvedURL else { return nil }
+            let label = app.title ?? (app.isExternal ? (url.host ?? app.host) : "\(app.host).sanity.studio")
+            return SplitPrimaryButton.MenuItem(id: app.id, title: label) {
+                AppDelegate.shared?.openURL(url)
+            }
+        }
+
+        return Group {
+            if menuItems.count > 1 {
+                SplitPrimaryButton("Studio", action: {
+                    if let primaryURL { AppDelegate.shared?.openURL(primaryURL) }
+                }, menuItems: menuItems)
+            } else {
                 PrimaryButton("Studio") {
-                    if let url = row.resolvedStudioURL {
-                        AppDelegate.shared?.openURL(url)
-                    }
+                    if let primaryURL { AppDelegate.shared?.openURL(primaryURL) }
                 }
             }
         }

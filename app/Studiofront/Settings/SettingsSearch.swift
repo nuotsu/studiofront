@@ -7,6 +7,7 @@ enum SettingsSearchTarget: String, Hashable, CaseIterable {
     case showInDock
     case refreshInterval
     case hideArchivedProjects
+    case studioURLPreference
     case presenceMode
     case menuBarIcon
     case theme
@@ -61,6 +62,13 @@ enum SettingsSearchIndex {
             pane: .general,
             target: .hideArchivedProjects,
             systemImage: "archivebox"
+        ),
+        SettingsSearchItem(
+            title: "Studio URL Preference",
+            keywords: ["studio", "url", "external", "sanity.studio", "domain", "preference"],
+            pane: .general,
+            target: .studioURLPreference,
+            systemImage: "link"
         ),
         SettingsSearchItem(
             title: "Editor Avatars",

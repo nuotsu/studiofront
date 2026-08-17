@@ -109,7 +109,7 @@ public actor SanityClient {
         )
         return dtos.compactMap { dto in
             guard let host = dto.appHost, !host.isEmpty else { return nil }
-            return RemoteStudioApp(projectId: dto.projectId, appHost: host, isExternal: dto.urlType == "external")
+            return RemoteStudioApp(projectId: dto.projectId, appHost: host, isExternal: dto.urlType == "external", title: dto.title)
         }
     }
 

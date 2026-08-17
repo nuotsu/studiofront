@@ -17,7 +17,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
     let settings = AppSettings.load()
     let store = StudioStore()
     let auth = AuthSession()
-    private(set) lazy var sync = ProjectSyncService(store: store, auth: auth)
+    private(set) lazy var sync = ProjectSyncService(store: store, auth: auth, settings: settings)
     private(set) lazy var presence = PresenceCoordinator(store: store, settings: settings)
 
     private var statusItem: NSStatusItem?
@@ -268,7 +268,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
     }
 
     func openSelectedStudio() {
-        guard let url = store.selectedRow?.resolvedStudioURL else { return }
+        guard let url = store.selectedRow?.resolvedStudioURL(preferExternal: settings.studioURLPreference == .external) else { return }
         openURL(url)
     }
 

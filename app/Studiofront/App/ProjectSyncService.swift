@@ -6,6 +6,7 @@ import StudioStore
 final class ProjectSyncService {
     private let store: StudioStore
     private let auth: AuthSession
+    private let settings: AppSettings
     private let client: SanityClient
     private var snapshot = PersistedSnapshot()
     private var inFlight: Task<Void, Never>?
@@ -20,9 +21,10 @@ final class ProjectSyncService {
         auth.signedInUser?.id ?? (auth.needsReconnect ? snapshot.lastActiveUserID : nil)
     }
 
-    init(store: StudioStore, auth: AuthSession, client: SanityClient = .shared) {
+    init(store: StudioStore, auth: AuthSession, settings: AppSettings, client: SanityClient = .shared) {
         self.store = store
         self.auth = auth
+        self.settings = settings
         self.client = client
     }
 
@@ -173,6 +175,7 @@ final class ProjectSyncService {
 
             var studioHosts: [String: String] = [:]
             var externalStudioHostsFromApps: [String: URL] = [:]
+            var studioAppsByProject: [String: [StudioApp]] = [:]
             for orgID in Set(remote.compactMap(\.organizationId)) {
                 try Task.checkCancellation()
                 guard let apps = try? await client.listStudioApplications(token: token, organizationId: orgID) else {
@@ -180,6 +183,9 @@ final class ProjectSyncService {
                 }
                 for app in apps {
                     guard let projectId = app.projectId else { continue }
+                    studioAppsByProject[projectId, default: []].append(
+                        StudioApp(host: app.appHost, isExternal: app.isExternal, title: app.title)
+                    )
                     if app.isExternal {
                         if let url = URL(string: app.appHost) {
                             externalStudioHostsFromApps[projectId] = url
@@ -256,17 +262,29 @@ final class ProjectSyncService {
             }
 
             snapshot.projects = remote.map { project in
-                SanityProject(
+                let resolvedHost = project.studioHost ?? studioHosts[project.id]
+                let resolvedExternal = externalStudioHostsFromApps[project.id] ?? project.externalStudioHost
+                var studioApps = studioAppsByProject[project.id] ?? []
+                // `/user-applications` doesn't cover every project (e.g. the
+                // deprecated `metadata.externalStudioHost` field) — synthesize
+                // an entry so the dropdown still lists it.
+                if !studioApps.contains(where: { !$0.isExternal }), let resolvedHost, !resolvedHost.isEmpty {
+                    studioApps.append(StudioApp(host: resolvedHost, isExternal: false))
+                }
+                if !studioApps.contains(where: \.isExternal), let resolvedExternal {
+                    studioApps.append(StudioApp(host: resolvedExternal.absoluteString, isExternal: true))
+                }
+                return SanityProject(
                     id: project.id,
                     displayName: project.displayName,
                     organizationId: project.organizationId,
                     organizationName: project.organizationId.flatMap { orgNames[$0] } ?? project.organizationId,
-                    studioHost: project.studioHost ?? studioHosts[project.id],
+                    studioHost: resolvedHost,
                     // `/user-applications` is the current, more accurate source
                     // (confirmed against the live API: SanityPress 2023's app entry
                     // points at a different, newer domain than its own deprecated
                     // metadata.externalStudioHost still records) — prefer it.
-                    externalStudioHost: externalStudioHostsFromApps[project.id] ?? project.externalStudioHost,
+                    externalStudioHost: resolvedExternal,
                     datasets: datasetsByProject[project.id] ?? [],
                     members: project.members.map { member in
                         let profile = memberProfilesByProject[project.id]?[member.id]
@@ -280,7 +298,8 @@ final class ProjectSyncService {
                     currentUserRole: project.members.first(where: { $0.id == userID })?.role,
                     createdAt: project.createdAt == .distantPast ? Date() : project.createdAt,
                     brandColorHex: project.color.flatMap(Self.normalizedHex),
-                    isArchived: project.isArchived
+                    isArchived: project.isArchived,
+                    studioApps: studioApps
                 )
             }
             snapshot.cachedAt = Date()
@@ -289,8 +308,9 @@ final class ProjectSyncService {
 
             let curationByID = Dictionary(uniqueKeysWithValues: curation.map { ($0.projectId, $0) })
             let eligibleIDs = projectIDs.filter { !(curationByID[$0]?.isHidden ?? false) }
+            let preferExternal = settings.studioURLPreference == .external
             let studioURLByProject = Dictionary(uniqueKeysWithValues: snapshot.projects.compactMap { project in
-                project.resolvedStudioURL.map { (project.id, $0) }
+                project.resolvedStudioURL(preferExternal: preferExternal).map { (project.id, $0) }
             })
             snapshot.activity = await fetchActivity(
                 token: token,

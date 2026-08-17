@@ -48,6 +48,7 @@ public struct RemoteStudioApp: Sendable, Equatable {
     /// pointing at wherever the developer embedded their Studio.
     public var appHost: String
     public var isExternal: Bool
+    public var title: String?
 }
 
 struct ProjectDTO: Decodable {

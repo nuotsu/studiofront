@@ -149,7 +149,8 @@ final class PresenceCoordinator {
             }
         }
 
-        guard let studioURL = store.rows.first(where: { $0.id == id })?.resolvedStudioURL else { return members }
+        let preferExternal = settings.studioURLPreference == .external
+        guard let studioURL = store.rows.first(where: { $0.id == id })?.resolvedStudioURL(preferExternal: preferExternal) else { return members }
         return members.map { member in
             var member = member
             if let docId = member.currentDocumentId, let typeName = cache[docId] {
