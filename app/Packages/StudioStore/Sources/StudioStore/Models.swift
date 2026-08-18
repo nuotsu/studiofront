@@ -230,16 +230,36 @@ public struct EditedDocument: Sendable, Hashable, Codable {
 public struct ProjectActivity: Sendable, Hashable, Codable {
     public var lastDeployedAt: Date?
     public var lastEditedDocument: EditedDocument?
+    /// Newest-first, deduped draft/published documents, for title search
+    /// coverage beyond the single most-recently-edited one. Equals
+    /// `[lastEditedDocument]` (or `[]`) once both are populated from the
+    /// same fetch — `lastEditedDocument` still drives the row's activity
+    /// line UI.
+    public var recentDocuments: [EditedDocument]
     public var activeUsers: [Member]
 
     public init(
         lastDeployedAt: Date? = nil,
         lastEditedDocument: EditedDocument? = nil,
+        recentDocuments: [EditedDocument] = [],
         activeUsers: [Member] = []
     ) {
         self.lastDeployedAt = lastDeployedAt
         self.lastEditedDocument = lastEditedDocument
+        self.recentDocuments = recentDocuments
         self.activeUsers = activeUsers
+    }
+
+    /// Decoded manually so cached JSON written before `recentDocuments`
+    /// existed (`PersistenceStore`'s `cache-v1.json`) still decodes —
+    /// matching the same forward-compatible pattern as
+    /// `SanityProject.studioApps`.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        lastDeployedAt = try container.decodeIfPresent(Date.self, forKey: .lastDeployedAt)
+        lastEditedDocument = try container.decodeIfPresent(EditedDocument.self, forKey: .lastEditedDocument)
+        recentDocuments = try container.decodeIfPresent([EditedDocument].self, forKey: .recentDocuments) ?? []
+        activeUsers = try container.decode([Member].self, forKey: .activeUsers)
     }
 }
 

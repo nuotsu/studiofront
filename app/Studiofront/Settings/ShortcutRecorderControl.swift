@@ -4,7 +4,7 @@ import ThemeKit
 
 enum KeyGlyphMapping {
     static func glyph(forKeyCode keyCode: UInt16, characters: String) -> KeyGlyph {
-        switch AppSettings.normalizedOpenStudioKeyCode(keyCode) {
+        switch AppSettings.normalizedEnterKeyCode(keyCode) {
         case 36: return .symbol("return")
         case 53: return .symbol("escape")
         case 123: return .symbol("arrow.left")
@@ -43,7 +43,7 @@ private enum ReservedShortcut {
             default: return nil
             }
         }
-        switch AppSettings.normalizedOpenStudioKeyCode(keyCode) {
+        switch AppSettings.normalizedEnterKeyCode(keyCode) {
         case 126: return "Already used by ↑ — Move selection up"
         case 125: return "Already used by ↓ — Move selection down"
         case 53: return "Already used by Esc — Close popover / clear search"
@@ -167,7 +167,7 @@ struct ShortcutRecorderControl: View {
         }
         errorMessage = nil
         characters = eventCharacters
-        keyCode = Int(AppSettings.normalizedOpenStudioKeyCode(event.keyCode))
+        keyCode = Int(AppSettings.normalizedEnterKeyCode(event.keyCode))
         modifierRawValue = Int(flags.rawValue)
         isRecording = false
     }

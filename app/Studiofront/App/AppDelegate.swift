@@ -19,6 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
     let auth = AuthSession()
     private(set) lazy var sync = ProjectSyncService(store: store, auth: auth, settings: settings)
     private(set) lazy var presence = PresenceCoordinator(store: store, settings: settings)
+    private(set) lazy var documentSearch = DocumentSearchCoordinator(store: store, settings: settings)
 
     private var statusItem: NSStatusItem?
     private var popover: NSPopover?
@@ -453,6 +454,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         removeKeyMonitor()
         sync.cancel()
         presence.willHide()
+        documentSearch.willHide()
         DispatchQueue.main.async { [weak self] in
             self?.applyActivationPolicy()
         }
@@ -485,6 +487,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
 
         if matchesOpenStudioBinding(keyCode: keyCode, flags: flags) {
             openSelectedStudio()
+            return true
+        }
+        if matchesOpenDocumentBinding(keyCode: keyCode, flags: flags) {
+            openSelectedDocument()
             return true
         }
         if matchesFavoriteToggleBinding(keyCode: keyCode, flags: flags) {
@@ -539,9 +545,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
     }
 
     private func matchesOpenStudioBinding(keyCode: UInt16, flags: NSEvent.ModifierFlags) -> Bool {
-        let pressed = AppSettings.normalizedOpenStudioKeyCode(keyCode)
-        let bound = AppSettings.normalizedOpenStudioKeyCode(UInt16(settings.openStudioKeyCode))
+        let pressed = AppSettings.normalizedEnterKeyCode(keyCode)
+        let bound = AppSettings.normalizedEnterKeyCode(UInt16(settings.openStudioKeyCode))
         return pressed == bound && flags == settings.openStudioModifierFlags
+    }
+
+    private func matchesOpenDocumentBinding(keyCode: UInt16, flags: NSEvent.ModifierFlags) -> Bool {
+        let pressed = AppSettings.normalizedEnterKeyCode(keyCode)
+        let bound = AppSettings.normalizedEnterKeyCode(UInt16(settings.openDocumentKeyCode))
+        return pressed == bound && flags == settings.openDocumentModifierFlags
     }
 
     private func matchesFavoriteToggleBinding(keyCode: UInt16, flags: NSEvent.ModifierFlags) -> Bool {
@@ -550,5 +562,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
 
     private func matchesGroupByCycleBinding(keyCode: UInt16, flags: NSEvent.ModifierFlags) -> Bool {
         keyCode == UInt16(settings.groupByCycleKeyCode) && flags == settings.groupByCycleModifierFlags
+    }
+
+    /// Opens the selected row's currently-displayed document — its last
+    /// edited document, or whichever document matched an active search —
+    /// via the same deep-link mechanism `ProjectRowView`'s document button uses.
+    private func openSelectedDocument() {
+        guard let id = store.selectedID, let row = store.rows.first(where: { $0.id == id }) else { return }
+        guard let url = store.documentDisplay(for: row).document?.deepLinkURL else { return }
+        openURL(url)
     }
 }

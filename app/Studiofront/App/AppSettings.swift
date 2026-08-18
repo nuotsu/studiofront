@@ -210,6 +210,18 @@ final class AppSettings {
         didSet { UserDefaults.standard.set(groupByCycleCharacters, forKey: Keys.groupByCycleCharacters) }
     }
 
+    var openDocumentKeyCode: Int {
+        didSet { UserDefaults.standard.set(openDocumentKeyCode, forKey: Keys.openDocumentKeyCode) }
+    }
+
+    var openDocumentModifierRawValue: Int {
+        didSet { UserDefaults.standard.set(openDocumentModifierRawValue, forKey: Keys.openDocumentModifierRawValue) }
+    }
+
+    var openDocumentCharacters: String {
+        didSet { UserDefaults.standard.set(openDocumentCharacters, forKey: Keys.openDocumentCharacters) }
+    }
+
     var refreshInterval: TimeInterval {
         TimeInterval(max(1, refreshIntervalMinutes) * 60)
     }
@@ -223,8 +235,10 @@ final class AppSettings {
             .intersection(.deviceIndependentFlagsMask)
     }
 
-    /// Return and keypad Enter are treated as the same key everywhere this binding is read or recorded.
-    nonisolated static func normalizedOpenStudioKeyCode(_ keyCode: UInt16) -> UInt16 {
+    /// Return and keypad Enter are treated as the same key everywhere an
+    /// Enter-based binding (Open Studio, Open Document, Open Studio dropdown)
+    /// is read or recorded.
+    nonisolated static func normalizedEnterKeyCode(_ keyCode: UInt16) -> UInt16 {
         keyCode == 76 ? 36 : keyCode
     }
 
@@ -262,6 +276,17 @@ final class AppSettings {
     nonisolated static let defaultGroupByCycleModifierRawValue = Int(NSEvent.ModifierFlags.command.rawValue)
     nonisolated static let defaultGroupByCycleCharacters = "/"
 
+    var openDocumentModifierFlags: NSEvent.ModifierFlags {
+        NSEvent.ModifierFlags(rawValue: UInt(openDocumentModifierRawValue))
+            .intersection(.deviceIndependentFlagsMask)
+    }
+
+    /// ⌘↵ — opens the selected row's currently-displayed document (its last
+    /// edited document, or whichever document matched an active search).
+    nonisolated static let defaultOpenDocumentKeyCode = 36 // kVK_Return
+    nonisolated static let defaultOpenDocumentModifierRawValue = Int(NSEvent.ModifierFlags.command.rawValue)
+    nonisolated static let defaultOpenDocumentCharacters = ""
+
     init(
         themePreference: ThemePreference = .liquidGlass,
         appearancePreference: AppearancePreference = .system,
@@ -283,7 +308,10 @@ final class AppSettings {
         favoriteToggleCharacters: String = AppSettings.defaultFavoriteToggleCharacters,
         groupByCycleKeyCode: Int = AppSettings.defaultGroupByCycleKeyCode,
         groupByCycleModifierRawValue: Int = AppSettings.defaultGroupByCycleModifierRawValue,
-        groupByCycleCharacters: String = AppSettings.defaultGroupByCycleCharacters
+        groupByCycleCharacters: String = AppSettings.defaultGroupByCycleCharacters,
+        openDocumentKeyCode: Int = AppSettings.defaultOpenDocumentKeyCode,
+        openDocumentModifierRawValue: Int = AppSettings.defaultOpenDocumentModifierRawValue,
+        openDocumentCharacters: String = AppSettings.defaultOpenDocumentCharacters
     ) {
         self.themePreference = themePreference
         self.appearancePreference = appearancePreference
@@ -306,6 +334,9 @@ final class AppSettings {
         self.groupByCycleKeyCode = groupByCycleKeyCode
         self.groupByCycleModifierRawValue = groupByCycleModifierRawValue
         self.groupByCycleCharacters = groupByCycleCharacters
+        self.openDocumentKeyCode = openDocumentKeyCode
+        self.openDocumentModifierRawValue = openDocumentModifierRawValue
+        self.openDocumentCharacters = openDocumentCharacters
     }
 
     static func load() -> AppSettings {
@@ -341,6 +372,12 @@ final class AppSettings {
             ?? Self.defaultGroupByCycleModifierRawValue
         let groupByCycleCharacters = defaults.string(forKey: Keys.groupByCycleCharacters)
             ?? Self.defaultGroupByCycleCharacters
+        let openDocumentKeyCode = defaults.object(forKey: Keys.openDocumentKeyCode) as? Int
+            ?? Self.defaultOpenDocumentKeyCode
+        let openDocumentModifierRawValue = defaults.object(forKey: Keys.openDocumentModifierRawValue) as? Int
+            ?? Self.defaultOpenDocumentModifierRawValue
+        let openDocumentCharacters = defaults.string(forKey: Keys.openDocumentCharacters)
+            ?? Self.defaultOpenDocumentCharacters
         return AppSettings(
             themePreference: theme,
             appearancePreference: appearance,
@@ -362,7 +399,10 @@ final class AppSettings {
             favoriteToggleCharacters: favoriteToggleCharacters,
             groupByCycleKeyCode: groupByCycleKeyCode,
             groupByCycleModifierRawValue: groupByCycleModifierRawValue,
-            groupByCycleCharacters: groupByCycleCharacters
+            groupByCycleCharacters: groupByCycleCharacters,
+            openDocumentKeyCode: openDocumentKeyCode,
+            openDocumentModifierRawValue: openDocumentModifierRawValue,
+            openDocumentCharacters: openDocumentCharacters
         )
     }
 
@@ -390,5 +430,8 @@ final class AppSettings {
         static let groupByCycleKeyCode = "groupByCycleKeyCode"
         static let groupByCycleModifierRawValue = "groupByCycleModifierRawValue"
         static let groupByCycleCharacters = "groupByCycleCharacters"
+        static let openDocumentKeyCode = "openDocumentKeyCode"
+        static let openDocumentModifierRawValue = "openDocumentModifierRawValue"
+        static let openDocumentCharacters = "openDocumentCharacters"
     }
 }

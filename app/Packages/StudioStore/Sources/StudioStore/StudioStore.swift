@@ -20,6 +20,15 @@ public final class StudioStore {
     /// eligible project ids for presence can change while the popover stays
     /// open (no per-row visibility/hide toggle exists yet).
     public var onRowsReplaced: (() -> Void)?
+    /// Live, per-project document search results for the current query —
+    /// populated by `DocumentSearchCoordinator` as each project's search
+    /// resolves. Cleared whenever the query changes or drops below the
+    /// coordinator's minimum length. Keyed by project id.
+    public var liveDocumentMatchesByProject: [String: [EditedDocument]] = [:]
+    /// Project ids with a live document search still in flight for the
+    /// current query — drives the header's loading indicator.
+    public var searchingProjectIDs: Set<String> = []
+    public var isSearchingDocuments: Bool { !searchingProjectIDs.isEmpty }
 
     private var copyResetTask: Task<Void, Never>?
 
@@ -315,6 +324,7 @@ public final class StudioStore {
     private func matches(_ row: ProjectRow) -> Bool {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return true }
+        if !(liveDocumentMatchesByProject[row.id] ?? []).isEmpty { return true }
         let needle = normalize(trimmed)
         let fields: [String] = [
             row.displayTitle,
@@ -325,6 +335,7 @@ public final class StudioStore {
             row.project.id,
             row.project.datasets.map(\.name).joined(separator: " "),
             row.activity.lastEditedDocument?.title ?? "",
+            row.activity.recentDocuments.map(\.title).joined(separator: " "),
             row.curation.frontendLinks.map(\.label).joined(separator: " "),
             row.curation.extraStudioLinks.map(\.label).joined(separator: " "),
         ]
@@ -332,6 +343,42 @@ public final class StudioStore {
             let normalized = normalize(field)
             return normalized.contains(needle) || initials(of: normalized).contains(needle)
         }
+    }
+
+    /// The document to show/open on a row's activity line, and whether it's
+    /// there because it actually matched the search (as opposed to just
+    /// being the default `lastEditedDocument` shown with no query active).
+    /// `isSearchMatch` is what tells `ProjectRowView` to present the row as
+    /// a document search result — title promoted to the name slot — rather
+    /// than a project row that merely happens to show its last edit.
+    public struct DocumentDisplay {
+        public var document: EditedDocument?
+        public var isSearchMatch: Bool
+    }
+
+    public func documentDisplay(for row: ProjectRow) -> DocumentDisplay {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return DocumentDisplay(document: row.activity.lastEditedDocument, isSearchMatch: false)
+        }
+        // Live results are authoritative — confirmed by Sanity against the
+        // current query — so they take priority over the cached/instant
+        // first-pass fields below.
+        if let liveMatch = liveDocumentMatchesByProject[row.id]?.first {
+            return DocumentDisplay(document: liveMatch, isSearchMatch: true)
+        }
+        let needle = normalize(trimmed)
+        func titleMatches(_ title: String) -> Bool {
+            let normalized = normalize(title)
+            return normalized.contains(needle) || initials(of: normalized).contains(needle)
+        }
+        if let lastEdited = row.activity.lastEditedDocument, titleMatches(lastEdited.title) {
+            return DocumentDisplay(document: lastEdited, isSearchMatch: true)
+        }
+        if let match = row.activity.recentDocuments.first(where: { titleMatches($0.title) }) {
+            return DocumentDisplay(document: match, isSearchMatch: true)
+        }
+        return DocumentDisplay(document: row.activity.lastEditedDocument, isSearchMatch: false)
     }
 
     private func normalize(_ string: String) -> String {

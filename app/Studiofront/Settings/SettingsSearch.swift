@@ -22,6 +22,7 @@ enum SettingsSearchTarget: String, Hashable, CaseIterable {
     case openStudiofrontShortcut
     case favoriteToggleShortcut
     case groupByCycleShortcut
+    case openDocumentShortcut
     case about
 }
 
@@ -167,6 +168,13 @@ enum SettingsSearchIndex {
             keywords: ["group by", "cycle", "org", "last edited", "rebind", "record"],
             pane: .keybindings,
             target: .groupByCycleShortcut,
+            systemImage: "keyboard"
+        ),
+        SettingsSearchItem(
+            title: "Open document shortcut",
+            keywords: ["open document", "last edited", "search result", "rebind", "record"],
+            pane: .keybindings,
+            target: .openDocumentShortcut,
             systemImage: "keyboard"
         ),
         SettingsSearchItem(

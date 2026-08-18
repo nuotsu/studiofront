@@ -62,6 +62,16 @@ struct KeybindingsSettingsView: View {
                         defaultCharacters: AppSettings.defaultGroupByCycleCharacters
                     )
                     .settingsHighlight(.groupByCycleShortcut)
+                    ConfigurableKeybindingRow(
+                        label: "Open document",
+                        keyCode: $settings.openDocumentKeyCode,
+                        modifierRawValue: $settings.openDocumentModifierRawValue,
+                        characters: $settings.openDocumentCharacters,
+                        defaultKeyCode: AppSettings.defaultOpenDocumentKeyCode,
+                        defaultModifierRawValue: AppSettings.defaultOpenDocumentModifierRawValue,
+                        defaultCharacters: AppSettings.defaultOpenDocumentCharacters
+                    )
+                    .settingsHighlight(.openDocumentShortcut)
                     KeybindingRow(label: "Refresh", glyphs: [.symbol("command"), .text("R")])
                     KeybindingRow(label: "Jump to favorite", glyphs: [.symbol("command"), .text("1–9")])
                 }

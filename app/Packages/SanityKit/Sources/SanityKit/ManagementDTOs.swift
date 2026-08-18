@@ -145,6 +145,32 @@ public struct RemoteEditedDocument: Sendable, Equatable {
             updatedAt: winner.doc.updatedAt
         )
     }
+
+    /// Merges a list query's published/draft candidate arrays into one
+    /// deduped, newest-first list — one entry per canonical document id
+    /// (a draft's `drafts.<id>` prefix stripped before grouping), applying
+    /// the same draft-vs-published winner rule `resolving` uses for a
+    /// single document.
+    static func resolvingList(
+        published: [DocumentProjectionDTO],
+        draft: [DocumentProjectionDTO],
+        limit: Int
+    ) -> [RemoteEditedDocument] {
+        func canonicalId(_ id: String) -> String {
+            let prefix = "drafts."
+            return id.hasPrefix(prefix) ? String(id.dropFirst(prefix.count)) : id
+        }
+        func byCanonicalId(_ docs: [DocumentProjectionDTO]) -> [String: DocumentProjectionDTO] {
+            Dictionary(docs.map { (canonicalId($0.id), $0) }) { _, newer in newer }
+        }
+        let publishedByCanonical = byCanonicalId(published)
+        let draftByCanonical = byCanonicalId(draft)
+        let allIds = Set(publishedByCanonical.keys).union(draftByCanonical.keys)
+        let merged = allIds.compactMap { id in
+            resolving(published: publishedByCanonical[id], draft: draftByCanonical[id])
+        }
+        return Array(merged.sorted { $0.updatedAt > $1.updatedAt }.prefix(limit))
+    }
 }
 
 /// One line of the History API's `/data/history/<dataset>/transactions` NDJSON
@@ -180,27 +206,26 @@ struct ArrayQueryEnvelope<Element: Decodable & Sendable>: Decodable, Sendable {
     var result: [Element]
 }
 
-struct QueryEnvelope: Decodable, Sendable {
-    var published: DocumentProjectionDTO?
-    var draft: DocumentProjectionDTO?
+struct QueryListEnvelope: Decodable, Sendable {
+    var published: [DocumentProjectionDTO]
+    var draft: [DocumentProjectionDTO]
 
     enum CodingKeys: String, CodingKey { case result }
-    enum ResultKeys: String, CodingKey { case published, draft }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         guard let result = try container.decodeIfPresent(ResultContainer.self, forKey: .result) else {
-            published = nil
-            draft = nil
+            published = []
+            draft = []
             return
         }
-        published = result.published
-        draft = result.draft
+        published = result.published ?? []
+        draft = result.draft ?? []
     }
 
     private struct ResultContainer: Decodable {
-        var published: DocumentProjectionDTO?
-        var draft: DocumentProjectionDTO?
+        var published: [DocumentProjectionDTO]?
+        var draft: [DocumentProjectionDTO]?
     }
 }
 

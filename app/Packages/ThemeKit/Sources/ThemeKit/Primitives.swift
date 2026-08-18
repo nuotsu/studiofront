@@ -156,7 +156,7 @@ public struct SplitPrimaryButton: View {
         guard let menuAnchor else { return }
         let menu = NSMenu()
 
-        let header = NSMenuItem(title: "Studio URL", action: nil, keyEquivalent: "")
+        let header = NSMenuItem(title: "Studio URLs", action: nil, keyEquivalent: "")
         header.isEnabled = false
         menu.addItem(header)
         menu.addItem(.separator())

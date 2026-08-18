@@ -81,52 +81,71 @@ struct ProjectRowView: View {
     }
 
     private var identity: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 6) {
-                if let favoriteIndex {
-                    KeycapLegend([.symbol("command"), .text("\(favoriteIndex)")], compact: true)
+        let display = store.documentDisplay(for: row)
+        return VStack(alignment: .leading, spacing: 4) {
+            if display.isSearchMatch, let document = display.document {
+                documentLine(document: document, emphasized: true)
+                projectLine(emphasized: false)
+            } else {
+                projectLine(emphasized: true)
+                if let document = display.document {
+                    documentLine(document: document, emphasized: false)
                 }
-                Text(row.displayTitle)
-                    .font(theme.typography.projectName)
-                    .foregroundStyle(theme.colors.text)
-                    .lineLimit(1)
-                CopyChip(
-                    text: row.project.id,
-                    copied: store.copiedProjectID == row.project.id,
-                    accessibilityName: "Copy project ID \(row.project.id)"
-                ) {
-                    store.copyProjectID(row.project.id)
-                }
-            }
-
-            if let document = row.activity.lastEditedDocument {
-                Button {
-                    if let url = document.deepLinkURL {
-                        AppDelegate.shared?.openURL(url)
-                    }
-                } label: {
-                    HStack(spacing: 5) {
-                        Text(document.title)
-                            .font(theme.typography.meta)
-                            .foregroundStyle(isDocumentHovered ? theme.colors.text : theme.colors.sub)
-                            .lineLimit(1)
-                        HStack(spacing: 3) {
-                            Image(systemName: "pencil")
-                                .font(.system(size: 8, weight: .semibold))
-                            Text(RelativeTimestamp.string(from: document.editedAt))
-                        }
-                        .font(theme.typography.timestamp)
-                        .foregroundStyle(isDocumentHovered ? theme.colors.sub : theme.colors.faint)
-                        .fixedSize()
-                    }
-                }
-                .buttonStyle(.plain)
-                .disabled(document.deepLinkURL == nil)
-                .onHover { isDocumentHovered = $0 }
-                .accessibilityLabel("Open last edited document, \(document.title), edited \(RelativeTimestamp.string(from: document.editedAt))")
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// The project name line — promoted (name-slot font/color) when this row
+    /// isn't a document search result, demoted to a muted caption beneath the
+    /// document title when it is.
+    private func projectLine(emphasized: Bool) -> some View {
+        HStack(spacing: 6) {
+            if let favoriteIndex {
+                KeycapLegend([.symbol("command"), .text("\(favoriteIndex)")], compact: true)
+            }
+            Text(row.displayTitle)
+                .font(emphasized ? theme.typography.projectName : theme.typography.meta)
+                .foregroundStyle(emphasized ? theme.colors.text : theme.colors.sub)
+                .lineLimit(1)
+            CopyChip(
+                text: row.project.id,
+                copied: store.copiedProjectID == row.project.id,
+                accessibilityName: "Copy project ID \(row.project.id)"
+            ) {
+                store.copyProjectID(row.project.id)
+            }
+        }
+    }
+
+    /// The document line — promoted to the name slot (same font/color as
+    /// the project name) when this row is a document search result,
+    /// otherwise the usual muted "last edited" caption beneath the name.
+    private func documentLine(document: EditedDocument, emphasized: Bool) -> some View {
+        Button {
+            if let url = document.deepLinkURL {
+                AppDelegate.shared?.openURL(url)
+            }
+        } label: {
+            HStack(spacing: 5) {
+                Text(document.title)
+                    .font(emphasized ? theme.typography.projectName : theme.typography.meta)
+                    .foregroundStyle(emphasized ? theme.colors.text : (isDocumentHovered ? theme.colors.text : theme.colors.sub))
+                    .lineLimit(1)
+                HStack(spacing: 3) {
+                    Image(systemName: "pencil")
+                        .font(.system(size: 8, weight: .semibold))
+                    Text(RelativeTimestamp.string(from: document.editedAt))
+                }
+                .font(theme.typography.timestamp)
+                .foregroundStyle(isDocumentHovered ? theme.colors.sub : theme.colors.faint)
+                .fixedSize()
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(document.deepLinkURL == nil)
+        .onHover { isDocumentHovered = $0 }
+        .accessibilityLabel("Open document, \(document.title), edited \(RelativeTimestamp.string(from: document.editedAt))")
     }
 
     private var trailing: some View {

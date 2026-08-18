@@ -6,6 +6,27 @@ public actor SanityClient {
 
     public static let datasetConcurrencyLimit = 5
 
+    /// Raw per-side (published/draft) slice size for `recentEditedDocuments`,
+    /// before draft/published dedup. Kept generous relative to
+    /// `recentDocumentsCacheLimit` since dedup can only shrink the merged set.
+    public static let recentDocumentsFetchLimit = 30
+    /// Persisted/searchable document count per project after dedup — how far
+    /// back title search reaches beyond the single most-recently-edited doc.
+    public static let recentDocumentsCacheLimit = 20
+    /// Per-project result cap for `searchDocuments` — kept small since this
+    /// fans out live, on a debounce, across every eligible project at once.
+    public static let documentSearchResultLimit = 8
+
+    /// Sanity/plugin-internal document types that aren't user content —
+    /// excluded so asset uploads and plugin metadata (which touch
+    /// `_updatedAt` on every edit) don't crowd out real content in either
+    /// the prefetched "recently edited" list or a live search.
+    /// `string::startsWith` is used instead of `match`, since GROQ's `match`
+    /// tokenizes on `.` and can't reliably prefix-match "sanity.*".
+    fileprivate static let nonContentTypeFilter = """
+    !string::startsWith(_type, "sanity.") && !(_type in ["media.tag", "workflow.metadata", "translation.metadata", "assist.instruction.context"])
+    """
+
     private let session: URLSession
 
     public init(session: URLSession = .shared) {
@@ -113,20 +134,25 @@ public actor SanityClient {
         }
     }
 
-    /// Content query against the project's dataset over the CDN, for activity data
-    /// not available from the Management API (§6.3). Never throws for lack of
-    /// dataset access — callers should treat `.unauthorized`/`.notFound` as a
+    /// Content query against the project's dataset over the CDN, for the
+    /// per-project recently-edited document list (§6.3) — drives both the
+    /// activity line (its newest entry) and title search coverage beyond
+    /// that single most-recent document. Never throws for lack of dataset
+    /// access — callers should treat `.unauthorized`/`.notFound` as a
     /// normal, quiet "no activity" state rather than a reportable error.
-    public func lastEditedDocument(
+    public func recentEditedDocuments(
         token: String,
         projectId: String,
         dataset: String,
-        etag: String? = nil
-    ) async throws -> SanityConditional<RemoteEditedDocument?> {
+        etag: String? = nil,
+        perStateLimit: Int = SanityClient.recentDocumentsFetchLimit
+    ) async throws -> SanityConditional<[RemoteEditedDocument]> {
+        // GROQ's `...` slice is right-exclusive, so `[0...perStateLimit]`
+        // yields exactly `perStateLimit` items (indices 0 through perStateLimit-1).
         let groq = """
         {
-          "published": *[!(_id in path("drafts.**")) && !(_id in path("_.**"))] | order(_updatedAt desc)[0]{_id, _type, _updatedAt, title, name},
-          "draft": *[_id in path("drafts.**") && !(_id in path("_.**"))] | order(_updatedAt desc)[0]{_id, _type, _updatedAt, title, name}
+          "published": *[!(_id in path("drafts.**")) && !(_id in path("_.**")) && \(Self.nonContentTypeFilter)] | order(_updatedAt desc)[0...\(perStateLimit)]{_id, _type, _updatedAt, title, name},
+          "draft": *[_id in path("drafts.**") && !(_id in path("_.**")) && \(Self.nonContentTypeFilter)] | order(_updatedAt desc)[0...\(perStateLimit)]{_id, _type, _updatedAt, title, name}
         }
         """
         guard var components = URLComponents(
@@ -141,10 +167,75 @@ public actor SanityClient {
             throw SanityError.transport("Couldn’t reach Sanity.")
         }
 
-        let result: SanityConditional<QueryEnvelope> = try await performGET(url: url, token: token, etag: etag)
+        let result: SanityConditional<QueryListEnvelope> = try await performGET(url: url, token: token, etag: etag)
         return result.map { envelope in
-            RemoteEditedDocument.resolving(published: envelope.published, draft: envelope.draft)
+            RemoteEditedDocument.resolvingList(
+                published: envelope.published,
+                draft: envelope.draft,
+                limit: SanityClient.recentDocumentsCacheLimit
+            )
         }
+    }
+
+    /// Live document title search against a project's dataset, issued only
+    /// in direct response to an active search query — the one deliberate
+    /// exception to search otherwise never calling the network. CDN-fronted
+    /// and non-content-type-filtered like `recentEditedDocuments`, but
+    /// matched against `text` instead of sorted purely by recency, so a
+    /// document search stays complete regardless of how recently something
+    /// was edited or how common its schema type is.
+    public func searchDocuments(
+        token: String,
+        projectId: String,
+        dataset: String,
+        text: String,
+        limit: Int = SanityClient.documentSearchResultLimit
+    ) async throws -> [RemoteEditedDocument] {
+        guard !text.isEmpty else { return [] }
+        let groq = """
+        {
+          "published": *[!(_id in path("drafts.**")) && !(_id in path("_.**")) && \(Self.nonContentTypeFilter) && (title match $q || name match $q)] | order(_updatedAt desc)[0...\(limit)]{_id, _type, _updatedAt, title, name},
+          "draft": *[_id in path("drafts.**") && !(_id in path("_.**")) && \(Self.nonContentTypeFilter) && (title match $q || name match $q)] | order(_updatedAt desc)[0...\(limit)]{_id, _type, _updatedAt, title, name}
+        }
+        """
+        guard var components = URLComponents(
+            url: URL(string: "https://\(projectId).apicdn.sanity.io")!,
+            resolvingAgainstBaseURL: false
+        ) else {
+            throw SanityError.transport("Couldn’t reach Sanity.")
+        }
+        components.path = "/\(SanityAPI.version)/data/query/\(dataset)"
+        // `$q` is a real bound GROQ parameter (JSON-encoded, like `documentTypes`'s
+        // `$ids`), not string-interpolated into the query text — `text` is
+        // arbitrary user-typed input, unlike `$ids`'s trusted Sanity-generated
+        // ids, so it must never be spliced directly into the GROQ source.
+        guard let qParam = Self.groqWildcardParam(text) else {
+            throw SanityError.transport("Couldn’t reach Sanity.")
+        }
+        components.queryItems = [
+            URLQueryItem(name: "query", value: groq),
+            URLQueryItem(name: "$q", value: qParam),
+        ]
+        guard let url = components.url else {
+            throw SanityError.transport("Couldn’t reach Sanity.")
+        }
+
+        let result: SanityConditional<QueryListEnvelope> = try await performGET(url: url, token: token, etag: nil)
+        guard let envelope = result.value else { return [] }
+        return RemoteEditedDocument.resolvingList(
+            published: envelope.published,
+            draft: envelope.draft,
+            limit: limit
+        )
+    }
+
+    /// JSON-encodes `text` wrapped in `*...*` wildcards, for binding as a
+    /// GROQ `match` parameter — JSON encoding (rather than hand-rolled
+    /// escaping) safely handles any character a search field can contain,
+    /// including quotes and backslashes.
+    private static func groqWildcardParam(_ text: String) -> String? {
+        guard let data = try? JSONEncoder().encode("*\(text)*") else { return nil }
+        return String(data: data, encoding: .utf8)
     }
 
     /// The presence websocket URL, matching exactly what Sanity Studio itself
@@ -199,7 +290,7 @@ public actor SanityClient {
     /// Batched `{_id, _type}` lookup for building edit-intent links — presence
     /// data (both the realtime socket and the History API) carries a
     /// document's id but never its schema type. CDN-fronted like
-    /// `lastEditedDocument`, since this is read-only lookup data, not
+    /// `recentEditedDocuments`, since this is read-only lookup data, not
     /// something that needs to bypass caching.
     public func documentTypes(
         token: String,

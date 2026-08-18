@@ -335,11 +335,12 @@ final class ProjectSyncService {
         }
     }
 
-    /// Fetches the last-edited document per project (§6.3). Per-project failures —
-    /// including lack of dataset access, which is expected and not every user
-    /// token grants read access to every org's datasets — resolve to an empty
-    /// `ProjectActivity` rather than surfacing an error or triggering reconnect.
-    /// Cancellation leaves the project's previous cached value untouched.
+    /// Fetches the recently-edited documents per project (§6.3). Per-project
+    /// failures — including lack of dataset access, which is expected and not
+    /// every user token grants read access to every org's datasets — resolve
+    /// to an empty `ProjectActivity` rather than surfacing an error or
+    /// triggering reconnect. Cancellation leaves the project's previous
+    /// cached value untouched.
     private func fetchActivity(
         token: String,
         projectIDs: [String],
@@ -359,23 +360,25 @@ final class ProjectSyncService {
                     guard let dataset = Self.primaryDataset(from: datasetsByProject[id] ?? []) else { continue }
                     group.addTask {
                         do {
-                            let conditional = try await client.lastEditedDocument(
+                            let conditional = try await client.recentEditedDocuments(
                                 token: token,
                                 projectId: id,
                                 dataset: dataset
                             )
-                            let doc: RemoteEditedDocument? = conditional.value ?? nil
-                            guard let doc else { return (id, ProjectActivity()) }
-                            let deepLinkURL = studioURLByProject[id].flatMap {
-                                Self.editIntentURL(studioURL: $0, documentId: doc.id, typeName: doc.typeName)
-                            }
-                            return (id, ProjectActivity(
-                                lastEditedDocument: EditedDocument(
+                            let docs: [RemoteEditedDocument] = conditional.value ?? []
+                            let recentDocuments = docs.map { doc in
+                                EditedDocument(
                                     title: doc.title,
                                     typeName: doc.typeName,
                                     editedAt: doc.updatedAt,
-                                    deepLinkURL: deepLinkURL
+                                    deepLinkURL: studioURLByProject[id].flatMap {
+                                        Self.editIntentURL(studioURL: $0, documentId: doc.id, typeName: doc.typeName)
+                                    }
                                 )
+                            }
+                            return (id, ProjectActivity(
+                                lastEditedDocument: recentDocuments.first,
+                                recentDocuments: recentDocuments
                             ))
                         } catch is CancellationError {
                             return (id, nil)

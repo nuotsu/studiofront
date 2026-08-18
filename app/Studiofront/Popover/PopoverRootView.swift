@@ -72,8 +72,9 @@ struct PopoverRootView: View {
         .onChange(of: store.searchFocusToken) { _, _ in
             searchFocused = true
         }
-        .onChange(of: store.query) { _, _ in
+        .onChange(of: store.query) { _, newValue in
             store.reconcileSelection()
+            AppDelegate.shared?.documentSearch.queryDidChange(newValue)
         }
         .onChange(of: store.groupBy) { _, _ in
             store.reconcileSelection()
@@ -125,7 +126,7 @@ struct PopoverRootView: View {
 
             HStack(spacing: 10) {
                 HStack(spacing: 5) {
-                    if store.isRefreshing {
+                    if store.isRefreshing || store.isSearchingDocuments {
                         ProgressView()
                             .controlSize(.mini)
                             .tint(theme.colors.faint)
@@ -137,7 +138,11 @@ struct PopoverRootView: View {
                 .font(.system(size: 9.5))
                 .foregroundStyle(theme.colors.faint)
                 .accessibilityElement(children: .combine)
-                .accessibilityLabel(store.isRefreshing ? "Refreshing projects" : projectCountLabel)
+                .accessibilityLabel(
+                    store.isRefreshing ? "Refreshing projects"
+                        : store.isSearchingDocuments ? "Searching documents"
+                        : projectCountLabel
+                )
 
                 HStack(spacing: 6) {
                     Text("Group by")
@@ -170,8 +175,17 @@ struct PopoverRootView: View {
                 .foregroundStyle(theme.colors.faint)
 
                 HStack(spacing: 4) {
+                    KeycapLegend(openDocumentGlyphs, compact: true)
+                    Text("Document")
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
+                }
+                .font(.system(size: 9.5))
+                .foregroundStyle(theme.colors.faint)
+
+                HStack(spacing: 4) {
                     KeycapLegend(openStudioGlyphs, compact: true)
-                    Text("Open Studio")
+                    Text("Studio")
                         .lineLimit(1)
                         .fixedSize(horizontal: true, vertical: false)
                 }
@@ -287,6 +301,9 @@ struct PopoverRootView: View {
 
     private var emptyListMessage: String {
         if !store.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            if store.isSearchingDocuments {
+                return "Searching documents…"
+            }
             return "No projects match “\(store.query)”"
         }
         if store.isRefreshing, auth.isSignedIn {
@@ -303,6 +320,15 @@ struct PopoverRootView: View {
     private var openStudioGlyphs: [KeyGlyph] {
         let modifierGlyphs = KeyGlyphMapping.modifierGlyphs(settings.openStudioModifierFlags)
         let keyGlyph = KeyGlyphMapping.glyph(forKeyCode: UInt16(settings.openStudioKeyCode), characters: settings.openStudioCharacters)
+        return modifierGlyphs + [keyGlyph]
+    }
+
+    /// Reflects the user's current "Open Document" binding (default ⌘Return,
+    /// or whatever they recorded in Settings → Keybindings) so this legend
+    /// never drifts from reality.
+    private var openDocumentGlyphs: [KeyGlyph] {
+        let modifierGlyphs = KeyGlyphMapping.modifierGlyphs(settings.openDocumentModifierFlags)
+        let keyGlyph = KeyGlyphMapping.glyph(forKeyCode: UInt16(settings.openDocumentKeyCode), characters: settings.openDocumentCharacters)
         return modifierGlyphs + [keyGlyph]
     }
 
