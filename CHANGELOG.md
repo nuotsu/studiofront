@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.0.6] - 2026-08-17
+
+- Add Studio URL preference to choose external vs. Sanity-hosted Studio, with a dropdown for projects with multiple registered Studio apps
+- Add collaborator name tooltips on hover in the avatar stack
+- Redesign the Settings window with a floating sidebar and inset traffic lights, replacing the split-view sidebar
+- Add a "Hide scrollbar" preference
+- Replace the Manage button's gearshape icon with a custom Sanity-style icon
+- Fix avatar tooltip clipping under a pinned section header
+
 ## [0.0.5] - 2026-08-17
 
 - Fix Settings window opening more than once
