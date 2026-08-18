@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import ThemeKit
 
 struct SettingsRootView: View {
     @Environment(AppSettings.self) private var settings
@@ -8,52 +9,34 @@ struct SettingsRootView: View {
     static let windowWidth: CGFloat = 600
     static let minHeight: CGFloat = 360
     static let sidebarWidth: CGFloat = 200
+    static let sidebarInset: CGFloat = 8
+    static let sidebarCornerRadius: CGFloat = 16
+    /// Extra inset from the window corner; AppKit's default is ~7pt.
+    static let trafficLightLeading: CGFloat = 22
+    static let trafficLightTop: CGFloat = 22
+    /// Space below the window top so search sits under the inset traffic lights.
+    static let trafficLightClearance: CGFloat = 44
     static let defaultHeight: CGFloat = 630
 
     @State private var query = ""
     @State private var selectedSearchID: String?
     @State private var searchFieldFocused = false
     @State private var search = SettingsSearchState()
-    @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
     var body: some View {
-        @Bindable var auth = auth
-        NavigationSplitView(columnVisibility: $columnVisibility) {
-            sidebarList
-                .navigationSplitViewColumnWidth(
-                    min: Self.sidebarWidth,
-                    ideal: Self.sidebarWidth,
-                    max: Self.sidebarWidth
-                )
-        } detail: {
-            Group {
-                switch auth.selectedSettingsPane {
-                case .general:
-                    GeneralSettingsView()
-                case .appearance:
-                    AppearanceSettingsView()
-                case .account:
-                    AccountSettingsView()
-                case .keybindings:
-                    KeybindingsSettingsView()
-                case .about:
-                    AboutSettingsView()
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .ignoresSafeArea(.container, edges: .top)
+        HStack(spacing: 0) {
+            sidebarColumn
+            detailColumn
         }
-        .navigationSplitViewStyle(.automatic)
+        // Draw under the transparent titlebar so the sidebar glass sits behind
+        // the traffic lights. The HStack otherwise lays out in the titlebar
+        // safe area and the lights float in the gap above the card.
+        .ignoresSafeArea(.container, edges: .top)
         // The scene's "Settings" title would draw over the pane heading beneath
         // the transparent titlebar; SwiftUI keeps restoring it, so clear it here
         // rather than fighting it from AppKit.
         .navigationTitle("")
-        // Force an NSToolbar so the sidebar can own a titlebar section (traffic lights).
-        .toolbar {
-            ToolbarSpacer(.flexible)
-        }
-        .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
-        .background(SettingsSplitViewTuner())
+        .background(SettingsWindowChrome())
         .environment(search)
         .frame(
             minWidth: Self.windowWidth,
@@ -70,6 +53,40 @@ struct SettingsRootView: View {
             AppDelegate.shared?.applyAppearance(settings.appearancePreference)
             AppDelegate.shared?.configureOpenSettingsWindow()
         }
+    }
+
+    private var sidebarColumn: some View {
+        sidebarList
+            .padding(.top, Self.trafficLightClearance)
+            .padding(.leading, Self.sidebarInset)
+            .padding(.bottom, Self.sidebarInset)
+            .frame(maxHeight: .infinity)
+            .background {
+                GlassSurface(cornerRadius: Self.sidebarCornerRadius)
+                    .padding(.leading, Self.sidebarInset)
+                    .padding(.top, Self.sidebarInset)
+                    .padding(.bottom, Self.sidebarInset)
+            }
+            .frame(width: Self.sidebarWidth)
+    }
+
+    private var detailColumn: some View {
+        Group {
+            switch auth.selectedSettingsPane {
+            case .general:
+                GeneralSettingsView()
+            case .appearance:
+                AppearanceSettingsView()
+            case .account:
+                AccountSettingsView()
+            case .keybindings:
+                KeybindingsSettingsView()
+            case .about:
+                AboutSettingsView()
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .ignoresSafeArea(.container, edges: .top)
     }
 
     private var searchField: some View {
@@ -117,8 +134,8 @@ struct SettingsRootView: View {
         }
         // 10 matches the sidebar rows' own inset, so the field lines up with them.
         .padding(.horizontal, 10)
-        .padding(.top, 6)
-        .padding(.bottom, 8)
+        .padding(.top, 4)
+        .padding(.bottom, 2)
         .onChange(of: query) { _, _ in
             selectedSearchID = nil
             // Switching the sidebar between browse and results mode can still
@@ -141,7 +158,9 @@ struct SettingsRootView: View {
         // field inside it) survives.
         AnyView(sidebarContent)
             .listStyle(.sidebar)
+            .scrollContentBackground(.hidden)
             .scrollEdgeEffectStyle(.soft, for: .top)
+            .contentMargins(.top, -4, for: .scrollContent)
             .safeAreaBar(edge: .top) {
                 searchField
             }
@@ -210,53 +229,24 @@ struct SettingsRootView: View {
     }
 }
 
-/// Pins the Tahoe floating sidebar to a fixed leading column and stretches it
-/// full-height under the titlebar so traffic lights sit inside the glass.
-struct SettingsSplitViewTuner: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSView {
-        let view = NSView(frame: .zero)
+/// Transparent titlebar chrome so traffic lights sit over the floating sidebar glass.
+struct SettingsWindowChrome: NSViewRepresentable {
+    func makeNSView(context: Context) -> SettingsChromeView {
+        let view = SettingsChromeView(frame: .zero)
         view.isHidden = true
-        DispatchQueue.main.async { Self.tune(from: view) }
+        DispatchQueue.main.async { Self.configureWindowChrome(view.window) }
         return view
     }
 
-    func updateNSView(_ nsView: NSView, context: Context) {
-        DispatchQueue.main.async { Self.tune(from: nsView) }
+    func updateNSView(_ nsView: SettingsChromeView, context: Context) {
+        guard let window = nsView.window else { return }
+        Self.applyWindowChrome(to: window)
     }
 
-    private static func tune(from view: NSView) {
-        guard let split = enclosingSplitViewController(from: view) else { return }
-        configureWindowChrome(split.view.window)
-
-        for item in split.splitViewItems {
-            switch item.behavior {
-            case .sidebar:
-                item.minimumThickness = SettingsRootView.sidebarWidth
-                item.maximumThickness = SettingsRootView.sidebarWidth
-                item.preferredThicknessFraction = NSSplitViewItem.unspecifiedDimension
-                item.holdingPriority = .defaultHigh
-                item.canCollapse = true
-                item.canCollapseFromWindowResize = false
-                item.allowsFullHeightLayout = true
-                item.titlebarSeparatorStyle = .none
-            default:
-                item.holdingPriority = .defaultLow
-                item.automaticallyAdjustsSafeAreaInsets = true
-                item.titlebarSeparatorStyle = .none
-            }
-        }
-        split.minimumThicknessForInlineSidebars = 0
-        split.view.needsLayout = true
-        split.view.layoutSubtreeIfNeeded()
-        if split.splitView.subviews.count > 1 {
-            split.splitView.setPosition(SettingsRootView.sidebarWidth, ofDividerAt: 0)
-        }
-    }
-
-    /// AppKit finishes building the titlebar and toolbar after the split view
-    /// appears, and rebuilds them later, so a single pass can run too early or be
+    /// AppKit finishes building the titlebar after the window appears, and SwiftUI
+    /// restores the scene title later, so a single pass can run too early or be
     /// undone. Re-apply over the next few runloop turns.
-    private static func configureWindowChrome(_ window: NSWindow?) {
+    static func configureWindowChrome(_ window: NSWindow?) {
         guard let window else { return }
         applyWindowChrome(to: window)
         for delay in [0.05, 0.2, 0.5] {
@@ -266,7 +256,8 @@ struct SettingsSplitViewTuner: NSViewRepresentable {
         }
     }
 
-    private static func applyWindowChrome(to window: NSWindow) {
+    static func applyWindowChrome(to window: NSWindow) {
+        window.isRestorable = false
         window.styleMask.insert(.fullSizeContentView)
         // `fullSizeContentView` draws the titlebar over the content, so a visible
         // window title lands on top of the pane's own heading. `titleVisibility`
@@ -277,41 +268,68 @@ struct SettingsSplitViewTuner: NSViewRepresentable {
         window.title = ""
         window.titlebarAppearsTransparent = true
         window.titlebarSeparatorStyle = .none
-        window.toolbarStyle = .unified
-        removeSidebarToggleItems(from: window)
+        insetTrafficLights(in: window)
     }
 
-    /// The visible toggle button next to the traffic lights isn't actually an
-    /// `NSToolbarItem` on macOS 26 (confirmed by logging `toolbar.items` at
-    /// runtime — it only ever contained our own `ToolbarSpacer`); it's drawn
-    /// by AppKit's floating-sidebar window chrome, which has no public API to
-    /// suppress. Rather than fight it, `columnVisibility` above is now a real
-    /// binding and `canCollapse` is `true`, so the button actually works. This
-    /// removal is kept as a defensive no-op for the (currently theoretical)
-    /// case where a toolbar item under this identifier does exist.
-    static func removeSidebarToggleItems(from window: NSWindow) {
-        guard let toolbar = window.toolbar else { return }
-        while let index = toolbar.items.firstIndex(where: {
-            $0.itemIdentifier == .toggleSidebar
-                || $0.itemIdentifier.rawValue.localizedCaseInsensitiveContains("togglesidebar")
-        }) {
-            toolbar.removeItem(at: index)
+    /// AppKit pins the buttons to the window corner; shift them onto the sidebar
+    /// glass. Re-applied after layout because `NSThemeFrame` resets frames.
+    private static func insetTrafficLights(in window: NSWindow) {
+        guard let close = window.standardWindowButton(.closeButton),
+              let miniaturize = window.standardWindowButton(.miniaturizeButton),
+              let zoom = window.standardWindowButton(.zoomButton),
+              let container = close.superview,
+              close.frame.width > 0
+        else { return }
+
+        container.clipsToBounds = false
+        container.superview?.clipsToBounds = false
+
+        let gap = miniaturize.frame.minX - close.frame.maxX
+        let spacing = gap > 0 ? gap : 6
+        let leading = SettingsRootView.trafficLightLeading
+        let top = SettingsRootView.trafficLightTop
+        let buttons = [close, miniaturize, zoom]
+        var x = leading
+        for button in buttons {
+            let y: CGFloat = container.isFlipped
+                ? top
+                : container.bounds.height - top - button.frame.height
+            let origin = NSPoint(x: x, y: y)
+            if button.frame.origin != origin {
+                button.setFrameOrigin(origin)
+            }
+            x += button.frame.width + spacing
+        }
+    }
+}
+
+final class SettingsChromeView: NSView {
+    private var resizeObserver: NSObjectProtocol?
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if let resizeObserver {
+            NotificationCenter.default.removeObserver(resizeObserver)
+            self.resizeObserver = nil
+        }
+        SettingsWindowChrome.configureWindowChrome(window)
+        guard let window else { return }
+        resizeObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didResizeNotification,
+            object: window,
+            queue: .main
+        ) { [weak self] _ in
+            guard let window = self?.window else { return }
+            SettingsWindowChrome.applyWindowChrome(to: window)
         }
     }
 
-    private static func enclosingSplitViewController(from view: NSView) -> NSSplitViewController? {
-        var current: NSView? = view
-        while let candidate = current {
-            if let split = candidate.nextResponder as? NSSplitViewController {
-                return split
-            }
-            if let splitView = candidate as? NSSplitView,
-               let split = splitView.delegate as? NSSplitViewController {
-                return split
-            }
-            current = candidate.superview
+    override func layout() {
+        super.layout()
+        DispatchQueue.main.async { [weak self] in
+            guard let window = self?.window else { return }
+            SettingsWindowChrome.applyWindowChrome(to: window)
         }
-        return nil
     }
 }
 

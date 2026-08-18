@@ -150,6 +150,10 @@ final class AppSettings {
         didSet { UserDefaults.standard.set(studioURLPreference.rawValue, forKey: Keys.studioURLPreference) }
     }
 
+    var hideScrollbar: Bool {
+        didSet { UserDefaults.standard.set(hideScrollbar, forKey: Keys.hideScrollbar) }
+    }
+
     // TODO: move to Settings > Advanced once that tab exists (spec §10).
     var presenceMode: PresenceMode {
         didSet { UserDefaults.standard.set(presenceMode.rawValue, forKey: Keys.presenceMode) }
@@ -266,6 +270,7 @@ final class AppSettings {
         refreshIntervalMinutes: Int = 5,
         hideArchivedProjects: Bool = true,
         studioURLPreference: StudioURLPreference = .external,
+        hideScrollbar: Bool = false,
         presenceMode: PresenceMode = .realtime,
         openStudioKeyCode: Int = AppSettings.defaultOpenStudioKeyCode,
         openStudioModifierRawValue: Int = AppSettings.defaultOpenStudioModifierRawValue,
@@ -287,6 +292,7 @@ final class AppSettings {
         self.refreshIntervalMinutes = refreshIntervalMinutes
         self.hideArchivedProjects = hideArchivedProjects
         self.studioURLPreference = studioURLPreference
+        self.hideScrollbar = hideScrollbar
         self.presenceMode = presenceMode
         self.openStudioKeyCode = openStudioKeyCode
         self.openStudioModifierRawValue = openStudioModifierRawValue
@@ -312,6 +318,7 @@ final class AppSettings {
         let refresh = Self.allowedRefreshIntervals.contains(storedInterval ?? -1) ? storedInterval! : 5
         let hideArchivedProjects = defaults.object(forKey: Keys.hideArchivedProjects) as? Bool ?? true
         let studioURLPreference = StudioURLPreference(rawValue: defaults.string(forKey: Keys.studioURLPreference) ?? "") ?? .external
+        let hideScrollbar = defaults.object(forKey: Keys.hideScrollbar) as? Bool ?? false
         let presenceMode = PresenceMode(rawValue: defaults.string(forKey: Keys.presenceMode) ?? "") ?? .realtime
         let openStudioKeyCode = defaults.object(forKey: Keys.openStudioKeyCode) as? Int ?? Self.defaultOpenStudioKeyCode
         let openStudioModifierRawValue = defaults.object(forKey: Keys.openStudioModifierRawValue) as? Int ?? Self.defaultOpenStudioModifierRawValue
@@ -342,6 +349,7 @@ final class AppSettings {
             refreshIntervalMinutes: refresh,
             hideArchivedProjects: hideArchivedProjects,
             studioURLPreference: studioURLPreference,
+            hideScrollbar: hideScrollbar,
             presenceMode: presenceMode,
             openStudioKeyCode: openStudioKeyCode,
             openStudioModifierRawValue: openStudioModifierRawValue,
@@ -368,6 +376,7 @@ final class AppSettings {
         static let refreshInterval = "refreshIntervalMinutes"
         static let hideArchivedProjects = "hideArchivedProjects"
         static let studioURLPreference = "studioURLPreference"
+        static let hideScrollbar = "hideScrollbar"
         static let presenceMode = "presenceMode"
         static let openStudioKeyCode = "openStudioKeyCode"
         static let openStudioModifierRawValue = "openStudioModifierRawValue"

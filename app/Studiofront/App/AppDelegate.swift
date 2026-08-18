@@ -362,7 +362,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         window.contentMinSize = NSSize(width: SettingsRootView.windowWidth, height: SettingsRootView.minHeight)
         window.contentMaxSize = NSSize(width: SettingsRootView.windowWidth, height: 10_000)
         window.appearance = settings.appearancePreference.nsAppearance
-        SettingsSplitViewTuner.removeSidebarToggleItems(from: window)
     }
 
     private func orderSettingsFront() {

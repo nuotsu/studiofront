@@ -8,6 +8,7 @@ enum SettingsSearchTarget: String, Hashable, CaseIterable {
     case refreshInterval
     case hideArchivedProjects
     case studioURLPreference
+    case hideScrollbar
     case presenceMode
     case menuBarIcon
     case theme
@@ -76,6 +77,13 @@ enum SettingsSearchIndex {
             pane: .general,
             target: .presenceMode,
             systemImage: "person.2"
+        ),
+        SettingsSearchItem(
+            title: "Hide scrollbar",
+            keywords: ["scrollbar", "scroll", "hide", "scroller"],
+            pane: .general,
+            target: .hideScrollbar,
+            systemImage: "computermouse"
         ),
         SettingsSearchItem(
             title: "Menubar icon",

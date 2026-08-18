@@ -37,20 +37,25 @@ struct GeneralSettingsView: View {
                     }
                     .settingsHighlight(.studioURLPreference)
 
-                    Toggle("Hide archived projects", isOn: $settings.hideArchivedProjects)
-                        .settingsHighlight(.hideArchivedProjects)
-                }
-
-                Section {
-                    Picker("Editor Avatars", selection: $settings.presenceMode) {
+                    Picker(selection: $settings.presenceMode) {
                         ForEach(PresenceMode.allCases) { mode in
                             Text(mode.title).tag(mode)
                         }
+                    } label: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Editor Avatars")
+                            Text(settings.presenceMode.caption)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                     .settingsHighlight(.presenceMode)
-                    Text(settings.presenceMode.caption)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+
+                    Toggle("Hide archived projects", isOn: $settings.hideArchivedProjects)
+                        .settingsHighlight(.hideArchivedProjects)
+
+                    Toggle("Hide scrollbar", isOn: $settings.hideScrollbar)
+                        .settingsHighlight(.hideScrollbar)
                 }
             }
             .formStyle(.grouped)

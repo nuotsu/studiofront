@@ -9,6 +9,8 @@ struct PopoverRootView: View {
     @Environment(\.openWindow) private var openWindow
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @FocusState private var searchFocused: Bool
+    @State private var avatarTooltip: AvatarTooltipDisplay?
+    @State private var avatarTooltipSize: CGSize = .zero
 
     var body: some View {
         @Bindable var store = store
@@ -24,6 +26,38 @@ struct PopoverRootView: View {
         .frame(maxHeight: metrics.popoverMaxHeight)
         .background(ThemedSurface())
         .clipShape(RoundedRectangle(cornerRadius: theme.cornerRadius(metrics.panelCornerRadius), style: theme.cornerStyle))
+        // Rendered here — an ancestor of `list`'s scroll view — rather than
+        // inside each row's avatar stack: a pinned section header gets an
+        // elevated compositing layer that no `.zIndex` inside a scrolled row
+        // can out-rank, so the tooltip has to sit outside that hierarchy
+        // entirely to draw above it. Resolving `AvatarTooltipAnchorKey`'s
+        // anchor via this overlay's own `GeometryProxy` (rather than manually
+        // diffing `.global` frames) lets SwiftUI do the coordinate-space
+        // conversion, so the tooltip lands correctly centered regardless of
+        // how deeply the hovered avatar is nested.
+        .overlayPreferenceValue(AvatarTooltipAnchorKey.self) { anchor in
+            GeometryReader { proxy in
+                if let anchor, let avatarTooltip {
+                    let avatarFrame = proxy[anchor]
+                    AvatarTooltip(name: avatarTooltip.name)
+                        .background(
+                            GeometryReader { tooltipProxy in
+                                Color.clear.preference(key: AvatarTooltipSizePreferenceKey.self, value: tooltipProxy.size)
+                            }
+                        )
+                        .position(
+                            x: avatarFrame.midX,
+                            y: avatarFrame.minY - avatarTooltipSize.height / 2 - 8
+                        )
+                        .transaction { $0.animation = nil }
+                        .opacity(avatarTooltip.isVisible ? 1 : 0)
+                        .animation(.easeOut(duration: 0.12), value: avatarTooltip.isVisible)
+                        .allowsHitTesting(false)
+                }
+            }
+        }
+        .onPreferenceChange(AvatarTooltipPreferenceKey.self) { avatarTooltip = $0 }
+        .onPreferenceChange(AvatarTooltipSizePreferenceKey.self) { avatarTooltipSize = $0 }
         .studioTheme(theme)
         .preferredColorScheme(settings.appearancePreference.colorScheme)
         .transaction { $0.disablesAnimations = true }
@@ -229,6 +263,7 @@ struct PopoverRootView: View {
                 }
                 .padding(.bottom, theme.metrics.listPadding.bottom)
             }
+            .scrollIndicators(settings.hideScrollbar ? .hidden : .automatic)
             .frame(maxHeight: theme.metrics.listMaxHeight)
             .onChange(of: store.selectedID) { _, id in
                 guard let id else { return }
@@ -279,4 +314,11 @@ struct PopoverRootView: View {
         return modifierGlyphs + [keyGlyph]
     }
 
+}
+
+private struct AvatarTooltipSizePreferenceKey: PreferenceKey {
+    static let defaultValue: CGSize = .zero
+    static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
+        value = nextValue()
+    }
 }

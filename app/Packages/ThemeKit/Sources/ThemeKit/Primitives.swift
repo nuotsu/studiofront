@@ -386,7 +386,6 @@ public struct AvatarStack: View {
     @State private var displayedItem: Item?
     @State private var isTooltipVisible = false
     @State private var avatarFrames: [String: CGRect] = [:]
-    @State private var tooltipSize: CGSize = .zero
     @State private var showTask: Task<Void, Never>?
 
     private static let coordinateSpaceName = "avatarStack"
@@ -425,6 +424,14 @@ public struct AvatarStack: View {
                             )
                         }
                     )
+                    // Reports this avatar's bounds as an `Anchor` (rather than a
+                    // resolved rect in some coordinate space) whenever it's the
+                    // one the tooltip should point at, so whichever ancestor
+                    // ends up rendering the tooltip can resolve it correctly
+                    // via its own `GeometryProxy` regardless of nesting/padding.
+                    .anchorPreference(key: AvatarTooltipAnchorKey.self, value: .bounds) { bounds in
+                        item.id == displayedItem?.id ? bounds : nil
+                    }
                 }
                 if overflow > 0 {
                     Text("+\(overflow)")
@@ -441,32 +448,18 @@ public struct AvatarStack: View {
             .onContinuousHover(coordinateSpace: .named(Self.coordinateSpaceName)) { phase in
                 handleHover(phase, visible: visible)
             }
-            // `.overlay` never contributes to this HStack's reported size, unlike a
-            // ZStack sibling — the tooltip can render (and stay retained through its
-            // fade-out) without permanently reserving space and pushing later
-            // siblings (Manage icon, Studio button) out of place.
-            .overlay(alignment: .topLeading) {
-                if let displayedItem, let frame = avatarFrames[displayedItem.id] {
-                    AvatarTooltip(name: displayedItem.name)
-                        .background(
-                            GeometryReader { proxy in
-                                Color.clear.preference(key: TooltipSizePreferenceKey.self, value: proxy.size)
-                            }
-                        )
-                        .offset(
-                            x: frame.midX - tooltipSize.width / 2,
-                            y: frame.minY - tooltipSize.height - 6
-                        )
-                        // Position always snaps regardless of any ambient
-                        // animation (e.g. the fade below) — only opacity animates.
-                        .transaction { $0.animation = nil }
-                        .opacity(isTooltipVisible ? 1 : 0)
-                        .allowsHitTesting(false)
-                        .zIndex(1000)
+            // The tooltip itself isn't rendered here: this stack sits inside a
+            // pinned-header `LazyVStack` row, and a pinned header gets an
+            // elevated compositing layer no in-row `.zIndex` can out-rank, so
+            // an ancestor above the scroll view (via `AvatarTooltipAnchorKey`
+            // above) renders it instead.
+            .preference(
+                key: AvatarTooltipPreferenceKey.self,
+                value: displayedItem.map { item in
+                    AvatarTooltipDisplay(name: item.name, isVisible: isTooltipVisible)
                 }
-            }
+            )
             .onPreferenceChange(AvatarFramePreferenceKey.self) { avatarFrames = $0 }
-            .onPreferenceChange(TooltipSizePreferenceKey.self) { tooltipSize = $0 }
         }
     }
 
@@ -536,6 +529,11 @@ public struct AvatarStack: View {
     }
 }
 
+private struct AvatarFrameInfo: Equatable {
+    var local: CGRect
+    var global: CGRect
+}
+
 private struct AvatarFramePreferenceKey: PreferenceKey {
     static let defaultValue: [String: CGRect] = [:]
     static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) {
@@ -543,19 +541,52 @@ private struct AvatarFramePreferenceKey: PreferenceKey {
     }
 }
 
-private struct TooltipSizePreferenceKey: PreferenceKey {
-    static let defaultValue: CGSize = .zero
-    static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
-        value = nextValue()
+/// The currently-hovered avatar's bounds, reported as an `Anchor` rather than
+/// a rect resolved in some fixed coordinate space, so whichever ancestor ends
+/// up rendering the tooltip (see `AvatarTooltipPreferenceKey`) can resolve it
+/// correctly via its own `GeometryProxy` regardless of nesting.
+public struct AvatarTooltipAnchorKey: PreferenceKey {
+    public static let defaultValue: Anchor<CGRect>? = nil
+    public static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) {
+        if let next = nextValue() {
+            value = next
+        }
     }
 }
 
-/// Custom (non-native) tooltip bubble for `AvatarStack`'s hover.
-private struct AvatarTooltip: View {
+/// What `AvatarStack` wants shown for its hover tooltip — reported via
+/// preference so an ancestor above the scroll view can render it (see the
+/// comment at the `.preference` call site in `AvatarStack.body`).
+public struct AvatarTooltipDisplay: Equatable, Sendable {
+    public var name: String
+    public var isVisible: Bool
+
+    public init(name: String, isVisible: Bool) {
+        self.name = name
+        self.isVisible = isVisible
+    }
+}
+
+public struct AvatarTooltipPreferenceKey: PreferenceKey {
+    public static let defaultValue: AvatarTooltipDisplay? = nil
+    public static func reduce(value: inout AvatarTooltipDisplay?, nextValue: () -> AvatarTooltipDisplay?) {
+        if let next = nextValue() {
+            value = next
+        }
+    }
+}
+
+/// Custom (non-native) tooltip bubble for `AvatarStack`'s hover. Rendered by
+/// an ancestor of the scroll view — see `AvatarTooltipPreferenceKey`.
+public struct AvatarTooltip: View {
     @Environment(\.studioTheme) private var theme
     var name: String
 
-    var body: some View {
+    public init(name: String) {
+        self.name = name
+    }
+
+    public var body: some View {
         Text(name)
             .font(.system(size: 11, weight: .medium))
             .foregroundStyle(theme.colors.text)
