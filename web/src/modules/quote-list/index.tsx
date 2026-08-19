@@ -59,7 +59,7 @@ export default function ({
 								/>
 
 								<dl>
-									<dt className="technical">{stegaClean(quote.author.name)}</dt>
+									<dt className="technical">{quote.author.name}</dt>
 									{quote.author?.title && (
 										<dd className="text-xs text-current/60">
 											{quote.author?.title}

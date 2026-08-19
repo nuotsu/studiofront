@@ -155,7 +155,7 @@
 }
 
 @utility technical {
-	@apply font-mono tracking-widest uppercase;
+	@apply font-mono uppercase;
 }
 
 /* ctas, links */

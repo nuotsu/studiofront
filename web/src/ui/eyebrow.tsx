@@ -1,4 +1,3 @@
-import { stegaClean } from 'next-sanity'
 import { cn } from '@/lib/utils'
 
 export default function ({
@@ -13,7 +12,7 @@ export default function ({
 			className={cn('technical eyebrow text-sm text-current/60', className)}
 			{...props}
 		>
-			{stegaClean(value)}
+			{value}
 		</p>
 	)
 }
