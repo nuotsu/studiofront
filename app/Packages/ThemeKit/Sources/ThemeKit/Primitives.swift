@@ -337,7 +337,7 @@ public struct SectionHeader: View {
         }
         .padding(.leading, 8 + theme.metrics.listPadding.leading)
         .padding(.trailing, 8 + theme.metrics.listPadding.trailing)
-        .padding(.top, 3)
+        .padding(.top, 6)
         .padding(.bottom, 3)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(backing)

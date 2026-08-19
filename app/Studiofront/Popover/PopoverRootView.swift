@@ -283,7 +283,7 @@ struct PopoverRootView: View {
             .overlay(alignment: .top) {
                 if theme.surface.kind == .glass {
                     GlassSurface(cornerRadius: 0, blendingMode: .withinWindow, preferSimpleMaterial: true)
-                        .frame(height: 32)
+                        .frame(height: 28)
                         .mask(
                             LinearGradient(
                                 stops: [
