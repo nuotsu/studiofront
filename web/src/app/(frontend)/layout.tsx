@@ -1,5 +1,5 @@
 import { VisualEditing } from 'next-sanity/visual-editing'
-import { Inter } from 'next/font/google'
+import { Geist_Mono, Inter } from 'next/font/google'
 import { draftMode } from 'next/headers'
 import { NuqsAdapter } from 'nuqs/adapters/next/app'
 import { Suspense } from 'react'
@@ -11,9 +11,8 @@ import Footer, { DynamicFooter } from '@/ui/footer'
 import Header, { DynamicHeader } from '@/ui/header'
 import '@/app.css'
 
-const fontSans = Inter({
-	subsets: ['latin'],
-})
+const fontSans = Inter({ subsets: ['latin'] })
+const fontMono = Geist_Mono({ subsets: ['latin'] })
 
 export default async function RootLayout({
 	children,

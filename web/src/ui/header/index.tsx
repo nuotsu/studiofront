@@ -9,6 +9,7 @@ import { getSite } from '@/sanity/lib/queries'
 import type { Cta } from '@/sanity/types'
 import CTAList from '@/ui/cta-list'
 import Logo from '@/ui/logo'
+import GithubStarCount from '../github-star-count'
 import css from './header.module.css'
 import MobileToggle from './mobile-toggle'
 import Navigation from './navigation'
@@ -67,8 +68,10 @@ async function CachedHeader({ perspective, stega }: DynamicFetchOptions) {
 
 							<CTAList
 								ctas={site?.ctas as Cta[]}
-								className="max-sm:w-full max-sm:*:w-full text-sm"
-							/>
+								className="text-sm max-sm:w-full max-sm:*:w-full"
+							>
+								<GithubStarCount className="order-first" />
+							</CTAList>
 						</div>
 					</div>
 				</div>

@@ -6,6 +6,7 @@ import SanityLink, { type SanityLinkType } from './sanity-link'
 export default function ({
 	ctas,
 	className,
+	children,
 }: {
 	ctas?: (Cta & { _key?: string })[]
 } & React.ComponentProps<'div'>) {
@@ -26,6 +27,8 @@ export default function ({
 					key={`${cta._key}-${i}`}
 				/>
 			))}
+
+			{children}
 		</div>
 	)
 }

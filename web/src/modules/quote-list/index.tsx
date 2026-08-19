@@ -45,7 +45,7 @@ export default function ({
 						className="bg-foreground/5 flex flex-col gap-4 p-4 md:snap-start"
 						key={quote._id}
 					>
-						<blockquote className="prose grow text-lg">
+						<blockquote className="prose grow text-lg/tight">
 							<PortableText value={quote.quote} />
 						</blockquote>
 
@@ -59,9 +59,11 @@ export default function ({
 								/>
 
 								<dl>
-									<dt>{quote.author.name}</dt>
+									<dt className="technical">{stegaClean(quote.author.name)}</dt>
 									{quote.author?.title && (
-										<dd className="text-xs">{quote.author?.title}</dd>
+										<dd className="text-xs text-current/60">
+											{quote.author?.title}
+										</dd>
 									)}
 								</dl>
 							</cite>
