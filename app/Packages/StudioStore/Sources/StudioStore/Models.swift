@@ -313,13 +313,6 @@ public enum GroupBy: String, CaseIterable, Identifiable, Sendable {
     case lastEdited
 
     public var id: Self { self }
-
-    public var title: String {
-        switch self {
-        case .organization: "Org"
-        case .lastEdited: "Last edited"
-        }
-    }
 }
 
 public enum RecencyBucket: String, CaseIterable, Sendable {

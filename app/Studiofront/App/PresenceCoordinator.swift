@@ -12,6 +12,8 @@ import StudioStore
 /// (§1, §7.1).
 @MainActor
 final class PresenceCoordinator {
+    private static let maxConnectedProjects = 40
+
     private let store: StudioStore
     private let settings: AppSettings
     private let client: SanityClient
@@ -25,6 +27,8 @@ final class PresenceCoordinator {
     /// rest of the popover session. Presence data never carries schema type
     /// (only a document id) — see `attachDeepLinks`.
     private var documentTypeCache: [String: [String: String]] = [:]
+    /// Per-project member roster for the open popover session.
+    private var rosterCache: [String: [Member]] = [:]
     private var isActive = false
 
     init(store: StudioStore, settings: AppSettings, client: SanityClient = .shared) {
@@ -72,6 +76,7 @@ final class PresenceCoordinator {
         forwardingTasks.removeAll()
         order.removeAll()
         documentTypeCache.removeAll()
+        rosterCache.removeAll()
         let outgoing = provider
         provider = nil
         Task { await outgoing?.stopAll() }
@@ -82,7 +87,7 @@ final class PresenceCoordinator {
     /// only point the eligible set can change while the popover stays open.
     func refreshEligibleProjects() {
         guard isActive, let provider else { return }
-        let ids = eligibleProjectIds()
+        let ids = store.eligibleProjectIDsForPresence(maxCount: Self.maxConnectedProjects)
 
         Task { await provider.start(projectIds: ids) }
 
@@ -103,6 +108,7 @@ final class PresenceCoordinator {
             forwardingTasks[id] = nil
             order[id] = nil
             documentTypeCache[id] = nil
+            rosterCache[id] = nil
             store.setActiveUsers([], forProjectID: id)
         }
     }
@@ -150,7 +156,9 @@ final class PresenceCoordinator {
         }
 
         let preferExternal = settings.studioURLPreference == .external
-        guard let studioURL = store.rows.first(where: { $0.id == id })?.resolvedStudioURL(preferExternal: preferExternal) else { return members }
+        let rowByID = Dictionary(uniqueKeysWithValues: store.rows.map { ($0.id, $0) })
+        guard let row = rowByID[id],
+              let studioURL = row.resolvedStudioURL(preferExternal: preferExternal) else { return members }
         return members.map { member in
             var member = member
             if let docId = member.currentDocumentId, let typeName = cache[docId] {
@@ -158,16 +166,6 @@ final class PresenceCoordinator {
             }
             return member
         }
-    }
-
-    /// Same eligibility as `ProjectSyncService.fetchActivity` (visible, not
-    /// hidden, not archived). No per-row viewport tracking exists in this
-    /// app, and search only narrows this same fixed set — so this already
-    /// satisfies "only projects renderable in the open popover" (§7.1).
-    private func eligibleProjectIds() -> [String] {
-        store.rows
-            .filter { !$0.curation.isHidden && !$0.isUnavailable && !$0.project.isArchived }
-            .map(\.id)
     }
 
     private func currentToken() async -> String? {
@@ -180,6 +178,9 @@ final class PresenceCoordinator {
     }
 
     private func roster(for projectId: String) async -> [Member] {
-        store.rows.first(where: { $0.id == projectId })?.project.members ?? []
+        if let cached = rosterCache[projectId] { return cached }
+        let roster = store.rows.first(where: { $0.id == projectId })?.project.members ?? []
+        rosterCache[projectId] = roster
+        return roster
     }
 }

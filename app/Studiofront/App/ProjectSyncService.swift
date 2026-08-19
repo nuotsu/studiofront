@@ -176,22 +176,33 @@ final class ProjectSyncService {
             var studioHosts: [String: String] = [:]
             var externalStudioHostsFromApps: [String: URL] = [:]
             var studioAppsByProject: [String: [StudioApp]] = [:]
-            for orgID in Set(remote.compactMap(\.organizationId)) {
+            let client = self.client
+            let orgIDs = Array(Set(remote.compactMap(\.organizationId)))
+            let orgLimit = SanityClient.datasetConcurrencyLimit
+            for start in stride(from: 0, to: orgIDs.count, by: orgLimit) {
                 try Task.checkCancellation()
-                guard let apps = try? await client.listStudioApplications(token: token, organizationId: orgID) else {
-                    continue
-                }
-                for app in apps {
-                    guard let projectId = app.projectId else { continue }
-                    studioAppsByProject[projectId, default: []].append(
-                        StudioApp(host: app.appHost, isExternal: app.isExternal, title: app.title)
-                    )
-                    if app.isExternal {
-                        if let url = URL(string: app.appHost) {
-                            externalStudioHostsFromApps[projectId] = url
+                let slice = Array(orgIDs[start..<min(start + orgLimit, orgIDs.count)])
+                await withTaskGroup(of: (String, [RemoteStudioApp]).self) { group in
+                    for orgID in slice {
+                        group.addTask {
+                            let apps = try? await client.listStudioApplications(token: token, organizationId: orgID)
+                            return (orgID, apps ?? [])
                         }
-                    } else {
-                        studioHosts[projectId] = app.appHost
+                    }
+                    for await (_, apps) in group {
+                        for app in apps {
+                            guard let projectId = app.projectId else { continue }
+                            studioAppsByProject[projectId, default: []].append(
+                                StudioApp(host: app.appHost, isExternal: app.isExternal, title: app.title)
+                            )
+                            if app.isExternal {
+                                if let url = URL(string: app.appHost) {
+                                    externalStudioHostsFromApps[projectId] = url
+                                }
+                            } else {
+                                studioHosts[projectId] = app.appHost
+                            }
+                        }
                     }
                 }
             }
@@ -201,7 +212,6 @@ final class ProjectSyncService {
             )
             let projectIDs = remote.map(\.id)
             let limit = SanityClient.datasetConcurrencyLimit
-            let client = self.client
             for start in stride(from: 0, to: projectIDs.count, by: limit) {
                 try Task.checkCancellation()
                 let end = min(start + limit, projectIDs.count)
@@ -233,8 +243,13 @@ final class ProjectSyncService {
             // moved, or access revoked) so the persisted snapshot doesn't grow forever.
             let validProjectIDs = Set(projectIDs)
             snapshot.etags = snapshot.etags.filter { key, _ in
-                guard key.hasPrefix("datasets:") else { return true }
-                return validProjectIDs.contains(String(key.dropFirst("datasets:".count)))
+                if key.hasPrefix("datasets:") {
+                    return validProjectIDs.contains(String(key.dropFirst("datasets:".count)))
+                }
+                if key.hasPrefix("activity:") {
+                    return validProjectIDs.contains(String(key.dropFirst("activity:".count)))
+                }
+                return true
             }
             snapshot.activity = snapshot.activity.filter { validProjectIDs.contains($0.key) }
 
@@ -307,7 +322,10 @@ final class ProjectSyncService {
             snapshot.curationByUser[userID] = curation
 
             let curationByID = Dictionary(uniqueKeysWithValues: curation.map { ($0.projectId, $0) })
-            let eligibleIDs = projectIDs.filter { !(curationByID[$0]?.isHidden ?? false) }
+            let eligibleIDs = remote.filter { project in
+                !(curationByID[project.id]?.isHidden ?? false)
+                    && !(store.hideArchivedProjects && project.isArchived)
+            }.map(\.id)
             let preferExternal = settings.studioURLPreference == .external
             let studioURLByProject = Dictionary(uniqueKeysWithValues: snapshot.projects.compactMap { project in
                 project.resolvedStudioURL(preferExternal: preferExternal).map { (project.id, $0) }
@@ -317,7 +335,8 @@ final class ProjectSyncService {
                 projectIDs: eligibleIDs,
                 datasetsByProject: datasetsByProject,
                 studioURLByProject: studioURLByProject,
-                previous: snapshot.activity
+                previous: snapshot.activity,
+                force: force
             )
 
             guard generation == refreshGeneration else { return }
@@ -346,7 +365,8 @@ final class ProjectSyncService {
         projectIDs: [String],
         datasetsByProject: [String: [Dataset]],
         studioURLByProject: [String: URL],
-        previous: [String: ProjectActivity]
+        previous: [String: ProjectActivity],
+        force: Bool
     ) async -> [String: ProjectActivity] {
         var result = previous
         let limit = SanityClient.datasetConcurrencyLimit
@@ -355,16 +375,21 @@ final class ProjectSyncService {
             if Task.isCancelled { break }
             let end = min(start + limit, projectIDs.count)
             let slice = Array(projectIDs[start..<end])
-            await withTaskGroup(of: (String, ProjectActivity?).self) { group in
+            await withTaskGroup(of: (String, ProjectActivity?, String?).self) { group in
                 for id in slice {
                     guard let dataset = Self.primaryDataset(from: datasetsByProject[id] ?? []) else { continue }
+                    let etag = force ? nil : snapshot.etags["activity:\(id)"]
                     group.addTask {
                         do {
                             let conditional = try await client.recentEditedDocuments(
                                 token: token,
                                 projectId: id,
-                                dataset: dataset
+                                dataset: dataset,
+                                etag: etag
                             )
+                            if conditional.notModified {
+                                return (id, nil, conditional.etag)
+                            }
                             let docs: [RemoteEditedDocument] = conditional.value ?? []
                             let recentDocuments = docs.map { doc in
                                 EditedDocument(
@@ -380,17 +405,20 @@ final class ProjectSyncService {
                             return (id, ProjectActivity(
                                 lastEditedDocument: recentDocuments.first,
                                 recentDocuments: recentDocuments
-                            ))
+                            ), conditional.etag)
                         } catch is CancellationError {
-                            return (id, nil)
+                            return (id, nil, nil)
                         } catch SanityError.cancelled {
-                            return (id, nil)
+                            return (id, nil, nil)
                         } catch {
-                            return (id, ProjectActivity())
+                            return (id, ProjectActivity(), nil)
                         }
                     }
                 }
-                for await (id, activity) in group {
+                for await (id, activity, etag) in group {
+                    if let etag {
+                        snapshot.etags["activity:\(id)"] = etag
+                    }
                     if let activity {
                         result[id] = activity
                     }

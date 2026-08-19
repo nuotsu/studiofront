@@ -32,6 +32,20 @@ public final class StudioStore {
 
     private var copyResetTask: Task<Void, Never>?
 
+    private struct ListState {
+        var visibleRows: [ProjectRow]
+        var groups: [ProjectGroup]
+        var flatVisibleIDs: [String]
+        var favoriteIndexByID: [String: Int]
+    }
+
+    private var listStateGeneration = 0
+    private var cachedListStateGeneration: Int?
+    private var cachedListState: ListState?
+
+    private var normalizedQuerySource = ""
+    private var normalizedQueryNeedle = ""
+
     public init(
         rows: [ProjectRow] = [],
         organizations: [OrganizationRecord] = []
@@ -44,7 +58,7 @@ public final class StudioStore {
     public var totalCount: Int { rows.filter { !$0.curation.isHidden && !isArchivedAndHidden($0) }.count }
 
     public var visibleRows: [ProjectRow] {
-        rows.filter { !$0.curation.isHidden && !isArchivedAndHidden($0) && matches($0) }
+        listState().visibleRows
     }
 
     private func isArchivedAndHidden(_ row: ProjectRow) -> Bool {
@@ -70,19 +84,131 @@ public final class StudioStore {
     }
 
     /// 1-based Cmd+N legend index for every current favorite, keyed by row id.
-    /// Callers rendering many rows should read this once per list build rather than
-    /// calling `favoriteIndex(forRowID:)` per row, which would recompute `sortedFavorites`
-    /// (a full filter + sort over all rows) for every row instead of once for the list.
     public var favoriteIndexByID: [String: Int] {
-        var map: [String: Int] = [:]
-        for (index, row) in sortedFavorites.enumerated() where index < 9 {
-            map[row.id] = index + 1
-        }
-        return map
+        listState().favoriteIndexByID
     }
 
     public var groups: [ProjectGroup] {
-        let visible = visibleRows
+        listState().groups
+    }
+
+    public var flatVisibleIDs: [String] {
+        listState().flatVisibleIDs
+    }
+
+    /// Projects eligible for presence connections and live document search fan-out.
+    public func eligibleProjectIDs(respectingArchivedSetting: Bool = true) -> [String] {
+        rows
+            .filter { row in
+                !row.curation.isHidden
+                    && !row.isUnavailable
+                    && !(respectingArchivedSetting && hideArchivedProjects && row.project.isArchived)
+            }
+            .map(\.id)
+    }
+
+    /// Eligible projects capped by recency — limits presence/socket fan-out on large accounts.
+    public func eligibleProjectIDsForPresence(maxCount: Int = 40) -> [String] {
+        let eligible = Set(eligibleProjectIDs())
+        let sorted = rows
+            .filter { eligible.contains($0.id) }
+            .sorted { lhs, rhs in
+                switch (lhs.activity.lastEditedDocument?.editedAt, rhs.activity.lastEditedDocument?.editedAt) {
+                case let (l?, r?): return l > r
+                case (.some, .none): return true
+                case (.none, .some): return false
+                case (.none, .none): return false
+                }
+            }
+        return Array(sorted.prefix(maxCount).map(\.id))
+    }
+
+    /// Cached document title matches from recent activity — used to skip network search when sufficient.
+    public func cachedDocumentMatches(for row: ProjectRow) -> [EditedDocument] {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
+        return cachedTitleMatches(for: row, needle: normalizedSearchNeedle)
+    }
+
+    public func noteQueryChanged() {
+        invalidateListCache()
+    }
+
+    public func noteGroupByChanged() {
+        invalidateListCache()
+    }
+
+    public func noteHideArchivedChanged() {
+        invalidateListCache()
+    }
+
+    public func clearDocumentSearchState() {
+        liveDocumentMatchesByProject = [:]
+        searchingProjectIDs = []
+        invalidateListCache()
+    }
+
+    public func setSearchingProjectIDs(_ ids: Set<String>) {
+        searchingProjectIDs = ids
+        invalidateListCache()
+    }
+
+    /// Applies live search results in one observable update per batch.
+    public func applyDocumentSearchBatch(
+        updates: [String: [EditedDocument]],
+        completedProjectIDs: Set<String>
+    ) {
+        guard !updates.isEmpty || !completedProjectIDs.isEmpty else { return }
+        if !updates.isEmpty {
+            liveDocumentMatchesByProject.merge(updates) { _, new in new }
+        }
+        if !completedProjectIDs.isEmpty {
+            searchingProjectIDs.subtract(completedProjectIDs)
+        }
+        invalidateListCache()
+    }
+
+    private func listState() -> ListState {
+        if cachedListStateGeneration == listStateGeneration, let cached = cachedListState {
+            return cached
+        }
+
+        let visible = computeVisibleRows()
+        let groups = computeGroups(from: visible)
+        let flatVisibleIDs = groups.flatMap { $0.items.map(\.id) }
+        var favoriteIndexByID: [String: Int] = [:]
+        for (index, row) in sortedFavorites(from: visible).enumerated() where index < 9 {
+            favoriteIndexByID[row.id] = index + 1
+        }
+
+        let state = ListState(
+            visibleRows: visible,
+            groups: groups,
+            flatVisibleIDs: flatVisibleIDs,
+            favoriteIndexByID: favoriteIndexByID
+        )
+        cachedListState = state
+        cachedListStateGeneration = listStateGeneration
+        return state
+    }
+
+    private func invalidateListCache() {
+        listStateGeneration += 1
+    }
+
+    private var normalizedSearchNeedle: String {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        if normalizedQuerySource == trimmed { return normalizedQueryNeedle }
+        normalizedQuerySource = trimmed
+        normalizedQueryNeedle = normalize(trimmed)
+        return normalizedQueryNeedle
+    }
+
+    private func computeVisibleRows() -> [ProjectRow] {
+        rows.filter { !$0.curation.isHidden && !isArchivedAndHidden($0) && matches($0) }
+    }
+
+    private func computeGroups(from visible: [ProjectRow]) -> [ProjectGroup] {
         var result: [ProjectGroup] = []
 
         let favorites = sortedFavorites(from: visible)
@@ -159,12 +285,12 @@ public final class StudioStore {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
         if searchingProjectIDs.contains(row.id) {
-            return cachedTitleMatches(for: row, needle: normalize(trimmed))
+            return cachedTitleMatches(for: row, needle: normalizedSearchNeedle)
         }
         if let live = liveDocumentMatchesByProject[row.id] {
             return live
         }
-        return cachedTitleMatches(for: row, needle: normalize(trimmed))
+        return cachedTitleMatches(for: row, needle: normalizedSearchNeedle)
     }
 
     private func cachedTitleMatches(for row: ProjectRow, needle: String) -> [EditedDocument] {
@@ -201,10 +327,6 @@ public final class StudioStore {
         }
     }
 
-    public var flatVisibleIDs: [String] {
-        groups.flatMap { $0.items.map(\.id) }
-    }
-
     public var selectedListItem: PopoverListItem? {
         guard let selectedID else { return nil }
         for group in groups {
@@ -232,6 +354,7 @@ public final class StudioStore {
         } else {
             selectedID = rows.first(where: { $0.curation.isFavorite })?.id ?? rows.first?.id
         }
+        invalidateListCache()
         reconcileSelection()
         onRowsReplaced?()
     }
@@ -241,7 +364,7 @@ public final class StudioStore {
     }
 
     /// Updates one row's live presence in place, distinct from `replaceRows`,
-    /// so a presence push never disturbs selection/scroll reconciliation.
+    /// so a presence push never disturbs selection/scroll reconciliation or list derivation.
     public func setActiveUsers(_ members: [Member], forProjectID id: String) {
         guard let index = rows.firstIndex(where: { $0.id == id }) else { return }
         rows[index].activity.activeUsers = members
@@ -291,6 +414,7 @@ public final class StudioStore {
         var row = rows[index]
         row.curation.isFavorite.toggle()
         rows[index] = row
+        invalidateListCache()
         reconcileSelection()
         onCurationChanged?()
     }
@@ -304,6 +428,7 @@ public final class StudioStore {
         let all = GroupBy.allCases
         guard let index = all.firstIndex(of: groupBy) else { return }
         groupBy = all[(index + 1) % all.count]
+        invalidateListCache()
     }
 
     public func isOrganizationFavorite(_ id: String) -> Bool {
@@ -315,21 +440,14 @@ public final class StudioStore {
             var org = organizations[index]
             org.isFavorite.toggle()
             organizations[index] = org
+            invalidateListCache()
             onCurationChanged?()
             return
         }
         let name = rows.first(where: { $0.project.organizationId == id })?.project.organizationName ?? id
         organizations.append(OrganizationRecord(id: id, name: name, isFavorite: true))
+        invalidateListCache()
         onCurationChanged?()
-    }
-
-    /// 1-based Cmd+N legend index for a row, or nil if it's not a favorite or falls
-    /// beyond the Cmd+1...Cmd+9 range. Reads `sortedFavorites` directly (rather than
-    /// having callers pass down a position computed elsewhere) so the legend can't
-    /// go stale relative to the underlying favorite/order state.
-    public func favoriteIndex(forRowID id: String) -> Int? {
-        guard let index = sortedFavorites.firstIndex(where: { $0.id == id }), index < 9 else { return nil }
-        return index + 1
     }
 
     public func jumpToFavorite(_ oneBasedIndex: Int) {
@@ -368,6 +486,8 @@ public final class StudioStore {
     public func clearQueryOrSignalDismiss() -> Bool {
         if !query.isEmpty {
             query = ""
+            clearDocumentSearchState()
+            invalidateListCache()
             reconcileSelection()
             return false
         }
@@ -392,7 +512,7 @@ public final class StudioStore {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return true }
         if !(liveDocumentMatchesByProject[row.id] ?? []).isEmpty { return true }
-        let needle = normalize(trimmed)
+        let needle = normalizedSearchNeedle
         let fields: [String] = [
             row.displayTitle,
             row.project.displayName,

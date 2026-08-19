@@ -74,14 +74,17 @@ struct PopoverRootView: View {
             searchFocused = true
         }
         .onChange(of: store.query) { _, newValue in
+            store.noteQueryChanged()
             store.reconcileSelection()
             AppDelegate.shared?.documentSearch.queryDidChange(newValue)
         }
         .onChange(of: store.groupBy) { _, _ in
+            store.noteGroupByChanged()
             store.reconcileSelection()
         }
         .onChange(of: settings.hideArchivedProjects) { _, hide in
             store.hideArchivedProjects = hide
+            store.noteHideArchivedChanged()
             store.reconcileSelection()
         }
         .onChange(of: settings.appearancePreference) { _, preference in
@@ -225,10 +228,10 @@ struct PopoverRootView: View {
 
     private var list: some View {
         let theme = settings.resolvedTheme
+        let groups = store.groups
+        let favoriteIndexByID = store.favoriteIndexByID
         return ScrollViewReader { proxy in
             ScrollView {
-                let groups = store.groups
-                let favoriteIndexByID = store.favoriteIndexByID
                 LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
                     ForEach(Array(groups.enumerated()), id: \.element.id) { index, group in
                         Section {
@@ -261,7 +264,7 @@ struct PopoverRootView: View {
                                 Color.clear.frame(height: 4)
                             }
                         } header: {
-                            let isGlassPinned = theme.surface.kind == .glass && pinnedGroup?.id == group.id
+                            let isGlassPinned = theme.surface.kind == .glass && pinnedGroup(in: groups)?.id == group.id
                             organizationSectionHeader(for: group)
                                 .opacity(isGlassPinned ? 0 : 1)
                                 .allowsHitTesting(!isGlassPinned)
@@ -310,7 +313,7 @@ struct PopoverRootView: View {
                 }
             }
             .overlay(alignment: .top) {
-                if theme.surface.kind == .glass, let group = pinnedGroup {
+                if theme.surface.kind == .glass, let group = pinnedGroup(in: groups) {
                     organizationSectionHeader(for: group)
                 }
             }
@@ -329,8 +332,8 @@ struct PopoverRootView: View {
         }
     }
 
-    private var pinnedGroup: ProjectGroup? {
-        store.groups.last { (headerMinYs[$0.id] ?? .greatestFiniteMagnitude) <= 1 }
+    private func pinnedGroup(in groups: [ProjectGroup]) -> ProjectGroup? {
+        groups.last { (headerMinYs[$0.id] ?? .greatestFiniteMagnitude) <= 1 }
     }
 
     private func organizationSectionHeader(for group: ProjectGroup) -> SectionHeader {

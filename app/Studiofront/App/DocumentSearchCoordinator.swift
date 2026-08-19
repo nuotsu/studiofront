@@ -14,6 +14,8 @@ final class DocumentSearchCoordinator {
     /// worth a live fan-out across every eligible project.
     private static let minimumQueryLength = 2
     private static let debounceDelay: Duration = .milliseconds(280)
+    /// When many projects are eligible, cap remote GROQ fan-out to the most recently edited.
+    private static let remoteSearchCap = 40
 
     private let store: StudioStore
     private let settings: AppSettings
@@ -21,6 +23,7 @@ final class DocumentSearchCoordinator {
 
     private var debounceTask: Task<Void, Never>?
     private var generation = 0
+    private var sessionCache: [String: [String: [EditedDocument]]] = [:]
 
     init(store: StudioStore, settings: AppSettings, client: SanityClient = .shared) {
         self.store = store
@@ -36,8 +39,7 @@ final class DocumentSearchCoordinator {
 
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.count >= Self.minimumQueryLength else {
-            store.liveDocumentMatchesByProject = [:]
-            store.searchingProjectIDs = []
+            store.clearDocumentSearchState()
             return
         }
 
@@ -55,24 +57,58 @@ final class DocumentSearchCoordinator {
         generation += 1
         debounceTask?.cancel()
         debounceTask = nil
-        store.liveDocumentMatchesByProject = [:]
-        store.searchingProjectIDs = []
+        sessionCache.removeAll()
+        store.clearDocumentSearchState()
     }
 
     private func runSearch(text: String, generation: Int) async {
         guard let token = try? TokenStore.shared.load(), !token.isEmpty else { return }
-        let ids = eligibleProjectIds()
-        guard !ids.isEmpty else { return }
 
-        store.liveDocumentMatchesByProject = [:]
-        store.searchingProjectIDs = Set(ids)
+        if let cached = sessionCache[text] {
+            store.applyDocumentSearchBatch(updates: cached, completedProjectIDs: Set(cached.keys))
+            return
+        }
+
+        store.clearDocumentSearchState()
+
+        let eligibleIDs = store.eligibleProjectIDs()
+        guard !eligibleIDs.isEmpty else { return }
+
+        var remoteIDs: [String] = []
+        var localUpdates: [String: [EditedDocument]] = [:]
+        for id in eligibleIDs {
+            guard let row = store.rows.first(where: { $0.id == id }) else { continue }
+            let local = store.cachedDocumentMatches(for: row)
+            if !local.isEmpty {
+                localUpdates[id] = local
+            } else {
+                remoteIDs.append(id)
+            }
+        }
+
+        if remoteIDs.count > Self.remoteSearchCap {
+            let capped = Set(store.eligibleProjectIDsForPresence(maxCount: Self.remoteSearchCap))
+            remoteIDs = remoteIDs.filter { capped.contains($0) }
+        }
+
+        store.applyDocumentSearchBatch(updates: localUpdates, completedProjectIDs: Set(localUpdates.keys))
+        store.setSearchingProjectIDs(Set(remoteIDs))
+
+        guard !remoteIDs.isEmpty else {
+            sessionCache[text] = localUpdates
+            return
+        }
 
         let limit = SanityClient.datasetConcurrencyLimit
         let client = self.client
         let preferExternal = settings.studioURLPreference == .external
-        for start in stride(from: 0, to: ids.count, by: limit) {
+        var allUpdates = localUpdates
+
+        for start in stride(from: 0, to: remoteIDs.count, by: limit) {
             guard generation == self.generation else { return }
-            let slice = Array(ids[start..<min(start + limit, ids.count)])
+            let slice = Array(remoteIDs[start..<min(start + limit, remoteIDs.count)])
+            var batchUpdates: [String: [EditedDocument]] = [:]
+
             await withTaskGroup(of: (String, [RemoteEditedDocument]).self) { group in
                 for id in slice {
                     guard let dataset = primaryDataset(for: id) else { continue }
@@ -89,7 +125,7 @@ final class DocumentSearchCoordinator {
                 for await (id, docs) in group {
                     guard generation == self.generation else { continue }
                     let studioURL = store.rows.first(where: { $0.id == id })?.resolvedStudioURL(preferExternal: preferExternal)
-                    store.liveDocumentMatchesByProject[id] = docs.map { doc in
+                    batchUpdates[id] = docs.map { doc in
                         EditedDocument(
                             id: doc.id,
                             title: doc.title,
@@ -100,18 +136,14 @@ final class DocumentSearchCoordinator {
                             }
                         )
                     }
-                    store.searchingProjectIDs.remove(id)
                 }
             }
-        }
-    }
 
-    /// Same eligibility `PresenceCoordinator`/`ProjectSyncService.fetchActivity`
-    /// use: visible, not hidden, not archived.
-    private func eligibleProjectIds() -> [String] {
-        store.rows
-            .filter { !$0.curation.isHidden && !$0.isUnavailable && !$0.project.isArchived }
-            .map(\.id)
+            allUpdates.merge(batchUpdates) { _, new in new }
+            store.applyDocumentSearchBatch(updates: batchUpdates, completedProjectIDs: Set(slice))
+        }
+
+        sessionCache[text] = allUpdates
     }
 
     private func primaryDataset(for projectId: String) -> String? {

@@ -90,7 +90,6 @@ public struct TypographyTokens: @unchecked Sendable {
     public var chip: Font
     public var button: Font
     public var avatar: Font
-    public var typeBadge: Font
     public var presence: Font
     public var shortcut: Font
 
@@ -105,7 +104,6 @@ public struct TypographyTokens: @unchecked Sendable {
         chip: Font = .system(size: 9, weight: .medium, design: .monospaced),
         button: Font = .system(size: 10, weight: .semibold),
         avatar: Font = .system(size: 10, weight: .bold),
-        typeBadge: Font = .system(size: 7.5, weight: .bold, design: .monospaced),
         presence: Font = .system(size: 7.5, weight: .bold),
         shortcut: Font = .system(size: 9, weight: .semibold, design: .monospaced)
     ) {
@@ -119,7 +117,6 @@ public struct TypographyTokens: @unchecked Sendable {
         self.chip = chip
         self.button = button
         self.avatar = avatar
-        self.typeBadge = typeBadge
         self.presence = presence
         self.shortcut = shortcut
     }
@@ -138,8 +135,6 @@ public struct MetricTokens: @unchecked Sendable {
     public var starColumnWidth: CGFloat
     public var iconButtonSize: CGSize
     public var iconButtonCornerRadius: CGFloat
-    public var typeBadgeSize: CGFloat
-    public var typeBadgeCornerRadius: CGFloat
     public var presenceSize: CGFloat
     public var searchFieldCornerRadius: CGFloat
     public var headerPadding: EdgeInsets
@@ -159,8 +154,6 @@ public struct MetricTokens: @unchecked Sendable {
         starColumnWidth: CGFloat = 15,
         iconButtonSize: CGSize = CGSize(width: 24, height: 23),
         iconButtonCornerRadius: CGFloat = 6,
-        typeBadgeSize: CGFloat = 13,
-        typeBadgeCornerRadius: CGFloat = 3,
         presenceSize: CGFloat = 16,
         searchFieldCornerRadius: CGFloat = 8,
         headerPadding: EdgeInsets = EdgeInsets(top: 11, leading: 12, bottom: 10, trailing: 12),
@@ -179,8 +172,6 @@ public struct MetricTokens: @unchecked Sendable {
         self.starColumnWidth = starColumnWidth
         self.iconButtonSize = iconButtonSize
         self.iconButtonCornerRadius = iconButtonCornerRadius
-        self.typeBadgeSize = typeBadgeSize
-        self.typeBadgeCornerRadius = typeBadgeCornerRadius
         self.presenceSize = presenceSize
         self.searchFieldCornerRadius = searchFieldCornerRadius
         self.headerPadding = headerPadding

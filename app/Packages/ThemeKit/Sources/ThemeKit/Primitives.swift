@@ -606,30 +606,6 @@ public struct AvatarTooltip: View {
     }
 }
 
-public struct TypeBadge: View {
-    @Environment(\.studioTheme) private var theme
-    var typeName: String
-
-    public init(typeName: String) {
-        self.typeName = typeName
-    }
-
-    public var body: some View {
-        let letter = String(typeName.prefix(1)).uppercased()
-        Text(letter)
-            .font(theme.typography.typeBadge)
-            .foregroundStyle(theme.colors.faint)
-            .frame(width: theme.metrics.typeBadgeSize, height: theme.metrics.typeBadgeSize)
-            .background(theme.colors.chipBackground)
-            .overlay(
-                RoundedRectangle(cornerRadius: theme.cornerRadius(theme.metrics.typeBadgeCornerRadius), style: theme.cornerStyle)
-                    .strokeBorder(theme.colors.chipBorder, lineWidth: 1)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: theme.cornerRadius(theme.metrics.typeBadgeCornerRadius), style: theme.cornerStyle))
-            .accessibilityLabel("Schema type: \(typeName)")
-    }
-}
-
 public struct SearchFieldChrome<Content: View>: View {
     @Environment(\.studioTheme) private var theme
     @ViewBuilder var content: () -> Content

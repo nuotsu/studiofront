@@ -453,7 +453,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
 
     func popoverDidClose(_ notification: Notification) {
         removeKeyMonitor()
-        sync.cancel()
         presence.willHide()
         documentSearch.willHide()
         DispatchQueue.main.async { [weak self] in

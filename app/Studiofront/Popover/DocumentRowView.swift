@@ -19,7 +19,7 @@ struct DocumentRowView: View {
         let metrics = theme.metrics
         RowContainer(isSelected: isSelected, isHovered: isHovered) {
             HStack(alignment: .center, spacing: metrics.rowGap) {
-                favoriteButton
+                ProjectRowFavoriteButton(projectID: row.id, isFavorite: row.curation.isFavorite)
                 Button {
                     if let url = document.deepLinkURL {
                         AppDelegate.shared?.openURL(url)
@@ -43,7 +43,7 @@ struct DocumentRowView: View {
                 }
                 identity
                 Spacer(minLength: 8)
-                trailing
+                ProjectRowTrailingActions(row: row)
             }
         }
         .contentShape(Rectangle())
@@ -58,33 +58,7 @@ struct DocumentRowView: View {
     }
 
     private var faviconHost: String? {
-        if let frontendHost = row.curation.primaryFrontendURL?.host, !frontendHost.isEmpty {
-            return frontendHost
-        }
-        if let externalHost = row.project.externalStudioHost?.host, !externalHost.isEmpty {
-            return externalHost
-        }
-        if let studioHost = row.project.studioHost, !studioHost.isEmpty {
-            return "\(studioHost).sanity.studio"
-        }
-        return nil
-    }
-
-    private var isFavorite: Bool {
-        row.curation.isFavorite
-    }
-
-    private var favoriteButton: some View {
-        Button {
-            store.toggleFavorite(row.id)
-        } label: {
-            Image(systemName: isFavorite ? "star.fill" : "star")
-                .font(.system(size: 11))
-                .foregroundStyle(isFavorite ? theme.colors.star : theme.colors.faint)
-                .frame(width: theme.metrics.starColumnWidth)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(isFavorite ? "Remove from favorites" : "Add to favorites")
+        ProjectRowChrome.faviconHost(for: row)
     }
 
     private var identity: some View {
@@ -124,60 +98,6 @@ struct DocumentRowView: View {
             .accessibilityLabel("Open Studio, \(row.displayTitle)")
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var trailing: some View {
-        HStack(spacing: 11) {
-            AvatarStack(
-                items: row.activity.activeUsers.map { member in
-                    AvatarStack.Item(
-                        id: member.id,
-                        name: member.displayName,
-                        initials: member.initials,
-                        color: PresenceSwatch.color(for: member.id),
-                        imageURL: member.imageURL,
-                        deepLinkURL: member.deepLinkURL
-                    )
-                },
-                onSelect: { item in
-                    if let url = item.deepLinkURL {
-                        AppDelegate.shared?.openURL(url)
-                    }
-                }
-            )
-
-            HStack(spacing: 5) {
-                if let site = row.curation.primaryFrontendURL {
-                    IconButton(systemName: "globe", accessibilityLabel: "Open frontend") {
-                        AppDelegate.shared?.openURL(site)
-                    }
-                }
-                if let manage = row.project.manageURL {
-                    IconButton(imageName: "MasterDetail", accessibilityLabel: "Open in Sanity Manage") {
-                        AppDelegate.shared?.openURL(manage)
-                    }
-                }
-                studioButton
-            }
-        }
-    }
-
-    private var studioButton: some View {
-        let menuItems: [SplitPrimaryButton.MenuItem] = row.project.studioApps.compactMap { app in
-            guard let url = app.resolvedURL else { return nil }
-            let label = app.title ?? (app.isExternal ? (url.host ?? app.host) : "\(app.host).sanity.studio")
-            return SplitPrimaryButton.MenuItem(id: app.id, title: label) {
-                AppDelegate.shared?.openURL(url)
-            }
-        }
-
-        return Group {
-            if menuItems.count > 1 {
-                SplitPrimaryButton("Studio", action: openStudio, menuItems: menuItems)
-            } else {
-                PrimaryButton("Studio", action: openStudio)
-            }
-        }
     }
 
     private func openStudio() {
