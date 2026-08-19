@@ -42,7 +42,7 @@ export default function ({
 			>
 				{(quotes as unknown as Quote[])?.map((quote) => (
 					<article
-						className="bg-foreground/5 flex flex-col gap-4 border p-4 md:snap-start"
+						className="bg-foreground/5 flex flex-col gap-4 p-4 md:snap-start"
 						key={quote._id}
 					>
 						<blockquote className="prose grow text-lg">
