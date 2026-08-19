@@ -346,8 +346,7 @@ public struct SectionHeader: View {
     @ViewBuilder
     private var backing: some View {
         if theme.surface.kind == .glass {
-            GlassSurface(cornerRadius: 0, blendingMode: .withinWindow, preferSimpleMaterial: true)
-                .allowsHitTesting(false)
+            Color.clear
         } else {
             theme.colors.panelFill
         }

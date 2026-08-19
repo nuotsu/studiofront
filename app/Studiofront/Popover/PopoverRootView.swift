@@ -11,6 +11,7 @@ struct PopoverRootView: View {
     @FocusState private var searchFocused: Bool
     @State private var avatarTooltip: AvatarTooltipDisplay?
     @State private var avatarTooltipSize: CGSize = .zero
+    @State private var headerMinYs: [String: CGFloat] = [:]
 
     var body: some View {
         @Bindable var store = store
@@ -249,19 +250,19 @@ struct PopoverRootView: View {
                                 Color.clear.frame(height: 4)
                             }
                         } header: {
-                            SectionHeader(
-                                title: group.title,
-                                itemCount: group.items.count,
-                                accessory: group.organizationId,
-                                accessoryCopied: store.copiedOrganizationID == group.organizationId,
-                                onAccessory: group.organizationId.map { id in
-                                    { store.copyOrganizationID(id) }
-                                },
-                                isFavorite: group.organizationId.map(store.isOrganizationFavorite),
-                                onToggleFavorite: group.organizationId.map { id in
-                                    { store.toggleOrganizationFavorite(id) }
+                            let isGlassPinned = theme.surface.kind == .glass && pinnedGroup?.id == group.id
+                            organizationSectionHeader(for: group)
+                                .opacity(isGlassPinned ? 0 : 1)
+                                .allowsHitTesting(!isGlassPinned)
+                                .accessibilityHidden(isGlassPinned)
+                                .background {
+                                    GeometryReader { proxy in
+                                        Color.clear.preference(
+                                            key: SectionHeaderMinYKey.self,
+                                            value: [group.id: proxy.frame(in: .named("projectList")).minY]
+                                        )
+                                    }
                                 }
-                            )
                         }
                     }
 
@@ -278,6 +279,31 @@ struct PopoverRootView: View {
                 .padding(.bottom, theme.metrics.listPadding.bottom)
             }
             .scrollIndicators(settings.hideScrollbar ? .hidden : .automatic)
+            .coordinateSpace(name: "projectList")
+            .overlay(alignment: .top) {
+                if theme.surface.kind == .glass {
+                    GlassSurface(cornerRadius: 0, blendingMode: .withinWindow, preferSimpleMaterial: true)
+                        .frame(height: 32)
+                        .mask(
+                            LinearGradient(
+                                stops: [
+                                    .init(color: .black, location: 0),
+                                    .init(color: .black, location: 0.45),
+                                    .init(color: .clear, location: 1),
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .allowsHitTesting(false)
+                }
+            }
+            .overlay(alignment: .top) {
+                if theme.surface.kind == .glass, let group = pinnedGroup {
+                    organizationSectionHeader(for: group)
+                }
+            }
+            .onPreferenceChange(SectionHeaderMinYKey.self) { headerMinYs = $0 }
             .frame(maxHeight: theme.metrics.listMaxHeight)
             .onChange(of: store.selectedID) { _, id in
                 guard let id else { return }
@@ -290,6 +316,26 @@ struct PopoverRootView: View {
                 }
             }
         }
+    }
+
+    private var pinnedGroup: ProjectGroup? {
+        store.groups.last { (headerMinYs[$0.id] ?? .greatestFiniteMagnitude) <= 1 }
+    }
+
+    private func organizationSectionHeader(for group: ProjectGroup) -> SectionHeader {
+        SectionHeader(
+            title: group.title,
+            itemCount: group.items.count,
+            accessory: group.organizationId,
+            accessoryCopied: store.copiedOrganizationID == group.organizationId,
+            onAccessory: group.organizationId.map { id in
+                { store.copyOrganizationID(id) }
+            },
+            isFavorite: group.organizationId.map(store.isOrganizationFavorite),
+            onToggleFavorite: group.organizationId.map { id in
+                { store.toggleOrganizationFavorite(id) }
+            }
+        )
     }
 
     private var projectCountLabel: String {
@@ -340,6 +386,13 @@ struct PopoverRootView: View {
         return modifierGlyphs + [keyGlyph]
     }
 
+}
+
+private struct SectionHeaderMinYKey: PreferenceKey {
+    static let defaultValue: [String: CGFloat] = [:]
+    static func reduce(value: inout [String: CGFloat], nextValue: () -> [String: CGFloat]) {
+        value.merge(nextValue(), uniquingKeysWith: { _, new in new })
+    }
 }
 
 private struct AvatarTooltipSizePreferenceKey: PreferenceKey {
