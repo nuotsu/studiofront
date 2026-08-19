@@ -27,7 +27,7 @@ export default function ({
 
 			<div
 				className={cn(
-					'gap-lh',
+					'gap-1',
 					layout === 'carousel'
 						? 'carousel carousel-scroll-buttons carousel-scroll-marker max-md:full-bleed auto-rows-fr pb-2 max-md:px-4 md:mask-r-from-[calc(100%-2rem)] md:pr-4'
 						: [
@@ -42,10 +42,10 @@ export default function ({
 			>
 				{(quotes as unknown as Quote[])?.map((quote) => (
 					<article
-						className="border-stroke bg-background flex flex-col gap-4 border p-4 md:snap-start"
+						className="bg-foreground/5 flex flex-col gap-4 border p-4 md:snap-start"
 						key={quote._id}
 					>
-						<blockquote className="prose grow">
+						<blockquote className="prose grow text-lg">
 							<PortableText value={quote.quote} />
 						</blockquote>
 
@@ -61,7 +61,7 @@ export default function ({
 								<dl>
 									<dt>{quote.author.name}</dt>
 									{quote.author?.title && (
-										<dd className="text-sm">{quote.author?.title}</dd>
+										<dd className="text-xs">{quote.author?.title}</dd>
 									)}
 								</dl>
 							</cite>
