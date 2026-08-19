@@ -20,11 +20,20 @@ struct DocumentRowView: View {
         RowContainer(isSelected: isSelected, isHovered: isHovered) {
             HStack(alignment: .center, spacing: metrics.rowGap) {
                 favoriteButton
-                DocumentProjectAvatar(
-                    name: row.displayTitle,
-                    brandHex: row.project.brandColorHex,
-                    favicon: favicon
-                )
+                Button {
+                    if let url = document.deepLinkURL {
+                        AppDelegate.shared?.openURL(url)
+                    }
+                } label: {
+                    DocumentProjectAvatar(
+                        name: row.displayTitle,
+                        brandHex: row.project.brandColorHex,
+                        favicon: favicon
+                    )
+                }
+                .buttonStyle(.plain)
+                .disabled(document.deepLinkURL == nil)
+                .accessibilityLabel("Open document, \(document.title)")
                 .task(id: faviconHost) {
                     favicon = nil
                     guard let faviconHost else { return }
@@ -103,10 +112,16 @@ struct DocumentRowView: View {
             .buttonStyle(.plain)
             .disabled(document.deepLinkURL == nil)
 
-            Text(row.displayTitle)
-                .font(theme.typography.meta)
-                .foregroundStyle(theme.colors.sub)
-                .lineLimit(1)
+            Button {
+                openStudio()
+            } label: {
+                Text(row.displayTitle)
+                    .font(theme.typography.meta)
+                    .foregroundStyle(theme.colors.sub)
+                    .lineLimit(1)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Open Studio, \(row.displayTitle)")
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -148,8 +163,6 @@ struct DocumentRowView: View {
     }
 
     private var studioButton: some View {
-        let preferExternal = settings.studioURLPreference == .external
-        let primaryURL = row.project.resolvedStudioURL(preferExternal: preferExternal)
         let menuItems: [SplitPrimaryButton.MenuItem] = row.project.studioApps.compactMap { app in
             guard let url = app.resolvedURL else { return nil }
             let label = app.title ?? (app.isExternal ? (url.host ?? app.host) : "\(app.host).sanity.studio")
@@ -160,14 +173,16 @@ struct DocumentRowView: View {
 
         return Group {
             if menuItems.count > 1 {
-                SplitPrimaryButton("Studio", action: {
-                    if let primaryURL { AppDelegate.shared?.openURL(primaryURL) }
-                }, menuItems: menuItems)
+                SplitPrimaryButton("Studio", action: openStudio, menuItems: menuItems)
             } else {
-                PrimaryButton("Studio") {
-                    if let primaryURL { AppDelegate.shared?.openURL(primaryURL) }
-                }
+                PrimaryButton("Studio", action: openStudio)
             }
         }
+    }
+
+    private func openStudio() {
+        let preferExternal = settings.studioURLPreference == .external
+        guard let url = row.project.resolvedStudioURL(preferExternal: preferExternal) else { return }
+        AppDelegate.shared?.openURL(url)
     }
 }

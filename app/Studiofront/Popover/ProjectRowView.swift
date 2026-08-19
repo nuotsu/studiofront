@@ -20,14 +20,20 @@ struct ProjectRowView: View {
         RowContainer(isSelected: isSelected, isHovered: isHovered) {
             HStack(alignment: .center, spacing: metrics.rowGap) {
                 favoriteButton
-                ProjectAvatar(name: row.displayTitle, brandHex: row.project.brandColorHex, favicon: favicon)
-                    .task(id: faviconHost) {
-                        favicon = nil
-                        guard let faviconHost else { return }
-                        if let image = await FaviconCache.shared.favicon(forHost: faviconHost) {
-                            favicon = Image(nsImage: image)
-                        }
+                Button {
+                    openStudio()
+                } label: {
+                    ProjectAvatar(name: row.displayTitle, brandHex: row.project.brandColorHex, favicon: favicon)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Open Studio, \(row.displayTitle)")
+                .task(id: faviconHost) {
+                    favicon = nil
+                    guard let faviconHost else { return }
+                    if let image = await FaviconCache.shared.favicon(forHost: faviconHost) {
+                        favicon = Image(nsImage: image)
                     }
+                }
                 identity
                 Spacer(minLength: 8)
                 trailing
@@ -96,10 +102,16 @@ struct ProjectRowView: View {
             if let favoriteIndex {
                 KeycapLegend([.symbol("command"), .text("\(favoriteIndex)")], compact: true)
             }
-            Text(row.displayTitle)
-                .font(emphasized ? theme.typography.projectName : theme.typography.meta)
-                .foregroundStyle(emphasized ? theme.colors.text : theme.colors.sub)
-                .lineLimit(1)
+            Button {
+                openStudio()
+            } label: {
+                Text(row.displayTitle)
+                    .font(emphasized ? theme.typography.projectName : theme.typography.meta)
+                    .foregroundStyle(emphasized ? theme.colors.text : theme.colors.sub)
+                    .lineLimit(1)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Open Studio, \(row.displayTitle)")
             CopyChip(
                 text: row.project.id,
                 copied: store.copiedProjectID == row.project.id,
@@ -175,8 +187,6 @@ struct ProjectRowView: View {
     }
 
     private var studioButton: some View {
-        let preferExternal = settings.studioURLPreference == .external
-        let primaryURL = row.project.resolvedStudioURL(preferExternal: preferExternal)
         let menuItems: [SplitPrimaryButton.MenuItem] = row.project.studioApps.compactMap { app in
             guard let url = app.resolvedURL else { return nil }
             let label = app.title ?? (app.isExternal ? (url.host ?? app.host) : "\(app.host).sanity.studio")
@@ -187,14 +197,16 @@ struct ProjectRowView: View {
 
         return Group {
             if menuItems.count > 1 {
-                SplitPrimaryButton("Studio", action: {
-                    if let primaryURL { AppDelegate.shared?.openURL(primaryURL) }
-                }, menuItems: menuItems)
+                SplitPrimaryButton("Studio", action: openStudio, menuItems: menuItems)
             } else {
-                PrimaryButton("Studio") {
-                    if let primaryURL { AppDelegate.shared?.openURL(primaryURL) }
-                }
+                PrimaryButton("Studio", action: openStudio)
             }
         }
+    }
+
+    private func openStudio() {
+        let preferExternal = settings.studioURLPreference == .external
+        guard let url = row.project.resolvedStudioURL(preferExternal: preferExternal) else { return }
+        AppDelegate.shared?.openURL(url)
     }
 }
