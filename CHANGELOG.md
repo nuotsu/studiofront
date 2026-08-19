@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.0.7] - 2026-08-19
+
+- Add document search to the popover, with matches split into dedicated rows and a configurable Open Document shortcut (default ⌘↩)
+- Make project name and favicon clicks open Studio, and document rows open the matched document
+- Improve popover performance on large Sanity accounts (memoized list derivation, tiered document search, capped presence fan-out, parallel ETag-based refresh)
+- Restore native Liquid Glass Settings sidebar and keep it always visible
+- Use a single progressive blur at the top of the Liquid Glass project list, with sticky org headers in front of it and more top breathing room
+
 ## [0.0.6] - 2026-08-17
 
 - Add Studio URL preference to choose external vs. Sanity-hosted Studio, with a dropdown for projects with multiple registered Studio apps
