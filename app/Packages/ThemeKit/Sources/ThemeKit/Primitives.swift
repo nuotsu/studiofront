@@ -789,9 +789,14 @@ public struct ProjectAvatar: View {
 
     public var body: some View {
         let size = theme.metrics.avatarSize
+        avatarBody(size: size)
+            .accessibilityHidden(true)
+    }
+
+    private func avatarBody(size: CGFloat) -> some View {
         let letter = String(name.prefix(1)).uppercased()
         let initials = DisplayInitials.from(name)
-        ZStack {
+        return ZStack {
             if let favicon {
                 theme.colors.tagBackground
                 favicon
@@ -817,6 +822,57 @@ public struct ProjectAvatar: View {
             RoundedRectangle(cornerRadius: theme.cornerRadius(theme.metrics.avatarCornerRadius), style: theme.cornerStyle)
                 .strokeBorder(theme.colors.chipBorder, lineWidth: 1)
         )
+    }
+}
+
+/// Small document glyph used on document search result rows.
+public struct DocumentAvatarBadge: View {
+    @Environment(\.studioTheme) private var theme
+
+    public init() {}
+
+    public var body: some View {
+        Image(systemName: "doc")
+            .font(.system(size: 7.5, weight: .semibold))
+            .foregroundStyle(theme.colors.text)
+            .padding(3)
+            .background(theme.colors.panelFill, in: RoundedRectangle(cornerRadius: 2, style: theme.cornerStyle))
+            .overlay(
+                RoundedRectangle(cornerRadius: 2, style: theme.cornerStyle)
+                    .strokeBorder(theme.colors.chipBorder, lineWidth: 1)
+            )
+    }
+}
+
+/// Project avatar with a document-search badge. Reserves explicit layout
+/// space for the badge so macOS LazyVStack rows never clip it.
+public struct DocumentProjectAvatar: View {
+    @Environment(\.studioTheme) private var theme
+    var name: String
+    var brandHex: String?
+    var favicon: Image?
+
+    private static let badgeSize: CGFloat = 15
+    private static let badgeOverflow: CGFloat = 3
+
+    public init(name: String, brandHex: String?, favicon: Image? = nil) {
+        self.name = name
+        self.brandHex = brandHex
+        self.favicon = favicon
+    }
+
+    public var body: some View {
+        let size = theme.metrics.avatarSize
+        let frameSize = size + Self.badgeOverflow
+        ZStack(alignment: .topLeading) {
+            ProjectAvatar(name: name, brandHex: brandHex, favicon: favicon)
+            DocumentAvatarBadge()
+                .offset(
+                    x: size - Self.badgeSize + Self.badgeOverflow,
+                    y: size - Self.badgeSize + Self.badgeOverflow
+                )
+        }
+        .frame(width: frameSize, height: frameSize, alignment: .topLeading)
         .accessibilityHidden(true)
     }
 }

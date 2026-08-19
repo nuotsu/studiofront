@@ -91,6 +91,7 @@ final class DocumentSearchCoordinator {
                     let studioURL = store.rows.first(where: { $0.id == id })?.resolvedStudioURL(preferExternal: preferExternal)
                     store.liveDocumentMatchesByProject[id] = docs.map { doc in
                         EditedDocument(
+                            id: doc.id,
                             title: doc.title,
                             typeName: doc.typeName,
                             editedAt: doc.updatedAt,

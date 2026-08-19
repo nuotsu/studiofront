@@ -214,16 +214,33 @@ public struct ProjectCuration: Sendable, Codable, Hashable {
 }
 
 public struct EditedDocument: Sendable, Hashable, Codable {
+    public var id: String
     public var title: String
     public var typeName: String
     public var editedAt: Date
     public var deepLinkURL: URL?
 
-    public init(title: String, typeName: String, editedAt: Date, deepLinkURL: URL? = nil) {
+    public init(id: String, title: String, typeName: String, editedAt: Date, deepLinkURL: URL? = nil) {
+        self.id = id
         self.title = title
         self.typeName = typeName
         self.editedAt = editedAt
         self.deepLinkURL = deepLinkURL
+    }
+
+    /// Stable row identity even for cached JSON written before `id` existed.
+    public var listItemID: String {
+        if !id.isEmpty { return id }
+        return "\(typeName):\(title):\(editedAt.timeIntervalSince1970)"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(String.self, forKey: .id) ?? ""
+        title = try container.decode(String.self, forKey: .title)
+        typeName = try container.decode(String.self, forKey: .typeName)
+        editedAt = try container.decode(Date.self, forKey: .editedAt)
+        deepLinkURL = try container.decodeIfPresent(URL.self, forKey: .deepLinkURL)
     }
 }
 
@@ -366,13 +383,45 @@ public struct OrganizationRecord: Sendable, Hashable, Identifiable {
     }
 }
 
+public enum PopoverListItem: Identifiable, Sendable, Hashable {
+    case project(ProjectRow)
+    case document(project: ProjectRow, document: EditedDocument)
+
+    public var id: String {
+        switch self {
+        case let .project(row):
+            row.id
+        case let .document(project, document):
+            "doc:\(project.id):\(document.listItemID)"
+        }
+    }
+
+    public var projectRow: ProjectRow {
+        switch self {
+        case let .project(row):
+            row
+        case let .document(project, _):
+            project
+        }
+    }
+
+    public var document: EditedDocument? {
+        switch self {
+        case .project:
+            nil
+        case let .document(_, document):
+            document
+        }
+    }
+}
+
 public struct ProjectGroup: Identifiable, Sendable, Hashable {
     public var id: String
     public var title: String
     public var organizationId: String?
-    public var items: [ProjectRow]
+    public var items: [PopoverListItem]
 
-    public init(id: String, title: String, organizationId: String? = nil, items: [ProjectRow]) {
+    public init(id: String, title: String, organizationId: String? = nil, items: [PopoverListItem]) {
         self.id = id
         self.title = title
         self.organizationId = organizationId

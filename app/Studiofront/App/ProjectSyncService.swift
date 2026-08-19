@@ -368,6 +368,7 @@ final class ProjectSyncService {
                             let docs: [RemoteEditedDocument] = conditional.value ?? []
                             let recentDocuments = docs.map { doc in
                                 EditedDocument(
+                                    id: doc.id,
                                     title: doc.title,
                                     typeName: doc.typeName,
                                     editedAt: doc.updatedAt,

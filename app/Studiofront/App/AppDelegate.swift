@@ -565,12 +565,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         keyCode == UInt16(settings.groupByCycleKeyCode) && flags == settings.groupByCycleModifierFlags
     }
 
-    /// Opens the selected row's currently-displayed document — its last
-    /// edited document, or whichever document matched an active search —
-    /// via the same deep-link mechanism `ProjectRowView`'s document button uses.
+    /// Opens the selected list item's document — a dedicated document search
+    /// row's match, or the project row's last-edited caption fallback.
     private func openSelectedDocument() {
-        guard let id = store.selectedID, let row = store.rows.first(where: { $0.id == id }) else { return }
-        guard let url = store.documentDisplay(for: row).document?.deepLinkURL else { return }
-        openURL(url)
+        guard let item = store.selectedListItem else { return }
+        switch item {
+        case let .document(_, document):
+            guard let url = document.deepLinkURL else { return }
+            openURL(url)
+        case let .project(row):
+            guard let url = store.documentDisplay(for: row)?.deepLinkURL else { return }
+            openURL(url)
+        }
     }
 }

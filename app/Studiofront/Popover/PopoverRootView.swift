@@ -232,14 +232,25 @@ struct PopoverRootView: View {
                 LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
                     ForEach(Array(groups.enumerated()), id: \.element.id) { index, group in
                         Section {
-                            ForEach(group.items) { row in
-                                ProjectRowView(
-                                    row: row,
-                                    isSelected: store.selectedID == row.id,
-                                    favoriteIndex: favoriteIndexByID[row.id]
-                                )
+                            ForEach(group.items) { item in
+                                switch item {
+                                case let .project(row):
+                                    ProjectRowView(
+                                        row: row,
+                                        isSelected: store.selectedID == item.id,
+                                        favoriteIndex: favoriteIndexByID[row.id]
+                                    )
                                     // Favorite toggling moves the row across Section boundaries (into/out of the "Favorites" group), which LazyVStack can repaint stale on macOS unless the identity itself changes.
-                                    .id("\(row.id)-\(row.curation.isFavorite)")
+                                    .id("\(item.id)-\(row.curation.isFavorite)")
+                                case let .document(project, document):
+                                    DocumentRowView(
+                                        row: project,
+                                        document: document,
+                                        listItemID: item.id,
+                                        isSelected: store.selectedID == item.id
+                                    )
+                                    .id(item.id)
+                                }
                             }
                             // Gap before the next group's label. It lives in the
                             // scrolling content rather than on the header: padding

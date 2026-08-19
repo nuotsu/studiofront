@@ -87,7 +87,7 @@ public final class StudioStore {
 
         let favorites = sortedFavorites(from: visible)
         if !favorites.isEmpty {
-            result.append(ProjectGroup(id: "favorites", title: "Favorites", items: favorites))
+            result.append(ProjectGroup(id: "favorites", title: "Favorites", items: groupItems(from: favorites)))
         }
 
         let rest = visible.filter { !$0.curation.isFavorite }
@@ -100,7 +100,7 @@ public final class StudioStore {
                 seen.insert(org.id)
                 let items = rest.filter { $0.project.organizationId == org.id }
                 if !items.isEmpty {
-                    result.append(ProjectGroup(id: org.id, title: org.name, organizationId: org.id, items: sortedByRecency(items)))
+                    result.append(ProjectGroup(id: org.id, title: org.name, organizationId: org.id, items: groupItems(from: sortedByRecency(items))))
                 }
             }
             let leftoverOrgs = Dictionary(grouping: rest.filter { row in
@@ -113,11 +113,11 @@ public final class StudioStore {
                     == .orderedAscending
             }) {
                 let title = items.first?.project.organizationName ?? id
-                result.append(ProjectGroup(id: id, title: title, organizationId: id, items: sortedByRecency(items)))
+                result.append(ProjectGroup(id: id, title: title, organizationId: id, items: groupItems(from: sortedByRecency(items))))
             }
             let orphans = rest.filter { $0.project.organizationId == nil }
             if !orphans.isEmpty {
-                result.append(ProjectGroup(id: "other", title: "Other", items: sortedByRecency(orphans)))
+                result.append(ProjectGroup(id: "other", title: "Other", items: groupItems(from: sortedByRecency(orphans))))
             }
         case .lastEdited:
             for bucket in RecencyBucket.allCases {
@@ -128,8 +128,62 @@ public final class StudioStore {
                     return RecencyBucket.bucket(for: edited) == bucket
                 }
                 if !items.isEmpty {
-                    result.append(ProjectGroup(id: bucket.rawValue, title: bucket.title, items: sortedByRecency(items)))
+                    result.append(ProjectGroup(id: bucket.rawValue, title: bucket.title, items: groupItems(from: sortedByRecency(items))))
                 }
+            }
+        }
+        return result
+    }
+
+    /// Interleaves document search rows immediately after each project when a
+    /// query is active; otherwise returns plain project rows.
+    private func groupItems(from projects: [ProjectRow]) -> [PopoverListItem] {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return projects.map { .project($0) }
+        }
+        var items: [PopoverListItem] = []
+        items.reserveCapacity(projects.count)
+        for project in projects {
+            items.append(.project(project))
+            for document in matchingDocuments(for: project) {
+                items.append(.document(project: project, document: document))
+            }
+        }
+        return items
+    }
+
+    /// Documents matching the active query for a project — live Sanity results
+    /// when available, cached title matches while search is pending.
+    func matchingDocuments(for row: ProjectRow) -> [EditedDocument] {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
+        if searchingProjectIDs.contains(row.id) {
+            return cachedTitleMatches(for: row, needle: normalize(trimmed))
+        }
+        if let live = liveDocumentMatchesByProject[row.id] {
+            return live
+        }
+        return cachedTitleMatches(for: row, needle: normalize(trimmed))
+    }
+
+    private func cachedTitleMatches(for row: ProjectRow, needle: String) -> [EditedDocument] {
+        func titleMatches(_ title: String) -> Bool {
+            let normalized = normalize(title)
+            return normalized.contains(needle) || initials(of: normalized).contains(needle)
+        }
+        var seen = Set<String>()
+        var result: [EditedDocument] = []
+        for doc in row.activity.recentDocuments where titleMatches(doc.title) {
+            let key = doc.listItemID
+            if seen.insert(key).inserted {
+                result.append(doc)
+            }
+        }
+        if let lastEdited = row.activity.lastEditedDocument, titleMatches(lastEdited.title) {
+            let key = lastEdited.listItemID
+            if seen.insert(key).inserted {
+                result.insert(lastEdited, at: 0)
             }
         }
         return result
@@ -151,7 +205,20 @@ public final class StudioStore {
         groups.flatMap { $0.items.map(\.id) }
     }
 
+    public var selectedListItem: PopoverListItem? {
+        guard let selectedID else { return nil }
+        for group in groups {
+            if let item = group.items.first(where: { $0.id == selectedID }) {
+                return item
+            }
+        }
+        return nil
+    }
+
     public var selectedRow: ProjectRow? {
+        if let selectedListItem {
+            return selectedListItem.projectRow
+        }
         guard let selectedID else { return nil }
         return visibleRows.first { $0.id == selectedID } ?? rows.first { $0.id == selectedID }
     }
@@ -229,8 +296,8 @@ public final class StudioStore {
     }
 
     public func toggleFavoriteOnSelection() {
-        guard let selectedID else { return }
-        toggleFavorite(selectedID)
+        guard let projectID = selectedListItem?.projectRow.id else { return }
+        toggleFavorite(projectID)
     }
 
     public func cycleGroupBy() {
@@ -272,8 +339,8 @@ public final class StudioStore {
     }
 
     public func copySelectedProjectID() {
-        guard let id = selectedID else { return }
-        copy(id, key: "project:\(id)")
+        guard let projectID = selectedListItem?.projectRow.id else { return }
+        copy(projectID, key: "project:\(projectID)")
     }
 
     public func copyProjectID(_ id: String) {
@@ -345,40 +412,9 @@ public final class StudioStore {
         }
     }
 
-    /// The document to show/open on a row's activity line, and whether it's
-    /// there because it actually matched the search (as opposed to just
-    /// being the default `lastEditedDocument` shown with no query active).
-    /// `isSearchMatch` is what tells `ProjectRowView` to present the row as
-    /// a document search result — title promoted to the name slot — rather
-    /// than a project row that merely happens to show its last edit.
-    public struct DocumentDisplay {
-        public var document: EditedDocument?
-        public var isSearchMatch: Bool
-    }
-
-    public func documentDisplay(for row: ProjectRow) -> DocumentDisplay {
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            return DocumentDisplay(document: row.activity.lastEditedDocument, isSearchMatch: false)
-        }
-        // Live results are authoritative — confirmed by Sanity against the
-        // current query — so they take priority over the cached/instant
-        // first-pass fields below.
-        if let liveMatch = liveDocumentMatchesByProject[row.id]?.first {
-            return DocumentDisplay(document: liveMatch, isSearchMatch: true)
-        }
-        let needle = normalize(trimmed)
-        func titleMatches(_ title: String) -> Bool {
-            let normalized = normalize(title)
-            return normalized.contains(needle) || initials(of: normalized).contains(needle)
-        }
-        if let lastEdited = row.activity.lastEditedDocument, titleMatches(lastEdited.title) {
-            return DocumentDisplay(document: lastEdited, isSearchMatch: true)
-        }
-        if let match = row.activity.recentDocuments.first(where: { titleMatches($0.title) }) {
-            return DocumentDisplay(document: match, isSearchMatch: true)
-        }
-        return DocumentDisplay(document: row.activity.lastEditedDocument, isSearchMatch: false)
+    /// The document to show on a project row's activity caption line.
+    public func documentDisplay(for row: ProjectRow) -> EditedDocument? {
+        row.activity.lastEditedDocument
     }
 
     private func normalize(_ string: String) -> String {

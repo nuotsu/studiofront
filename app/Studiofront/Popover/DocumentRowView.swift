@@ -2,17 +2,17 @@ import SwiftUI
 import ThemeKit
 import StudioStore
 
-struct ProjectRowView: View {
+struct DocumentRowView: View {
     @Environment(\.studioTheme) private var theme
     @Environment(StudioStore.self) private var store
     @Environment(AppSettings.self) private var settings
 
     var row: ProjectRow
+    var document: EditedDocument
+    var listItemID: String
     var isSelected: Bool
-    var favoriteIndex: Int?
 
     @State private var isHovered = false
-    @State private var isDocumentHovered = false
     @State private var favicon: Image?
 
     var body: some View {
@@ -20,14 +20,18 @@ struct ProjectRowView: View {
         RowContainer(isSelected: isSelected, isHovered: isHovered) {
             HStack(alignment: .center, spacing: metrics.rowGap) {
                 favoriteButton
-                ProjectAvatar(name: row.displayTitle, brandHex: row.project.brandColorHex, favicon: favicon)
-                    .task(id: faviconHost) {
-                        favicon = nil
-                        guard let faviconHost else { return }
-                        if let image = await FaviconCache.shared.favicon(forHost: faviconHost) {
-                            favicon = Image(nsImage: image)
-                        }
+                DocumentProjectAvatar(
+                    name: row.displayTitle,
+                    brandHex: row.project.brandColorHex,
+                    favicon: favicon
+                )
+                .task(id: faviconHost) {
+                    favicon = nil
+                    guard let faviconHost else { return }
+                    if let image = await FaviconCache.shared.favicon(forHost: faviconHost) {
+                        favicon = Image(nsImage: image)
                     }
+                }
                 identity
                 Spacer(minLength: 8)
                 trailing
@@ -36,18 +40,12 @@ struct ProjectRowView: View {
         .contentShape(Rectangle())
         .opacity(row.isUnavailable || row.project.isArchived ? 0.45 : 1)
         .onHover { isHovered = $0 }
-        .onTapGesture { store.select(row.id) }
+        .onTapGesture { store.select(listItemID) }
         .accessibilityElement(children: .contain)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
-        .accessibilityLabel(accessibilityStatusLabel)
+        .accessibilityLabel("\(document.title), \(row.displayTitle)")
         .padding(.leading, metrics.listPadding.leading)
         .padding(.trailing, metrics.listPadding.trailing)
-    }
-
-    private var accessibilityStatusLabel: String {
-        if row.isUnavailable { return "\(row.displayTitle), unavailable" }
-        if row.project.isArchived { return "\(row.displayTitle), archived" }
-        return row.displayTitle
     }
 
     private var faviconHost: String? {
@@ -82,60 +80,35 @@ struct ProjectRowView: View {
 
     private var identity: some View {
         VStack(alignment: .leading, spacing: 4) {
-            projectLine(emphasized: true)
-            if let document = store.documentDisplay(for: row) {
-                documentLine(document: document, emphasized: false)
+            Button {
+                if let url = document.deepLinkURL {
+                    AppDelegate.shared?.openURL(url)
+                }
+            } label: {
+                HStack(spacing: 5) {
+                    Text(document.title)
+                        .font(theme.typography.projectName)
+                        .foregroundStyle(theme.colors.text)
+                        .lineLimit(1)
+                    HStack(spacing: 3) {
+                        Image(systemName: "pencil")
+                            .font(.system(size: 8, weight: .semibold))
+                        Text(RelativeTimestamp.string(from: document.editedAt))
+                    }
+                    .font(theme.typography.timestamp)
+                    .foregroundStyle(isHovered ? theme.colors.sub : theme.colors.faint)
+                    .fixedSize()
+                }
             }
+            .buttonStyle(.plain)
+            .disabled(document.deepLinkURL == nil)
+
+            Text(row.displayTitle)
+                .font(theme.typography.meta)
+                .foregroundStyle(theme.colors.sub)
+                .lineLimit(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    /// The project name line in the primary (name-slot) position.
-    private func projectLine(emphasized: Bool) -> some View {
-        HStack(spacing: 6) {
-            if let favoriteIndex {
-                KeycapLegend([.symbol("command"), .text("\(favoriteIndex)")], compact: true)
-            }
-            Text(row.displayTitle)
-                .font(emphasized ? theme.typography.projectName : theme.typography.meta)
-                .foregroundStyle(emphasized ? theme.colors.text : theme.colors.sub)
-                .lineLimit(1)
-            CopyChip(
-                text: row.project.id,
-                copied: store.copiedProjectID == row.project.id,
-                accessibilityName: "Copy project ID \(row.project.id)"
-            ) {
-                store.copyProjectID(row.project.id)
-            }
-        }
-    }
-
-    /// The last-edited document caption beneath the project name.
-    private func documentLine(document: EditedDocument, emphasized: Bool) -> some View {
-        Button {
-            if let url = document.deepLinkURL {
-                AppDelegate.shared?.openURL(url)
-            }
-        } label: {
-            HStack(spacing: 5) {
-                Text(document.title)
-                    .font(emphasized ? theme.typography.projectName : theme.typography.meta)
-                    .foregroundStyle(emphasized ? theme.colors.text : (isDocumentHovered ? theme.colors.text : theme.colors.sub))
-                    .lineLimit(1)
-                HStack(spacing: 3) {
-                    Image(systemName: "pencil")
-                        .font(.system(size: 8, weight: .semibold))
-                    Text(RelativeTimestamp.string(from: document.editedAt))
-                }
-                .font(theme.typography.timestamp)
-                .foregroundStyle(isDocumentHovered ? theme.colors.sub : theme.colors.faint)
-                .fixedSize()
-            }
-        }
-        .buttonStyle(.plain)
-        .disabled(document.deepLinkURL == nil)
-        .onHover { isDocumentHovered = $0 }
-        .accessibilityLabel("Open document, \(document.title), edited \(RelativeTimestamp.string(from: document.editedAt))")
     }
 
     private var trailing: some View {
