@@ -704,6 +704,8 @@ public struct GroupByControl<Value: Hashable>: View {
     var legend: [KeyGlyph]
 
     @State private var isHovered = false
+    @State private var menuAnchor: NSView?
+    @State private var activeMenuRouter: MenuActionRouter?
 
     public init(selection: Binding<Value>, options: [(Value, String)], legend: [KeyGlyph] = []) {
         self.selection = selection
@@ -716,6 +718,9 @@ public struct GroupByControl<Value: Hashable>: View {
     }
 
     public var body: some View {
+        // Appearance matches the original Menu + legend chip. Hit testing is
+        // disabled on the chrome and handled by the outer pill instead — same
+        // idea as an HTML <label> wrapping its control.
         HStack(spacing: 6) {
             Menu {
                 ForEach(options, id: \.0) { value, title in
@@ -733,9 +738,11 @@ public struct GroupByControl<Value: Hashable>: View {
             .controlSize(.small)
             .tint(theme.colors.faint)
             .fixedSize()
+            .allowsHitTesting(false)
 
             if !legend.isEmpty {
                 KeycapLegend(legend, compact: true)
+                    .allowsHitTesting(false)
             }
         }
         .padding(.horizontal, 6)
@@ -747,7 +754,28 @@ public struct GroupByControl<Value: Hashable>: View {
             }
         )
         .clipShape(RoundedRectangle(cornerRadius: theme.cornerRadius(4), style: theme.cornerStyle))
+        .contentShape(RoundedRectangle(cornerRadius: theme.cornerRadius(4), style: theme.cornerStyle))
+        .background(MenuAnchorView(anchor: $menuAnchor))
+        .onTapGesture(perform: showMenu)
         .onHover { isHovered = $0 }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Group by \(selectedTitle)")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { showMenu() }
+    }
+
+    private func showMenu() {
+        guard let menuAnchor else { return }
+        let menu = NSMenu()
+        let router = MenuActionRouter()
+        for (value, title) in options {
+            let itemValue = value
+            router.addItem(to: menu, title: title) {
+                selection.wrappedValue = itemValue
+            }
+        }
+        activeMenuRouter = router
+        menu.popUp(positioning: nil, at: NSPoint(x: 0, y: -4), in: menuAnchor)
     }
 }
 
