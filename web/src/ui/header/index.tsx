@@ -68,7 +68,7 @@ async function CachedHeader({ perspective, stega }: DynamicFetchOptions) {
 
 							<CTAList
 								ctas={site?.ctas as Cta[]}
-								className="text-sm max-sm:w-full max-sm:*:w-full"
+								className="gap-x-4 text-sm max-sm:w-full max-sm:*:w-full"
 							>
 								<GithubStarCount className="order-first" />
 							</CTAList>

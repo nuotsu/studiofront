@@ -19,5 +19,8 @@ app/Config/Signing.local.xcconfig
 # Release artifacts (DMG, appcast, dSYM zip): scripts/release-dmg.sh output
 /dist/
 
+# Local Xcode build output (DerivedData, archives, DMGs)
+/build/
+
 # macOS
 .DS_Store
