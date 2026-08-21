@@ -1,0 +1,50 @@
+name: GitHub stars → PostHog
+
+on:
+  schedule:
+    # ~midnight US/Pacific (UTC-7 / UTC-8 depending on DST)
+    - cron: "0 8 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send stargazer count to PostHog
+        env:
+          POSTHOG_PROJECT_API_KEY: ${{ secrets.POSTHOG_PROJECT_API_KEY }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${POSTHOG_PROJECT_API_KEY:-}" ]; then
+            echo "POSTHOG_PROJECT_API_KEY secret is not set" >&2
+            exit 1
+          fi
+
+          STARS=$(curl -fsS \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${{ github.repository }}" \
+            | jq -e '.stargazers_count')
+
+          echo "star_count=${STARS}"
+
+          jq -n \
+            --arg api_key "$POSTHOG_PROJECT_API_KEY" \
+            --argjson star_count "$STARS" \
+            '{
+              api_key: $api_key,
+              event: "github_stars_snapshot",
+              distinct_id: "github-bot",
+              properties: {
+                star_count: $star_count,
+                "$process_person_profile": false
+              }
+            }' \
+            | curl -fsS -X POST https://us.i.posthog.com/i/v0/e/ \
+              -H "Content-Type: application/json" \
+              -d @-
