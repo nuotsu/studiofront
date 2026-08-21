@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.0.8] - 2026-08-21
+
+- Show schema type chips in document search
+- Show a result count while searching
+- Keep mixed project + document matches after reopening the popover
+- Skip Favorites pinning / ⌘1–9 while searching
+- Hide Vercel deployment-target and webhook-deploy documents from search results
+- Expand the Group by pill's click target without changing its appearance
+
 ## [0.0.7] - 2026-08-19
 
 - Add document search to the popover, with matches split into dedicated rows and a configurable Open Document shortcut (default ⌘↩)
