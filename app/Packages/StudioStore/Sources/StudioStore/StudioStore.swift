@@ -14,6 +14,7 @@ public final class StudioStore {
     public var searchFocusToken: UInt = 0
     public var isRefreshing: Bool = false
     public var hideArchivedProjects: Bool = true
+    public var entitlement: StudioStoreEntitlement = .unlimited { didSet { invalidateListCache() } }
     public var onCurationChanged: (() -> Void)?
     public var onRefreshRequested: (() -> Void)?
     /// Fired after `replaceRows` — the only point at which the set of
@@ -37,6 +38,8 @@ public final class StudioStore {
         var groups: [ProjectGroup]
         var flatVisibleIDs: [String]
         var favoriteIndexByID: [String: Int]
+        var lockedProjectIDs: Set<String>
+        var lockedOrganizationIDs: Set<String>
     }
 
     private var listStateGeneration = 0
@@ -90,6 +93,14 @@ public final class StudioStore {
 
     public var groups: [ProjectGroup] {
         listState().groups
+    }
+
+    public func isProjectLocked(_ id: String) -> Bool {
+        listState().lockedProjectIDs.contains(id)
+    }
+
+    public func isOrganizationLocked(_ id: String) -> Bool {
+        listState().lockedOrganizationIDs.contains(id)
     }
 
     public var flatVisibleIDs: [String] {
@@ -180,12 +191,15 @@ public final class StudioStore {
         for (index, row) in sortedFavorites(from: visible).enumerated() where index < 9 {
             favoriteIndexByID[row.id] = index + 1
         }
+        let locked = computeLockedSets(from: visible)
 
         let state = ListState(
             visibleRows: visible,
             groups: groups,
             flatVisibleIDs: flatVisibleIDs,
-            favoriteIndexByID: favoriteIndexByID
+            favoriteIndexByID: favoriteIndexByID,
+            lockedProjectIDs: locked.projects,
+            lockedOrganizationIDs: locked.organizations
         )
         cachedListState = state
         cachedListStateGeneration = listStateGeneration
@@ -194,6 +208,31 @@ public final class StudioStore {
 
     private func invalidateListCache() {
         listStateGeneration += 1
+    }
+
+    /// Which projects/orgs the free tier keeps unlocked: favorites first, then
+    /// most-recently-active — the same order `sortedFavorites`/`computeGroups`
+    /// already use — walked until either the project or organization cap is
+    /// hit, whichever comes first. Everything else in `visible` is locked.
+    private func computeLockedSets(from visible: [ProjectRow]) -> (projects: Set<String>, organizations: Set<String>) {
+        guard !entitlement.isUnlimited else { return ([], []) }
+        let noOrgKey = "\u{0}no-organization"
+        let ordered = sortedFavorites(from: visible) + sortedByRecency(visible.filter { !$0.curation.isFavorite })
+
+        var unlockedProjectIDs: Set<String> = []
+        var unlockedOrgKeys: Set<String> = []
+        for row in ordered {
+            let orgKey = row.project.organizationId ?? noOrgKey
+            let projectCapHit = unlockedProjectIDs.count >= entitlement.maxFavoriteProjects
+            let orgCapHit = !unlockedOrgKeys.contains(orgKey) && unlockedOrgKeys.count >= entitlement.maxFavoriteOrganizations
+            guard !projectCapHit, !orgCapHit else { continue }
+            unlockedProjectIDs.insert(row.id)
+            unlockedOrgKeys.insert(orgKey)
+        }
+
+        let lockedProjects = Set(visible.map(\.id)).subtracting(unlockedProjectIDs)
+        let lockedOrgs = Set(visible.compactMap(\.project.organizationId)).subtracting(unlockedOrgKeys)
+        return (lockedProjects, lockedOrgs)
     }
 
     private var normalizedSearchNeedle: String {

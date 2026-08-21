@@ -41,6 +41,7 @@ struct ProjectRowFavoriteButton: View {
 struct ProjectRowTrailingActions: View {
     @Environment(\.studioTheme) private var theme
     @Environment(AppSettings.self) private var settings
+    @Environment(StudioStore.self) private var store
 
     var row: ProjectRow
 
@@ -75,7 +76,13 @@ struct ProjectRowTrailingActions: View {
                         AppDelegate.shared?.openURL(manage)
                     }
                 }
-                studioButton
+                if store.isProjectLocked(row.id) {
+                    IconButton(systemName: "lock.fill", accessibilityLabel: "Locked — upgrade to unlock") {
+                        AppDelegate.shared?.openSettingsWindow(pane: .license)
+                    }
+                } else {
+                    studioButton
+                }
             }
         }
     }

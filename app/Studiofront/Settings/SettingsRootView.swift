@@ -39,6 +39,8 @@ struct SettingsRootView: View {
                     AccountSettingsView()
                 case .keybindings:
                     KeybindingsSettingsView()
+                case .license:
+                    LicenseSettingsView()
                 case .about:
                     AboutSettingsView()
                 }

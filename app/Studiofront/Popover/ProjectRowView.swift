@@ -40,7 +40,7 @@ struct ProjectRowView: View {
             }
         }
         .contentShape(Rectangle())
-        .opacity(row.isUnavailable || row.project.isArchived ? 0.45 : 1)
+        .opacity(row.isUnavailable || row.project.isArchived || store.isProjectLocked(row.id) ? 0.45 : 1)
         .onHover { isHovered = $0 }
         .onTapGesture { store.select(row.id) }
         .accessibilityElement(children: .contain)
@@ -125,6 +125,10 @@ struct ProjectRowView: View {
     }
 
     private func openStudio() {
+        guard !store.isProjectLocked(row.id) else {
+            AppDelegate.shared?.openSettingsWindow(pane: .license)
+            return
+        }
         let preferExternal = settings.studioURLPreference == .external
         guard let url = row.project.resolvedStudioURL(preferExternal: preferExternal) else { return }
         AppDelegate.shared?.openURL(url)
