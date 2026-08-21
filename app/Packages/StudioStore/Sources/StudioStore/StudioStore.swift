@@ -210,19 +210,25 @@ public final class StudioStore {
 
     private func computeGroups(from visible: [ProjectRow]) -> [ProjectGroup] {
         var result: [ProjectGroup] = []
+        let isSearching = !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
 
-        let favorites = sortedFavorites(from: visible)
-        if !favorites.isEmpty {
-            result.append(ProjectGroup(id: "favorites", title: "Favorites", items: groupItems(from: favorites)))
+        // While searching, skip the Favorites pin and fold favorited projects into
+        // their normal org / recency groups so results aren't reordered by star.
+        if !isSearching {
+            let favorites = sortedFavorites(from: visible)
+            if !favorites.isEmpty {
+                result.append(ProjectGroup(id: "favorites", title: "Favorites", items: groupItems(from: favorites)))
+            }
         }
 
-        let rest = visible.filter { !$0.curation.isFavorite }
+        let rest = isSearching ? visible : visible.filter { !$0.curation.isFavorite }
         switch groupBy {
         case .organization:
             let pinned = organizations.filter(\.isFavorite)
             let unpinned = organizations.filter { !$0.isFavorite }
+            let orgOrder = isSearching ? organizations : pinned + unpinned
             var seen = Set<String>()
-            for org in pinned + unpinned {
+            for org in orgOrder {
                 seen.insert(org.id)
                 let items = rest.filter { $0.project.organizationId == org.id }
                 if !items.isEmpty {
@@ -284,14 +290,23 @@ public final class StudioStore {
     func matchingDocuments(for row: ProjectRow) -> [EditedDocument] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
+        let matches: [EditedDocument]
         if searchingProjectIDs.contains(row.id) {
-            return cachedTitleMatches(for: row, needle: normalizedSearchNeedle)
+            matches = cachedTitleMatches(for: row, needle: normalizedSearchNeedle)
+        } else if let live = liveDocumentMatchesByProject[row.id] {
+            matches = live
+        } else {
+            matches = cachedTitleMatches(for: row, needle: normalizedSearchNeedle)
         }
-        if let live = liveDocumentMatchesByProject[row.id] {
-            return live
-        }
-        return cachedTitleMatches(for: row, needle: normalizedSearchNeedle)
+        return matches.filter { !Self.excludedSearchTypeNames.contains($0.typeName) }
     }
+
+    /// Plugin / infra types that can still sit in the local recent-docs cache
+    /// from older syncs — keep them out of interleaved search rows.
+    private static let excludedSearchTypeNames: Set<String> = [
+        "vercel.deploymentTarget",
+        "webhook_deploy",
+    ]
 
     private func cachedTitleMatches(for row: ProjectRow, needle: String) -> [EditedDocument] {
         func titleMatches(_ title: String) -> Bool {
@@ -511,7 +526,7 @@ public final class StudioStore {
     private func matches(_ row: ProjectRow) -> Bool {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return true }
-        if !(liveDocumentMatchesByProject[row.id] ?? []).isEmpty { return true }
+        if !matchingDocuments(for: row).isEmpty { return true }
         let needle = normalizedSearchNeedle
         let fields: [String] = [
             row.displayTitle,

@@ -230,6 +230,7 @@ struct PopoverRootView: View {
         let theme = settings.resolvedTheme
         let groups = store.groups
         let favoriteIndexByID = store.favoriteIndexByID
+        let showFavoriteShortcuts = store.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         return ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
@@ -241,7 +242,7 @@ struct PopoverRootView: View {
                                     ProjectRowView(
                                         row: row,
                                         isSelected: store.selectedID == item.id,
-                                        favoriteIndex: favoriteIndexByID[row.id]
+                                        favoriteIndex: showFavoriteShortcuts ? favoriteIndexByID[row.id] : nil
                                     )
                                     // Favorite toggling moves the row across Section boundaries (into/out of the "Favorites" group), which LazyVStack can repaint stale on macOS unless the identity itself changes.
                                     .id("\(item.id)-\(row.curation.isFavorite)")
@@ -355,6 +356,11 @@ struct PopoverRootView: View {
     private var projectCountLabel: String {
         if store.isRefreshing, store.totalCount == 0 {
             return "Refreshing…"
+        }
+        let isSearching = !store.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if isSearching {
+            let count = store.flatVisibleIDs.count
+            return count == 1 ? "1 result" : "\(count) results"
         }
         return "\(store.visibleRows.count) projects"
     }

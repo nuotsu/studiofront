@@ -24,7 +24,7 @@ public actor SanityClient {
     /// `string::startsWith` is used instead of `match`, since GROQ's `match`
     /// tokenizes on `.` and can't reliably prefix-match "sanity.*".
     fileprivate static let nonContentTypeFilter = """
-    !string::startsWith(_type, "sanity.") && !(_type in ["media.tag", "workflow.metadata", "translation.metadata", "assist.instruction.context"])
+    !string::startsWith(_type, "sanity.") && !(_type in ["media.tag", "workflow.metadata", "translation.metadata", "assist.instruction.context", "vercel.deploymentTarget", "webhook_deploy"])
     """
 
     private let session: URLSession

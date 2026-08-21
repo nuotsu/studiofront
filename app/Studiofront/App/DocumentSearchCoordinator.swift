@@ -6,8 +6,9 @@ import StudioStore
 /// user is actively typing in the popover's search field — the deliberate
 /// exception to search otherwise never calling the network (§9.2). Modeled
 /// on `PresenceCoordinator`: same per-project `Task` lifecycle, same
-/// concurrency-capped fan-out, same "only while the popover is open, zero
-/// background work while closed" discipline.
+/// concurrency-capped fan-out. In-flight work stops while the popover is
+/// closed; live matches and the session cache are kept so reopen with the
+/// same query still shows mixed project + document rows.
 @MainActor
 final class DocumentSearchCoordinator {
     /// Below this length a query is too likely to match everything to be
@@ -50,15 +51,30 @@ final class DocumentSearchCoordinator {
         }
     }
 
-    /// Mirrors `PresenceCoordinator.willHide()` — cancels everything and
-    /// clears live state so nothing lingers or fires once the popover (and
-    /// with it, the search field) is gone.
+    /// Called from `popoverWillShow` — restores search for a still-active query
+    /// without waiting for debounce (query string did not change, so `onChange`
+    /// will not fire). Session-cache hits apply immediately.
+    func willShow() {
+        let trimmed = store.query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count >= Self.minimumQueryLength else { return }
+
+        generation += 1
+        let thisGeneration = generation
+        debounceTask?.cancel()
+        debounceTask = Task { [weak self] in
+            guard !Task.isCancelled, let self, thisGeneration == self.generation else { return }
+            await self.runSearch(text: trimmed, generation: thisGeneration)
+        }
+    }
+
+    /// Cancels in-flight search and clears the searching spinner. Keeps
+    /// `liveDocumentMatchesByProject` and `sessionCache` so reopening the
+    /// popover with the same query still shows mixed project + document rows.
     func willHide() {
         generation += 1
         debounceTask?.cancel()
         debounceTask = nil
-        sessionCache.removeAll()
-        store.clearDocumentSearchState()
+        store.setSearchingProjectIDs([])
     }
 
     private func runSearch(text: String, generation: Int) async {

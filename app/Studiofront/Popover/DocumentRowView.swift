@@ -52,7 +52,7 @@ struct DocumentRowView: View {
         .onTapGesture { store.select(listItemID) }
         .accessibilityElement(children: .contain)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
-        .accessibilityLabel("\(document.title), \(row.displayTitle)")
+        .accessibilityLabel("\(document.typeName.isEmpty ? "" : "\(document.typeName), ")\(document.title), \(row.displayTitle)")
         .padding(.leading, metrics.listPadding.leading)
         .padding(.trailing, metrics.listPadding.trailing)
     }
@@ -69,6 +69,9 @@ struct DocumentRowView: View {
                 }
             } label: {
                 HStack(spacing: 5) {
+                    if !document.typeName.isEmpty {
+                        DocumentTypeChip(document.typeName)
+                    }
                     Text(document.title)
                         .font(theme.typography.projectName)
                         .foregroundStyle(theme.colors.text)

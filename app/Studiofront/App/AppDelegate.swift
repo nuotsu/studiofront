@@ -449,6 +449,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
     func popoverWillShow(_ notification: Notification) {
         installKeyMonitor()
         presence.willShow()
+        documentSearch.willShow()
     }
 
     func popoverDidClose(_ notification: Notification) {
@@ -518,6 +519,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
                 store.searchFocusToken &+= 1
                 return true
             case "1", "2", "3", "4", "5", "6", "7", "8", "9":
+                // Favorites jump is disabled while a search query is active —
+                // results aren't favorited-first and the legends are hidden.
+                guard store.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                    return true
+                }
                 if let index = Int(character) {
                     store.jumpToFavorite(index)
                 }

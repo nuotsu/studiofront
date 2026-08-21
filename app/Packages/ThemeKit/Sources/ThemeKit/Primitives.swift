@@ -697,6 +697,34 @@ public struct KeycapLegend: View {
     }
 }
 
+/// Compact schema-type chip for document search rows — same chrome language as
+/// `KeycapLegend` (faint mono text, chip fill, slight radius, border).
+public struct DocumentTypeChip: View {
+    @Environment(\.studioTheme) private var theme
+    var typeName: String
+
+    public init(_ typeName: String) {
+        self.typeName = typeName
+    }
+
+    public var body: some View {
+        Text(typeName)
+            .font(theme.typography.chip)
+            .foregroundStyle(theme.colors.faint)
+            .lineLimit(1)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 1.5)
+            .background(theme.colors.chipBackground)
+            .overlay(
+                RoundedRectangle(cornerRadius: theme.cornerRadius(4), style: theme.cornerStyle)
+                    .strokeBorder(theme.colors.chipBorder, lineWidth: 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: theme.cornerRadius(4), style: theme.cornerStyle))
+            .fixedSize()
+            .accessibilityHidden(true)
+    }
+}
+
 public struct GroupByControl<Value: Hashable>: View {
     @Environment(\.studioTheme) private var theme
     var selection: Binding<Value>
@@ -856,7 +884,6 @@ public struct DocumentProjectAvatar: View {
     var brandHex: String?
     var favicon: Image?
 
-    private static let badgeSize: CGFloat = 15
     private static let badgeOverflow: CGFloat = 3
 
     public init(name: String, brandHex: String?, favicon: Image? = nil) {
@@ -868,15 +895,13 @@ public struct DocumentProjectAvatar: View {
     public var body: some View {
         let size = theme.metrics.avatarSize
         let frameSize = size + Self.badgeOverflow
-        ZStack(alignment: .topLeading) {
+        ZStack(alignment: .bottomTrailing) {
             ProjectAvatar(name: name, brandHex: brandHex, favicon: favicon)
+                .frame(width: size, height: size)
+                .frame(width: frameSize, height: frameSize, alignment: .topLeading)
             DocumentAvatarBadge()
-                .offset(
-                    x: size - Self.badgeSize + Self.badgeOverflow,
-                    y: size - Self.badgeSize + Self.badgeOverflow
-                )
         }
-        .frame(width: frameSize, height: frameSize, alignment: .topLeading)
+        .frame(width: frameSize, height: frameSize)
         .accessibilityHidden(true)
     }
 }
