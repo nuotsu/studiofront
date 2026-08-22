@@ -1,11 +1,13 @@
 import SwiftUI
 import ThemeKit
 import StudioStore
+import LicenseKit
 
 struct PopoverRootView: View {
     @Environment(StudioStore.self) private var store
     @Environment(AppSettings.self) private var settings
     @Environment(AuthSession.self) private var auth
+    @Environment(LicenseService.self) private var license
     @Environment(\.openWindow) private var openWindow
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @FocusState private var searchFocused: Bool
@@ -116,6 +118,27 @@ struct PopoverRootView: View {
                     .foregroundStyle(theme.colors.text)
                     .focused($searchFocused)
                     .background(SearchFieldTuning())
+                }
+                if let title = licenseHeaderPillTitle {
+                    Button {
+                        AppDelegate.shared?.openSettingsWindow(pane: .license)
+                    } label: {
+                        if isTrialLicenseHeader {
+                            Text(title)
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(Color(nsColor: .systemRed))
+                        } else {
+                            Text(title)
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(theme.colors.primaryText)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(theme.colors.primaryBackground)
+                                .clipShape(RoundedRectangle(cornerRadius: theme.cornerRadius(5), style: theme.cornerStyle))
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(title)
                 }
                 Button {
                     AppDelegate.shared?.openSettingsWindow()
@@ -290,6 +313,23 @@ struct PopoverRootView: View {
                             .padding(.horizontal, theme.metrics.listPadding.leading)
                             .padding(.vertical, 26)
                     }
+
+                    if showLicenseUpgradeFooter {
+                        Button {
+                            AppDelegate.shared?.openSettingsWindow(pane: .license)
+                        } label: {
+                            Text("Upgrade to unlock unlimited projects and organizations")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(theme.colors.primaryBackground)
+                                .multilineTextAlignment(.center)
+                                .frame(maxWidth: .infinity)
+                                .padding(.horizontal, theme.metrics.listPadding.leading)
+                                .padding(.top, groups.isEmpty ? 0 : 14)
+                                .padding(.bottom, 4)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Upgrade to unlock unlimited projects and organizations")
+                    }
                 }
                 .padding(.bottom, theme.metrics.listPadding.bottom)
             }
@@ -380,6 +420,32 @@ struct PopoverRootView: View {
             return "No projects yet"
         }
         return "Connect Sanity to load projects"
+    }
+
+    /// Compact pill between search and Settings — trial countdown or Upgrade.
+    /// Hidden while validating / licensed so launch doesn't flash Upgrade → trial.
+    private var licenseHeaderPillTitle: String? {
+        switch license.status {
+        case let .trial(daysLeft):
+            daysLeft == 1 ? "1 day left" : "\(daysLeft) days left"
+        case .free, .expired:
+            "Upgrade"
+        case .validating, .licensed:
+            nil
+        }
+    }
+
+    private var isTrialLicenseHeader: Bool {
+        if case .trial = license.status { return true }
+        return false
+    }
+
+    /// Footer unlock line — only when caps apply (free / expired), not during trial.
+    private var showLicenseUpgradeFooter: Bool {
+        switch license.status {
+        case .free, .expired: true
+        case .validating, .trial, .licensed: false
+        }
     }
 
     /// Reflects the user's current "Open Studio" binding (default Return, or whatever

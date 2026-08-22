@@ -8,6 +8,14 @@ public enum LicensePlan: String, Sendable, Codable {
     private static let monthlyVariantID = 2_044_728
     private static let annualVariantID = 2_044_717
 
+    public var title: String {
+        switch self {
+        case .monthly: "Monthly"
+        case .annual: "Annual"
+        case .unknown: "Subscription"
+        }
+    }
+
     static func from(variantID: Int?, variantName: String?) -> LicensePlan {
         if let variantID {
             if variantID == monthlyVariantID { return .monthly }
