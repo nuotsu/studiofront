@@ -12,5 +12,9 @@ let package = Package(
     ],
     targets: [
         .target(name: "StudioStore"),
+        .testTarget(
+            name: "StudioStoreTests",
+            dependencies: ["StudioStore"]
+        ),
     ]
 )

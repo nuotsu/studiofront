@@ -14,7 +14,8 @@ public final class StudioStore {
     public var searchFocusToken: UInt = 0
     public var isRefreshing: Bool = false
     public var hideArchivedProjects: Bool = true
-    public var entitlement: StudioStoreEntitlement = .unlimited { didSet { invalidateListCache() } }
+    /// Defaults to free caps until `LicenseService` resolves a concrete entitlement.
+    public var entitlement: StudioStoreEntitlement = .free { didSet { invalidateListCache() } }
     public var onCurationChanged: (() -> Void)?
     public var onRefreshRequested: (() -> Void)?
     /// Fired after `replaceRows` — the only point at which the set of

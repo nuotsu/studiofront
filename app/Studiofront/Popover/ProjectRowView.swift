@@ -100,7 +100,7 @@ struct ProjectRowView: View {
     private func documentLine(document: EditedDocument, emphasized: Bool) -> some View {
         Button {
             if let url = document.deepLinkURL {
-                AppDelegate.shared?.openURL(url)
+                AppDelegate.shared?.openUnlockedURL(url, projectID: row.id)
             }
         } label: {
             HStack(spacing: 5) {
@@ -125,12 +125,8 @@ struct ProjectRowView: View {
     }
 
     private func openStudio() {
-        guard !store.isProjectLocked(row.id) else {
-            AppDelegate.shared?.openSettingsWindow(pane: .license)
-            return
-        }
         let preferExternal = settings.studioURLPreference == .external
         guard let url = row.project.resolvedStudioURL(preferExternal: preferExternal) else { return }
-        AppDelegate.shared?.openURL(url)
+        AppDelegate.shared?.openUnlockedURL(url, projectID: row.id)
     }
 }

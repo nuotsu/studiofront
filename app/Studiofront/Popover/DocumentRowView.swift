@@ -100,22 +100,14 @@ struct DocumentRowView: View {
     }
 
     private func openDocument() {
-        guard !store.isProjectLocked(row.id) else {
-            AppDelegate.shared?.openSettingsWindow(pane: .license)
-            return
-        }
         if let url = document.deepLinkURL {
-            AppDelegate.shared?.openURL(url)
+            AppDelegate.shared?.openUnlockedURL(url, projectID: row.id)
         }
     }
 
     private func openStudio() {
-        guard !store.isProjectLocked(row.id) else {
-            AppDelegate.shared?.openSettingsWindow(pane: .license)
-            return
-        }
         let preferExternal = settings.studioURLPreference == .external
         guard let url = row.project.resolvedStudioURL(preferExternal: preferExternal) else { return }
-        AppDelegate.shared?.openURL(url)
+        AppDelegate.shared?.openUnlockedURL(url, projectID: row.id)
     }
 }

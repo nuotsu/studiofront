@@ -63,12 +63,21 @@ public actor LicenseClient {
         switch status {
         case "expired": return .expired
         case "disabled": return .invalidKey
+        case "inactive": return .notActivated
         default: break
         }
         if let message, message.localizedCaseInsensitiveContains("activation limit") {
             return .activationLimitReached
         }
-        return .invalidKey
+        if let message {
+            let lower = message.lowercased()
+            if lower.contains("not found") || lower.contains("invalid") {
+                return .invalidKey
+            }
+            return .transport(LicenseSecretRedactor.redact(message))
+        }
+        // Ambiguous rejection — keep the local key and let offline policy decide.
+        return .transport("Lemon Squeezy rejected the license request.")
     }
 
     // MARK: - HTTP

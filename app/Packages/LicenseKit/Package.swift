@@ -12,5 +12,9 @@ let package = Package(
     ],
     targets: [
         .target(name: "LicenseKit"),
+        .testTarget(
+            name: "LicenseKitTests",
+            dependencies: ["LicenseKit"]
+        ),
     ]
 )

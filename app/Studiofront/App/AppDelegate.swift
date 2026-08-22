@@ -281,9 +281,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         }
     }
 
+    /// Opens a Studio or document deep link only when the project is unlocked.
+    /// Locked projects route to Settings → License instead.
+    func openUnlockedURL(_ url: URL, projectID: String, dismiss: Bool = true) {
+        guard !store.isProjectLocked(projectID) else {
+            openSettingsWindow(pane: .license)
+            return
+        }
+        openURL(url, dismiss: dismiss)
+    }
+
     func openSelectedStudio() {
-        guard let url = store.selectedRow?.resolvedStudioURL(preferExternal: settings.studioURLPreference == .external) else { return }
-        openURL(url)
+        guard let row = store.selectedRow else { return }
+        guard let url = row.resolvedStudioURL(preferExternal: settings.studioURLPreference == .external) else { return }
+        openUnlockedURL(url, projectID: row.id)
     }
 
     func applyAppearance(_ preference: AppearancePreference) {
@@ -590,12 +601,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
     private func openSelectedDocument() {
         guard let item = store.selectedListItem else { return }
         switch item {
-        case let .document(_, document):
+        case let .document(project, document):
             guard let url = document.deepLinkURL else { return }
-            openURL(url)
+            openUnlockedURL(url, projectID: project.id)
         case let .project(row):
             guard let url = store.documentDisplay(for: row)?.deepLinkURL else { return }
-            openURL(url)
+            openUnlockedURL(url, projectID: row.id)
         }
     }
 }

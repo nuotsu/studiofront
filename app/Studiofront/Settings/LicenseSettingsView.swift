@@ -87,8 +87,15 @@ struct LicenseSettingsView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Upgrade")
                         .font(.headline)
-                    Text("Unlimited projects and organizations.")
-                        .foregroundStyle(.secondary)
+                    HStack(alignment: .firstTextBaseline, spacing: 0) {
+                        Text("Unlimited projects and organizations. ")
+                            .foregroundStyle(.secondary)
+                        Link(
+                            "See all plans",
+                            destination: URL(string: "https://studiofront.nuots.dev/pricing")!
+                        )
+                        .buttonStyle(SettingsInlineLinkButtonStyle())
+                    }
                 }
 
                 HStack(alignment: .top, spacing: 12) {
@@ -188,38 +195,40 @@ struct LicenseSettingsView: View {
 
     private var activateSection: some View {
         Section("Already have a license key?") {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("License key")
-                SecureField("", text: $keyDraft, prompt: Text("Paste your license key"))
-                    .textFieldStyle(.roundedBorder)
-                    .multilineTextAlignment(.leading)
-                    .labelsHidden()
-                    .disabled(isActivating)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .settingsHighlight(.licenseKey)
+            VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("License key")
+                    SecureField("", text: $keyDraft, prompt: Text("Paste your license key"))
+                        .textFieldStyle(.roundedBorder)
+                        .multilineTextAlignment(.leading)
+                        .labelsHidden()
+                        .disabled(isActivating)
+                }
+                .settingsHighlight(.licenseKey)
 
-            Button {
-                activate()
-            } label: {
-                HStack(spacing: 6) {
-                    if isActivating {
-                        ProgressView()
-                            .controlSize(.small)
+                Button {
+                    activate()
+                } label: {
+                    HStack(spacing: 6) {
+                        if isActivating {
+                            ProgressView()
+                                .controlSize(.small)
+                        }
+                        Text("Activate")
                     }
-                    Text("Activate")
+                }
+                .disabled(
+                    isActivating
+                        || keyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                )
+
+                if let message = license.lastError {
+                    Text(message)
+                        .foregroundStyle(.red)
+                        .font(.callout)
                 }
             }
-            .disabled(
-                isActivating
-                    || keyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            )
-
-            if let message = license.lastError {
-                Text(message)
-                    .foregroundStyle(.red)
-                    .font(.callout)
-            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -233,7 +242,7 @@ struct LicenseSettingsView: View {
                 Text("Unlimited projects and organizations.")
                     .foregroundStyle(.secondary)
                 if let expiresAt {
-                    Text("Renews \(expiresAt.formatted(date: .abbreviated, time: .omitted))")
+                    Text("Access through \(expiresAt.formatted(date: .abbreviated, time: .omitted))")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -261,5 +270,13 @@ struct LicenseSettingsView: View {
                 keyDraft = ""
             }
         }
+    }
+}
+
+private struct SettingsInlineLinkButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundStyle(Color.accentColor)
+            .opacity(configuration.isPressed ? 0.45 : 1)
     }
 }

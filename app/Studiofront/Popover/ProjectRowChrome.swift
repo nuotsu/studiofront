@@ -60,7 +60,7 @@ struct ProjectRowTrailingActions: View {
                 },
                 onSelect: { item in
                     if let url = item.deepLinkURL {
-                        AppDelegate.shared?.openURL(url)
+                        AppDelegate.shared?.openUnlockedURL(url, projectID: row.id)
                     }
                 }
             )
@@ -93,7 +93,7 @@ struct ProjectRowTrailingActions: View {
             guard let url = app.resolvedURL else { return nil }
             let label = app.title ?? (app.isExternal ? (url.host ?? app.host) : "\(app.host).sanity.studio")
             return SplitPrimaryButton.MenuItem(id: app.id, title: label) {
-                AppDelegate.shared?.openURL(url)
+                AppDelegate.shared?.openUnlockedURL(url, projectID: row.id)
             }
         }
 
@@ -107,6 +107,6 @@ struct ProjectRowTrailingActions: View {
     private func openStudio() {
         let preferExternal = settings.studioURLPreference == .external
         guard let url = row.project.resolvedStudioURL(preferExternal: preferExternal) else { return }
-        AppDelegate.shared?.openURL(url)
+        AppDelegate.shared?.openUnlockedURL(url, projectID: row.id)
     }
 }
