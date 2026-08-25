@@ -5,8 +5,8 @@ public enum LicensePlan: String, Sendable, Codable {
     case annual
     case unknown
 
-    private static let monthlyVariantID = 2_044_728
-    private static let annualVariantID = 2_044_717
+    private static let monthlyVariantID = 2_057_545
+    private static let annualVariantID = 2_057_546
 
     public var title: String {
         switch self {
