@@ -276,6 +276,7 @@ public struct SectionHeader: View {
     var isFavorite: Bool?
     var onToggleFavorite: (() -> Void)?
     var isLocked: Bool
+    var favoritingDisabled: Bool
 
     @State private var isAccessoryHovered = false
 
@@ -287,7 +288,8 @@ public struct SectionHeader: View {
         onAccessory: (() -> Void)? = nil,
         isFavorite: Bool? = nil,
         onToggleFavorite: (() -> Void)? = nil,
-        isLocked: Bool = false
+        isLocked: Bool = false,
+        favoritingDisabled: Bool = false
     ) {
         self.title = title
         self.itemCount = itemCount
@@ -297,6 +299,7 @@ public struct SectionHeader: View {
         self.isFavorite = isFavorite
         self.onToggleFavorite = onToggleFavorite
         self.isLocked = isLocked
+        self.favoritingDisabled = favoritingDisabled
     }
 
     public var body: some View {
@@ -312,6 +315,8 @@ public struct SectionHeader: View {
                         .frame(width: theme.metrics.starColumnWidth)
                 }
                 .buttonStyle(.plain)
+                .disabled(favoritingDisabled)
+                .opacity(favoritingDisabled ? 0.35 : 1)
                 .accessibilityLabel(isFavorite ? "Remove organization from favorites" : "Add organization to favorites")
             }
 

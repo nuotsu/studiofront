@@ -15,7 +15,14 @@ public final class StudioStore {
     public var isRefreshing: Bool = false
     public var hideArchivedProjects: Bool = true
     /// Defaults to free caps until `LicenseService` resolves a concrete entitlement.
-    public var entitlement: StudioStoreEntitlement = .free { didSet { invalidateListCache() } }
+    public var entitlement: StudioStoreEntitlement = .free {
+        didSet {
+            if !entitlement.isUnlimited {
+                clearAllFavorites()
+            }
+            invalidateListCache()
+        }
+    }
     public var onCurationChanged: (() -> Void)?
     public var onRefreshRequested: (() -> Void)?
     /// Fired after `replaceRows` — the only point at which the set of
@@ -465,6 +472,7 @@ public final class StudioStore {
     }
 
     public func toggleFavorite(_ id: String) {
+        guard entitlement.isUnlimited else { return }
         guard let index = rows.firstIndex(where: { $0.id == id }) else { return }
         var row = rows[index]
         row.curation.isFavorite.toggle()
@@ -491,6 +499,7 @@ public final class StudioStore {
     }
 
     public func toggleOrganizationFavorite(_ id: String) {
+        guard entitlement.isUnlimited else { return }
         if let index = organizations.firstIndex(where: { $0.id == id }) {
             var org = organizations[index]
             org.isFavorite.toggle()
@@ -502,6 +511,23 @@ public final class StudioStore {
         let name = rows.first(where: { $0.project.organizationId == id })?.project.organizationName ?? id
         organizations.append(OrganizationRecord(id: id, name: name, isFavorite: true))
         invalidateListCache()
+        onCurationChanged?()
+    }
+
+    /// Unfavorites every project and organization — called whenever `entitlement`
+    /// drops out of an unlimited plan, so a trial's favorites don't survive into
+    /// the free tier and nothing sits pre-favorited against the lock caps.
+    private func clearAllFavorites() {
+        var changed = false
+        for index in rows.indices where rows[index].curation.isFavorite {
+            rows[index].curation.isFavorite = false
+            changed = true
+        }
+        for index in organizations.indices where organizations[index].isFavorite {
+            organizations[index].isFavorite = false
+            changed = true
+        }
+        guard changed else { return }
         onCurationChanged?()
     }
 
