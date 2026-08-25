@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.1.0] - 2026-08-25
+
+- Add a 7-day unlimited trial, then a free plan capped at 3 projects across 3 organizations
+- Add Settings → License with Lemon Squeezy checkout ($10/mo or $84/yr) and license-key activation
+- Add popover upgrade entry points and lock icons on projects and orgs over the free cap
+- Enforce entitlement before opening a Studio or document
+- Keep a validated license unlocked for 72 hours when Lemon Squeezy is unreachable
+- Disable favoriting and clear favorites when the trial ends or entitlement drops to free
+
 ## [0.0.8] - 2026-08-21
 
 - Show schema type chips in document search
