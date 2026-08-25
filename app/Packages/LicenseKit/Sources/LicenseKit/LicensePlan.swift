@@ -1,0 +1,31 @@
+import Foundation
+
+public enum LicensePlan: String, Sendable, Codable {
+    case monthly
+    case annual
+    case unknown
+
+    private static let monthlyVariantID = 2_057_545
+    private static let annualVariantID = 2_057_546
+
+    public var title: String {
+        switch self {
+        case .monthly: "Monthly"
+        case .annual: "Annual"
+        case .unknown: "Subscription"
+        }
+    }
+
+    static func from(variantID: Int?, variantName: String?) -> LicensePlan {
+        if let variantID {
+            if variantID == monthlyVariantID { return .monthly }
+            if variantID == annualVariantID { return .annual }
+        }
+        if let variantName {
+            let normalized = variantName.lowercased()
+            if normalized.contains("month") { return .monthly }
+            if normalized.contains("annual") || normalized.contains("year") { return .annual }
+        }
+        return .unknown
+    }
+}

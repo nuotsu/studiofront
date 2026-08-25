@@ -9,6 +9,7 @@ struct StudiofrontApp: App {
             SettingsRootView()
                 .environment(appDelegate.settings)
                 .environment(appDelegate.auth)
+                .environment(appDelegate.license)
         }
         .windowToolbarStyle(.unified(showsTitle: false))
         .windowResizability(.contentSize)

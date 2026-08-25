@@ -364,6 +364,24 @@ public enum RecencyBucket: String, CaseIterable, Sendable {
     }
 }
 
+/// What the current license entitles the popover to show unlocked — pushed in
+/// by the app layer from `LicenseKit`'s `Entitlement`. `StudioStore` stays
+/// ignorant of licensing/Lemon Squeezy; it only knows these two numbers.
+public struct StudioStoreEntitlement: Sendable, Equatable {
+    public var isUnlimited: Bool
+    public var maxFavoriteProjects: Int
+    public var maxFavoriteOrganizations: Int
+
+    public init(isUnlimited: Bool, maxFavoriteProjects: Int, maxFavoriteOrganizations: Int) {
+        self.isUnlimited = isUnlimited
+        self.maxFavoriteProjects = maxFavoriteProjects
+        self.maxFavoriteOrganizations = maxFavoriteOrganizations
+    }
+
+    public static let unlimited = StudioStoreEntitlement(isUnlimited: true, maxFavoriteProjects: .max, maxFavoriteOrganizations: .max)
+    public static let free = StudioStoreEntitlement(isUnlimited: false, maxFavoriteProjects: 3, maxFavoriteOrganizations: 3)
+}
+
 public struct OrganizationRecord: Sendable, Hashable, Identifiable {
     public var id: String
     public var name: String

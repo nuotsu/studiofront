@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import ThemeKit
 import StudioStore
+import LicenseKit
 
 extension Notification.Name {
     static let openSettingsRequested = Notification.Name("openSettingsRequested")
@@ -17,6 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
     let settings = AppSettings.load()
     let store = StudioStore()
     let auth = AuthSession()
+    let license = LicenseService()
     private(set) lazy var sync = ProjectSyncService(store: store, auth: auth, settings: settings)
     private(set) lazy var presence = PresenceCoordinator(store: store, settings: settings)
     private(set) lazy var documentSearch = DocumentSearchCoordinator(store: store, settings: settings)
@@ -62,9 +64,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         auth.onStatusChange = { [weak self] in
             Task { await self?.sync.handleAuthChange() }
         }
+        license.onEntitlementChange = { [weak self] entitlement in
+            self?.store.entitlement = StudioStoreEntitlement(
+                isUnlimited: entitlement.isUnlimited,
+                maxFavoriteProjects: entitlement.maxFavoriteProjects,
+                maxFavoriteOrganizations: entitlement.maxFavoriteOrganizations
+            )
+        }
         Task {
             await auth.restoreOnLaunch()
             await self.sync.loadCache()
+        }
+        Task {
+            await license.restoreOnLaunch()
         }
         // Start Sparkle after launch so the first-run permission prompt is not buried.
         _ = AppUpdater.shared
@@ -233,6 +245,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
             popover.contentViewController?.view.window?.makeKey()
             sync.refreshIfStale(interval: settings.refreshInterval)
+            license.refreshIfStale()
         }
     }
 
@@ -268,9 +281,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         }
     }
 
+    /// Opens a Studio or document deep link only when the project is unlocked.
+    /// Locked projects route to Settings → License instead.
+    func openUnlockedURL(_ url: URL, projectID: String, dismiss: Bool = true) {
+        guard !store.isProjectLocked(projectID) else {
+            openSettingsWindow(pane: .license)
+            return
+        }
+        openURL(url, dismiss: dismiss)
+    }
+
     func openSelectedStudio() {
-        guard let url = store.selectedRow?.resolvedStudioURL(preferExternal: settings.studioURLPreference == .external) else { return }
-        openURL(url)
+        guard let row = store.selectedRow else { return }
+        guard let url = row.resolvedStudioURL(preferExternal: settings.studioURLPreference == .external) else { return }
+        openUnlockedURL(url, projectID: row.id)
     }
 
     func applyAppearance(_ preference: AppearancePreference) {
@@ -398,6 +422,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
             rootView: SettingsRootView()
                 .environment(settings)
                 .environment(auth)
+                .environment(license)
         )
         let window = NSWindow(contentViewController: hosting)
         window.title = "Settings"
@@ -442,6 +467,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
             .environment(store)
             .environment(settings)
             .environment(auth)
+            .environment(license)
     }
 
     // MARK: - Keyboard
@@ -575,12 +601,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
     private func openSelectedDocument() {
         guard let item = store.selectedListItem else { return }
         switch item {
-        case let .document(_, document):
+        case let .document(project, document):
             guard let url = document.deepLinkURL else { return }
-            openURL(url)
+            openUnlockedURL(url, projectID: project.id)
         case let .project(row):
             guard let url = store.documentDisplay(for: row)?.deepLinkURL else { return }
-            openURL(url)
+            openUnlockedURL(url, projectID: row.id)
         }
     }
 }

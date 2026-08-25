@@ -275,6 +275,8 @@ public struct SectionHeader: View {
     var onAccessory: (() -> Void)?
     var isFavorite: Bool?
     var onToggleFavorite: (() -> Void)?
+    var isLocked: Bool
+    var favoritingDisabled: Bool
 
     @State private var isAccessoryHovered = false
 
@@ -285,7 +287,9 @@ public struct SectionHeader: View {
         accessoryCopied: Bool = false,
         onAccessory: (() -> Void)? = nil,
         isFavorite: Bool? = nil,
-        onToggleFavorite: (() -> Void)? = nil
+        onToggleFavorite: (() -> Void)? = nil,
+        isLocked: Bool = false,
+        favoritingDisabled: Bool = false
     ) {
         self.title = title
         self.itemCount = itemCount
@@ -294,6 +298,8 @@ public struct SectionHeader: View {
         self.onAccessory = onAccessory
         self.isFavorite = isFavorite
         self.onToggleFavorite = onToggleFavorite
+        self.isLocked = isLocked
+        self.favoritingDisabled = favoritingDisabled
     }
 
     public var body: some View {
@@ -309,6 +315,8 @@ public struct SectionHeader: View {
                         .frame(width: theme.metrics.starColumnWidth)
                 }
                 .buttonStyle(.plain)
+                .disabled(favoritingDisabled)
+                .opacity(favoritingDisabled ? 0.35 : 1)
                 .accessibilityLabel(isFavorite ? "Remove organization from favorites" : "Add organization to favorites")
             }
 
@@ -316,6 +324,13 @@ public struct SectionHeader: View {
                 .font(theme.typography.section)
                 .tracking(0.7)
                 .foregroundStyle(colors.faint)
+
+            if isLocked {
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 9))
+                    .foregroundStyle(colors.faint.opacity(0.55))
+                    .accessibilityLabel("Locked — upgrade to unlock")
+            }
 
             if let accessory {
                 Button {

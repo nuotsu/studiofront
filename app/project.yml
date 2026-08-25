@@ -18,6 +18,8 @@ packages:
     path: Packages/SanityKit
   PresenceKit:
     path: Packages/PresenceKit
+  LicenseKit:
+    path: Packages/LicenseKit
   Sparkle:
     url: https://github.com/sparkle-project/Sparkle
     from: 2.9.5
@@ -42,6 +44,7 @@ targets:
       - package: StudioStore
       - package: SanityKit
       - package: PresenceKit
+      - package: LicenseKit
       - package: Sparkle
         product: Sparkle
     info:

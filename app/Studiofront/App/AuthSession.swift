@@ -7,6 +7,7 @@ enum SettingsPane: String, CaseIterable, Identifiable, Hashable {
     case appearance
     case account
     case keybindings
+    case license
     case about
 
     var id: Self { self }
@@ -17,6 +18,7 @@ enum SettingsPane: String, CaseIterable, Identifiable, Hashable {
         case .appearance: "Appearance"
         case .account: "Account"
         case .keybindings: "Keybindings"
+        case .license: "License"
         case .about: "About"
         }
     }
@@ -27,6 +29,7 @@ enum SettingsPane: String, CaseIterable, Identifiable, Hashable {
         case .appearance: "paintbrush"
         case .account: "person.crop.circle"
         case .keybindings: "keyboard"
+        case .license: "key.horizontal"
         case .about: "info.circle"
         }
     }

@@ -21,9 +21,7 @@ struct DocumentRowView: View {
             HStack(alignment: .center, spacing: metrics.rowGap) {
                 ProjectRowFavoriteButton(projectID: row.id, isFavorite: row.curation.isFavorite)
                 Button {
-                    if let url = document.deepLinkURL {
-                        AppDelegate.shared?.openURL(url)
-                    }
+                    openDocument()
                 } label: {
                     DocumentProjectAvatar(
                         name: row.displayTitle,
@@ -47,7 +45,7 @@ struct DocumentRowView: View {
             }
         }
         .contentShape(Rectangle())
-        .opacity(row.isUnavailable || row.project.isArchived ? 0.45 : 1)
+        .opacity(row.isUnavailable || row.project.isArchived || store.isProjectLocked(row.id) ? 0.45 : 1)
         .onHover { isHovered = $0 }
         .onTapGesture { store.select(listItemID) }
         .accessibilityElement(children: .contain)
@@ -64,9 +62,7 @@ struct DocumentRowView: View {
     private var identity: some View {
         VStack(alignment: .leading, spacing: 4) {
             Button {
-                if let url = document.deepLinkURL {
-                    AppDelegate.shared?.openURL(url)
-                }
+                openDocument()
             } label: {
                 HStack(spacing: 5) {
                     if !document.typeName.isEmpty {
@@ -103,9 +99,15 @@ struct DocumentRowView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    private func openDocument() {
+        if let url = document.deepLinkURL {
+            AppDelegate.shared?.openUnlockedURL(url, projectID: row.id)
+        }
+    }
+
     private func openStudio() {
         let preferExternal = settings.studioURLPreference == .external
         guard let url = row.project.resolvedStudioURL(preferExternal: preferExternal) else { return }
-        AppDelegate.shared?.openURL(url)
+        AppDelegate.shared?.openUnlockedURL(url, projectID: row.id)
     }
 }

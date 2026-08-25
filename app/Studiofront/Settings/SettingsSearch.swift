@@ -23,6 +23,7 @@ enum SettingsSearchTarget: String, Hashable, CaseIterable {
     case favoriteToggleShortcut
     case groupByCycleShortcut
     case openDocumentShortcut
+    case licenseKey
     case about
 }
 
@@ -176,6 +177,13 @@ enum SettingsSearchIndex {
             pane: .keybindings,
             target: .openDocumentShortcut,
             systemImage: "keyboard"
+        ),
+        SettingsSearchItem(
+            title: "License",
+            keywords: ["license", "upgrade", "key", "activate", "pro", "trial", "subscription"],
+            pane: .license,
+            target: .licenseKey,
+            systemImage: "key.horizontal"
         ),
         SettingsSearchItem(
             title: "About",
