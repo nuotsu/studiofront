@@ -390,7 +390,8 @@ struct PopoverRootView: View {
             onToggleFavorite: group.organizationId.map { id in
                 { store.toggleOrganizationFavorite(id) }
             },
-            isLocked: group.organizationId.map(store.isOrganizationLocked) ?? false
+            isLocked: group.organizationId.map(store.isOrganizationLocked) ?? false,
+            favoritingDisabled: !store.entitlement.isUnlimited
         )
     }
 

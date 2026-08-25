@@ -25,6 +25,7 @@ struct ProjectRowFavoriteButton: View {
     var isFavorite: Bool
 
     var body: some View {
+        let isLocked = !store.entitlement.isUnlimited
         Button {
             store.toggleFavorite(projectID)
         } label: {
@@ -34,6 +35,8 @@ struct ProjectRowFavoriteButton: View {
                 .frame(width: theme.metrics.starColumnWidth)
         }
         .buttonStyle(.plain)
+        .disabled(isLocked)
+        .opacity(isLocked ? 0.35 : 1)
         .accessibilityLabel(isFavorite ? "Remove from favorites" : "Add to favorites")
     }
 }
