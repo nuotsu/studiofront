@@ -191,6 +191,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         menu.addItem(withTitle: "Keybindings", action: #selector(openKeybindingsFromMenu(_:)), keyEquivalent: "")
         menu.addItem(withTitle: "Account", action: #selector(openAccountFromMenu(_:)), keyEquivalent: "")
         menu.addItem(.separator())
+        menu.addItem(withTitle: "License", action: #selector(openLicenseFromMenu(_:)), keyEquivalent: "")
+        switch license.status {
+        case let .trial(daysLeft):
+            let title = daysLeft == 1 ? "1 day left" : "\(daysLeft) days left"
+            menu.addItem(withTitle: title, action: nil, keyEquivalent: "")
+        case .free, .expired:
+            menu.addItem(withTitle: "Upgrade", action: #selector(openLicenseFromMenu(_:)), keyEquivalent: "")
+        case .validating, .licensed:
+            break
+        }
+        menu.addItem(.separator())
         menu.addItem(withTitle: "Check for Updates…", action: #selector(checkForUpdatesFromMenu(_:)), keyEquivalent: "")
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—"
         menu.addItem(withTitle: "Current version: v\(version)", action: nil, keyEquivalent: "")
@@ -229,6 +240,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
 
     @objc private func openAccountFromMenu(_ sender: Any?) {
         openSettingsWindow(pane: .account)
+    }
+
+    @objc private func openLicenseFromMenu(_ sender: Any?) {
+        openSettingsWindow(pane: .license)
     }
 
     @objc private func checkForUpdatesFromMenu(_ sender: Any?) {
