@@ -69,11 +69,9 @@ public struct PrimaryButton: View {
                 .font(theme.typography.button)
                 .foregroundStyle(theme.colors.primaryText)
                 .padding(.horizontal, 9)
-                .padding(.vertical, 4)
-                .background(theme.colors.primaryBackground)
-                .clipShape(RoundedRectangle(cornerRadius: theme.cornerRadius(6), style: theme.cornerStyle))
+                .frame(height: theme.metrics.iconButtonSize.height)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PrimaryButtonStyle())
         .accessibilityLabel(title)
     }
 }
@@ -109,6 +107,8 @@ public struct SplitPrimaryButton: View {
     }
 
     public var body: some View {
+        let shape = RoundedRectangle(cornerRadius: theme.cornerRadius(6), style: theme.cornerStyle)
+
         HStack(spacing: 0) {
             Button(action: action) {
                 Text(title)
@@ -116,9 +116,9 @@ public struct SplitPrimaryButton: View {
                     .foregroundStyle(theme.colors.primaryText)
                     .padding(.leading, 9)
                     .padding(.trailing, menuItems.isEmpty ? 9 : 7)
-                    .padding(.vertical, 4)
+                    .frame(maxHeight: .infinity)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PrimarySegmentButtonStyle(edge: .leading))
             .accessibilityLabel(title)
 
             if !menuItems.isEmpty {
@@ -135,16 +135,17 @@ public struct SplitPrimaryButton: View {
                         .fontWeight(.semibold)
                         .frame(width: 6, height: 6)
                         .foregroundStyle(theme.colors.primaryText)
-                        .padding(.vertical, 4)
+                        .padding(.horizontal, 6)
+                        .frame(maxHeight: .infinity)
                         .background(MenuAnchorView(anchor: $menuAnchor))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(PrimarySegmentButtonStyle(edge: .trailing))
                 .accessibilityLabel("More Studio URLs")
-                .padding(.horizontal, 6)
             }
         }
+        .frame(height: theme.metrics.iconButtonSize.height)
         .background(theme.colors.primaryBackground)
-        .clipShape(RoundedRectangle(cornerRadius: theme.cornerRadius(6), style: theme.cornerStyle))
+        .clipShape(shape)
         .accessibilityElement(children: .contain)
     }
 
@@ -175,6 +176,78 @@ public struct SplitPrimaryButton: View {
         // edge, instead of overlapping the button by aligning it to the top.
         menu.popUp(positioning: nil, at: NSPoint(x: 0, y: -4), in: menuAnchor)
     }
+}
+
+/// Opacity formerly applied to the whole plain `PrimaryButton` label on press
+/// (~system dim). Applied only to the blue fill/border so labels stay full strength.
+private enum PrimaryPressDim {
+    static let opacity: CGFloat = 0.2
+}
+
+private struct PrimaryButtonStyle: ButtonStyle {
+    @Environment(\.studioTheme) private var theme
+
+    func makeBody(configuration: Configuration) -> some View {
+        let shape = RoundedRectangle(cornerRadius: theme.cornerRadius(6), style: theme.cornerStyle)
+        configuration.label
+            .background(
+                theme.colors.primaryBackground
+                    .overlay(Color.black.opacity(configuration.isPressed ? PrimaryPressDim.opacity : 0))
+            )
+            .overlay(
+                shape
+                    .strokeBorder(theme.colors.primaryBackground, lineWidth: 1)
+                    .overlay(
+                        shape.strokeBorder(
+                            Color.black.opacity(configuration.isPressed ? PrimaryPressDim.opacity : 0),
+                            lineWidth: 1
+                        )
+                    )
+            )
+            .clipShape(shape)
+    }
+}
+
+/// Per-segment fill + partial border for `SplitPrimaryButton`.
+/// Leading (Studio): top / left / bottom. Trailing (caret): top / right / bottom.
+private struct PrimarySegmentButtonStyle: ButtonStyle {
+    @Environment(\.studioTheme) private var theme
+    var edge: PrimarySegmentEdge
+
+    func makeBody(configuration: Configuration) -> some View {
+        let corner = theme.cornerRadius(6)
+        let pressed = configuration.isPressed
+        let dim = pressed ? PrimaryPressDim.opacity : 0
+        let shape = UnevenRoundedRectangle(
+            topLeadingRadius: edge == .leading ? corner : 0,
+            bottomLeadingRadius: edge == .leading ? corner : 0,
+            bottomTrailingRadius: edge == .trailing ? corner : 0,
+            topTrailingRadius: edge == .trailing ? corner : 0,
+            style: theme.cornerStyle
+        )
+        return configuration.label
+            .background(
+                theme.colors.primaryBackground
+                    .overlay(Color.black.opacity(dim))
+            )
+            .overlay {
+                shape
+                    .strokeBorder(theme.colors.primaryBackground, lineWidth: 1)
+                    .overlay(shape.strokeBorder(Color.black.opacity(dim), lineWidth: 1))
+                    // Hide the inner seam stroke so only outer edges remain.
+                    .overlay(alignment: edge == .leading ? .trailing : .leading) {
+                        Rectangle()
+                            .fill(theme.colors.primaryBackground)
+                            .overlay(Color.black.opacity(dim))
+                            .frame(width: 2)
+                    }
+            }
+    }
+}
+
+private enum PrimarySegmentEdge {
+    case leading
+    case trailing
 }
 
 /// An invisible `NSView` used only to capture a stable AppKit anchor for
@@ -684,12 +757,14 @@ public struct KeycapLegend: View {
     @Environment(\.studioTheme) private var theme
     var glyphs: [KeyGlyph]
     var compact: Bool
+    var foreground: Color?
 
     /// `compact` shrinks the chip's own padding/frame only — glyph font sizes are
     /// unaffected, so the keys stay legible while taking up less room in tight rows.
-    public init(_ glyphs: [KeyGlyph], compact: Bool = false) {
+    public init(_ glyphs: [KeyGlyph], compact: Bool = false, foreground: Color? = nil) {
         self.glyphs = glyphs
         self.compact = compact
+        self.foreground = foreground
     }
 
     public var body: some View {
@@ -698,7 +773,7 @@ public struct KeycapLegend: View {
                 KeyGlyphView(glyph)
             }
         }
-        .foregroundStyle(theme.colors.faint)
+        .foregroundStyle(foreground ?? theme.colors.faint)
         .frame(minHeight: compact ? 11 : 14)
         .padding(.horizontal, compact ? 2 : 5)
         .padding(.vertical, compact ? 1.5 : 2)

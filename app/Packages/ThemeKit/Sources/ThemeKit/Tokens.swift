@@ -149,7 +149,7 @@ public struct MetricTokens: @unchecked Sendable {
         rowPadding: CGFloat = 8,
         rowCornerRadius: CGFloat = 8,
         rowGap: CGFloat = 9,
-        avatarSize: CGFloat = 26,
+        avatarSize: CGFloat = 30,
         avatarCornerRadius: CGFloat = 7,
         starColumnWidth: CGFloat = 15,
         iconButtonSize: CGSize = CGSize(width: 24, height: 23),

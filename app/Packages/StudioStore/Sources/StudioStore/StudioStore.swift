@@ -38,8 +38,11 @@ public final class StudioStore {
     /// current query — drives the header's loading indicator.
     public var searchingProjectIDs: Set<String> = []
     public var isSearchingDocuments: Bool { !searchingProjectIDs.isEmpty }
+    /// True after Command has been held for 0.3s — drives the ⌘1–9 avatar overlays.
+    public var showFavoriteShortcutLegends: Bool = false
 
     private var copyResetTask: Task<Void, Never>?
+    private var commandHoldRevealTask: Task<Void, Never>?
 
     private struct ListState {
         var visibleRows: [ProjectRow]
@@ -535,6 +538,23 @@ public final class StudioStore {
         let favorites = sortedFavorites
         guard favorites.indices.contains(oneBasedIndex - 1) else { return }
         selectedID = favorites[oneBasedIndex - 1].id
+    }
+
+    /// Tracks Command hold for revealing favorite shortcut legends after 0.3s.
+    /// Does not restart the timer while Command stays down (e.g. adding Option).
+    public func updateCommandKeyHeld(_ isHeld: Bool) {
+        if isHeld {
+            guard commandHoldRevealTask == nil, !showFavoriteShortcutLegends else { return }
+            commandHoldRevealTask = Task {
+                try? await Task.sleep(for: .milliseconds(300))
+                guard !Task.isCancelled else { return }
+                showFavoriteShortcutLegends = true
+            }
+        } else {
+            commandHoldRevealTask?.cancel()
+            commandHoldRevealTask = nil
+            showFavoriteShortcutLegends = false
+        }
     }
 
     public func copySelectedProjectID() {

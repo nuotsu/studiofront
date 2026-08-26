@@ -4,6 +4,7 @@ import StudioStore
 
 struct ProjectRowView: View {
     @Environment(\.studioTheme) private var theme
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(StudioStore.self) private var store
     @Environment(AppSettings.self) private var settings
 
@@ -17,6 +18,7 @@ struct ProjectRowView: View {
 
     var body: some View {
         let metrics = theme.metrics
+        let isDark = colorScheme == .dark
         RowContainer(isSelected: isSelected, isHovered: isHovered) {
             HStack(alignment: .center, spacing: metrics.rowGap) {
                 ProjectRowFavoriteButton(projectID: row.id, isFavorite: row.curation.isFavorite)
@@ -27,6 +29,26 @@ struct ProjectRowView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Open Studio, \(row.displayTitle)")
+                .overlay {
+                    if store.showFavoriteShortcutLegends, let favoriteIndex {
+                        KeycapLegend(
+                            [.symbol("command"), .text("\(favoriteIndex)")],
+                            compact: true,
+                            foreground: isDark ? theme.colors.sub : theme.colors.text
+                        )
+                            .background(
+                                RoundedRectangle(cornerRadius: theme.cornerRadius(4), style: theme.cornerStyle)
+                                    .fill(theme.colors.panelFill)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: theme.cornerRadius(4), style: theme.cornerStyle)
+                                            .fill(isDark ? Color.black.opacity(0.18) : Color.white.opacity(0.72))
+                                    )
+                            )
+                            .allowsHitTesting(false)
+                            .transition(.opacity)
+                    }
+                }
+                .animation(.easeInOut(duration: 0.12), value: store.showFavoriteShortcutLegends)
                 .task(id: faviconHost) {
                     favicon = nil
                     guard let faviconHost else { return }
@@ -73,9 +95,6 @@ struct ProjectRowView: View {
     /// The project name line in the primary (name-slot) position.
     private func projectLine(emphasized: Bool) -> some View {
         HStack(spacing: 6) {
-            if let favoriteIndex {
-                KeycapLegend([.symbol("command"), .text("\(favoriteIndex)")], compact: true)
-            }
             Button {
                 openStudio()
             } label: {

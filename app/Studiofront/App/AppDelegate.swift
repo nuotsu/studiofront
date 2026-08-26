@@ -489,8 +489,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
 
     private func installKeyMonitor() {
         removeKeyMonitor()
-        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .flagsChanged]) { [weak self] event in
             guard let self, Thread.isMainThread else { return event }
+            if event.type == .flagsChanged {
+                let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+                MainActor.assumeIsolated {
+                    self.store.updateCommandKeyHeld(flags.contains(.command))
+                }
+                return event
+            }
             let keyCode = event.keyCode
             let modifierRaw = event.modifierFlags.rawValue
             let characters = event.charactersIgnoringModifiers ?? ""
@@ -506,6 +513,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
             NSEvent.removeMonitor(keyMonitor)
             self.keyMonitor = nil
         }
+        store.updateCommandKeyHeld(false)
     }
 
     private func handlePopoverKey(keyCode: UInt16, modifierRaw: UInt, characters: String) -> Bool {
