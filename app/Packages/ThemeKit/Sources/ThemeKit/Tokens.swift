@@ -154,7 +154,7 @@ public struct MetricTokens: @unchecked Sendable {
         starColumnWidth: CGFloat = 15,
         iconButtonSize: CGSize = CGSize(width: 24, height: 23),
         iconButtonCornerRadius: CGFloat = 6,
-        presenceSize: CGFloat = 16,
+        presenceSize: CGFloat = 24,
         searchFieldCornerRadius: CGFloat = 8,
         headerPadding: EdgeInsets = EdgeInsets(top: 11, leading: 12, bottom: 10, trailing: 12),
         footerPadding: EdgeInsets = EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12),
