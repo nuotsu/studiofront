@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.1.1] - 2026-08-26
+
+- Reveal favorite ⌘1–9 overlays on project avatars after holding ⌘ for 0.3s
+- Enlarge project avatars and live presence avatars
+- Match Studio button height to icon buttons and add per-segment press borders
+- Fix the License "See all plans" link host to studiofront.nuotsu.dev
+
 ## [0.1.0] - 2026-08-25
 
 - Add a 7-day unlimited trial, then a free plan capped at 3 projects across 3 organizations
