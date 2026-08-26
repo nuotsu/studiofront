@@ -92,7 +92,7 @@ struct LicenseSettingsView: View {
                             .foregroundStyle(.secondary)
                         Link(
                             "See all plans",
-                            destination: URL(string: "https://studiofront.nuots.dev/pricing")!
+                            destination: URL(string: "https://studiofront.nuotsu.dev/pricing")!
                         )
                         .buttonStyle(SettingsInlineLinkButtonStyle())
                     }
