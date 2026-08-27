@@ -90,15 +90,14 @@ final class DocumentSearchCoordinator {
         let eligibleIDs = store.eligibleProjectIDs()
         guard !eligibleIDs.isEmpty else { return }
 
-        var remoteIDs: [String] = []
         var localUpdates: [String: [EditedDocument]] = [:]
+        var remoteIDs: [String] = []
         for id in eligibleIDs {
             guard let row = store.rows.first(where: { $0.id == id }) else { continue }
+            remoteIDs.append(id)
             let local = store.cachedDocumentMatches(for: row)
             if !local.isEmpty {
                 localUpdates[id] = local
-            } else {
-                remoteIDs.append(id)
             }
         }
 
@@ -107,8 +106,17 @@ final class DocumentSearchCoordinator {
             remoteIDs = remoteIDs.filter { capped.contains($0) }
         }
 
-        store.applyDocumentSearchBatch(updates: localUpdates, completedProjectIDs: Set(localUpdates.keys))
+        // Paint cached title matches immediately; live GROQ still runs so docs
+        // outside the recent-20 cache (or stale since last sync) aren't missed.
+        if !localUpdates.isEmpty {
+            store.applyDocumentSearchBatch(updates: localUpdates, completedProjectIDs: [])
+        }
         store.setSearchingProjectIDs(Set(remoteIDs))
+
+        let cappedOutIDs = Set(eligibleIDs).subtracting(Set(remoteIDs))
+        if !cappedOutIDs.isEmpty {
+            store.applyDocumentSearchBatch(updates: [:], completedProjectIDs: cappedOutIDs)
+        }
 
         guard !remoteIDs.isEmpty else {
             sessionCache[text] = localUpdates
@@ -155,11 +163,40 @@ final class DocumentSearchCoordinator {
                 }
             }
 
-            allUpdates.merge(batchUpdates) { _, new in new }
-            store.applyDocumentSearchBatch(updates: batchUpdates, completedProjectIDs: Set(slice))
+            var mergedBatch: [String: [EditedDocument]] = [:]
+            for id in slice {
+                let local = localUpdates[id] ?? allUpdates[id] ?? []
+                let remote = batchUpdates[id] ?? []
+                mergedBatch[id] = Self.mergeDocumentMatches(local: local, remote: remote)
+            }
+            allUpdates.merge(mergedBatch) { _, new in new }
+            store.applyDocumentSearchBatch(updates: mergedBatch, completedProjectIDs: Set(slice))
         }
 
         sessionCache[text] = allUpdates
+    }
+
+    /// Unions cached and live matches by canonical document id, preferring the
+    /// newer entry when draft/published refer to the same doc. Empty remote
+    /// results keep local-only hits (e.g. acronym matches).
+    private static func mergeDocumentMatches(local: [EditedDocument], remote: [EditedDocument]) -> [EditedDocument] {
+        guard !remote.isEmpty else { return local }
+        func canonicalId(_ id: String) -> String {
+            let prefix = "drafts."
+            return id.hasPrefix(prefix) ? String(id.dropFirst(prefix.count)) : id
+        }
+        var byCanonical: [String: EditedDocument] = [:]
+        for doc in local {
+            byCanonical[canonicalId(doc.id)] = doc
+        }
+        for doc in remote {
+            let key = canonicalId(doc.id)
+            if let existing = byCanonical[key], existing.editedAt >= doc.editedAt {
+                continue
+            }
+            byCanonical[key] = doc
+        }
+        return byCanonical.values.sorted { $0.editedAt > $1.editedAt }
     }
 
     private func primaryDataset(for projectId: String) -> String? {

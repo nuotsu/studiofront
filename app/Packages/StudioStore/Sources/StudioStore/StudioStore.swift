@@ -145,7 +145,8 @@ public final class StudioStore {
         return Array(sorted.prefix(maxCount).map(\.id))
     }
 
-    /// Cached document title matches from recent activity — used to skip network search when sufficient.
+    /// Cached document title matches from recent activity — instant first paint
+    /// while live GROQ search runs for the same project.
     public func cachedDocumentMatches(for row: ProjectRow) -> [EditedDocument] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
@@ -639,7 +640,13 @@ public final class StudioStore {
     }
 
     private func normalize(_ string: String) -> String {
-        string.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+        let folded = string.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+        let separatorsNormalized = folded
+            .replacingOccurrences(of: "-", with: " ")
+            .replacingOccurrences(of: "_", with: " ")
+        return separatorsNormalized
+            .split(whereSeparator: \.isWhitespace)
+            .joined(separator: " ")
     }
 
     /// First letter of each word, e.g. "elevate experiences" -> "ee", so a
