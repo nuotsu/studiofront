@@ -1,11 +1,11 @@
 import { PortableText } from 'next-sanity'
+import CustomHTML from '@/modules/custom-html'
 import {
 	getDynamicFetchOptions,
 	type DynamicFetchOptions,
 } from '@/sanity/lib/live'
 import { getSite } from '@/sanity/lib/queries'
 import Logo from '@/ui/logo'
-import CustomHTML from '@/modules/custom-html'
 import SocialNavigation from '@/ui/social-navigation'
 import Navigation from './navigation'
 
@@ -51,6 +51,12 @@ async function CachedFooter({ perspective, stega }: DynamicFetchOptions) {
 							className="social [&_svg]:size-lh link flex items-center gap-4 max-md:justify-center"
 							perspective={perspective}
 							stega={stega}
+						/>
+
+						<div
+							dangerouslySetInnerHTML={{
+								__html: `<div google-add-preferred-source-btn data-theme="dark"></div>`,
+							}}
 						/>
 					</div>
 

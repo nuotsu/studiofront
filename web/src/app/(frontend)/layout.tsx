@@ -1,6 +1,7 @@
 import { VisualEditing } from 'next-sanity/visual-editing'
 import { Geist_Mono, Inter } from 'next/font/google'
 import { draftMode } from 'next/headers'
+import Script from 'next/script'
 import { NuqsAdapter } from 'nuqs/adapters/next/app'
 import { Suspense } from 'react'
 import { preconnect } from 'react-dom'
@@ -27,6 +28,13 @@ export default async function RootLayout({
 	return (
 		<html lang="en" data-scroll-behavior="smooth">
 			<NuqsAdapter>
+				<head>
+					<Script
+						src="https://news.google.com/swg/js/v1/publisher.js"
+						strategy="afterInteractive"
+					/>
+				</head>
+
 				<body className="bg-background text-foreground antialiased">
 					{showDrafts ? (
 						<Suspense fallback={<div className="header-fallback" />}>
