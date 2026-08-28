@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.1.2] - 2026-08-28
+
+- Add License to the menu bar icon context menu, with trial days left or Upgrade
+- Always run live document search even when local titles already match, and treat hyphens like spaces
+- Add an Animate popover setting in General
+- Cache theme snapshots, menu-bar glyphs, and favicon peeks, and skip no-op presence writes
+
 ## [0.1.1] - 2026-08-26
 
 - Reveal favorite ⌘1–9 overlays on project avatars after holding ⌘ for 0.3s
