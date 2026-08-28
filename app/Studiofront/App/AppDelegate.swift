@@ -80,24 +80,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     func openMenuBarWidget() {
         applyAppearance(settings.appearancePreference)
-        isMenuBarPresented = true
-        // `MenuBarExtra` window presentation is click-driven; activate so a
-        // configured global hotkey at least surfaces the app.
         NSApp.activate(ignoringOtherApps: true)
+        guard !isMenuBarPresented else { return }
+        // MenuBarExtra has no presentation binding — toggle via its status item.
+        performMenuBarExtraClick()
     }
 
     func closePopover() {
-        isMenuBarPresented = false
+        guard isMenuBarPresented else { return }
         NotificationCenter.default.post(name: .dismissMenuBarWidget, object: nil)
     }
 
     func togglePopoverFromGlobalHotKey() {
+        applyAppearance(settings.appearancePreference)
+        // Activate first so the MenuBarExtra window can take key focus when
+        // another app was frontmost (same requirement as the old NSPopover path).
         NSApp.activate(ignoringOtherApps: true)
         if isMenuBarPresented {
             closePopover()
         } else {
-            openMenuBarWidget()
+            performMenuBarExtraClick()
         }
+    }
+
+    /// `MenuBarExtra` owns the status item; SwiftUI does not expose show/hide.
+    /// Clicking its button is the supported AppKit toggle for `.window` style.
+    private func performMenuBarExtraClick() {
+        guard let button = menuBarExtraStatusItem()?.button else { return }
+        button.performClick(nil)
+    }
+
+    private func menuBarExtraStatusItem() -> NSStatusItem? {
+        for window in NSApp.windows {
+            if let statusItem = window.value(forKey: "statusItem") as? NSStatusItem {
+                return statusItem
+            }
+        }
+        return nil
     }
 
     func menuBarWidgetDidAppear() {
