@@ -7,13 +7,7 @@ public struct ColorTokens: @unchecked Sendable {
     public var tagBackground: Color
     public var chipBackground: Color
     public var chipBorder: Color
-    public var fieldBackground: Color
-    public var fieldBorder: Color
     public var divider: Color
-    public var segmentBackground: Color
-    public var segmentOn: Color
-    public var segmentOnText: Color
-    public var segmentText: Color
     public var buttonBackground: Color
     public var buttonText: Color
     public var primaryBackground: Color
@@ -33,13 +27,7 @@ public struct ColorTokens: @unchecked Sendable {
         tagBackground: Color,
         chipBackground: Color,
         chipBorder: Color,
-        fieldBackground: Color,
-        fieldBorder: Color,
         divider: Color,
-        segmentBackground: Color,
-        segmentOn: Color,
-        segmentOnText: Color,
-        segmentText: Color,
         buttonBackground: Color,
         buttonText: Color,
         primaryBackground: Color,
@@ -58,13 +46,7 @@ public struct ColorTokens: @unchecked Sendable {
         self.tagBackground = tagBackground
         self.chipBackground = chipBackground
         self.chipBorder = chipBorder
-        self.fieldBackground = fieldBackground
-        self.fieldBorder = fieldBorder
         self.divider = divider
-        self.segmentBackground = segmentBackground
-        self.segmentOn = segmentOn
-        self.segmentOnText = segmentOnText
-        self.segmentText = segmentText
         self.buttonBackground = buttonBackground
         self.buttonText = buttonText
         self.primaryBackground = primaryBackground
@@ -124,10 +106,8 @@ public struct TypographyTokens: @unchecked Sendable {
 
 public struct MetricTokens: @unchecked Sendable {
     public var popoverWidth: CGFloat
-    public var popoverMaxHeight: CGFloat
     /// Fixed menu-bar window height (matches the former `NSPopover` content size).
     public var popoverContentHeight: CGFloat
-    public var listMaxHeight: CGFloat
     public var panelCornerRadius: CGFloat
     public var rowPadding: CGFloat
     public var rowCornerRadius: CGFloat
@@ -140,14 +120,11 @@ public struct MetricTokens: @unchecked Sendable {
     public var presenceSize: CGFloat
     public var searchFieldCornerRadius: CGFloat
     public var headerPadding: EdgeInsets
-    public var footerPadding: EdgeInsets
     public var listPadding: EdgeInsets
 
     public init(
         popoverWidth: CGFloat = 516,
-        popoverMaxHeight: CGFloat = 700,
         popoverContentHeight: CGFloat = 640,
-        listMaxHeight: CGFloat = 640,
         panelCornerRadius: CGFloat = 12,
         rowPadding: CGFloat = 8,
         rowCornerRadius: CGFloat = 8,
@@ -160,13 +137,10 @@ public struct MetricTokens: @unchecked Sendable {
         presenceSize: CGFloat = 24,
         searchFieldCornerRadius: CGFloat = 8,
         headerPadding: EdgeInsets = EdgeInsets(top: 11, leading: 12, bottom: 10, trailing: 12),
-        footerPadding: EdgeInsets = EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12),
         listPadding: EdgeInsets = EdgeInsets(top: 6, leading: 6, bottom: 8, trailing: 6)
     ) {
         self.popoverWidth = popoverWidth
-        self.popoverMaxHeight = popoverMaxHeight
         self.popoverContentHeight = popoverContentHeight
-        self.listMaxHeight = listMaxHeight
         self.panelCornerRadius = panelCornerRadius
         self.rowPadding = rowPadding
         self.rowCornerRadius = rowCornerRadius
@@ -179,7 +153,6 @@ public struct MetricTokens: @unchecked Sendable {
         self.presenceSize = presenceSize
         self.searchFieldCornerRadius = searchFieldCornerRadius
         self.headerPadding = headerPadding
-        self.footerPadding = footerPadding
         self.listPadding = listPadding
     }
 }
@@ -191,10 +164,8 @@ public struct SurfaceStyle: Sendable {
     }
 
     public var kind: Kind
-    public var cornerRadius: CGFloat
 
-    public init(kind: Kind, cornerRadius: CGFloat) {
+    public init(kind: Kind) {
         self.kind = kind
-        self.cornerRadius = cornerRadius
     }
 }

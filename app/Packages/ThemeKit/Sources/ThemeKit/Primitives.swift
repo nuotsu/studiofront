@@ -616,11 +616,6 @@ public struct AvatarStack: View {
     }
 }
 
-private struct AvatarFrameInfo: Equatable {
-    var local: CGRect
-    var global: CGRect
-}
-
 private struct AvatarFramePreferenceKey: PreferenceKey {
     static let defaultValue: [String: CGRect] = [:]
     static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) {

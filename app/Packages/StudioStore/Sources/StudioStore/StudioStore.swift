@@ -433,6 +433,7 @@ public final class StudioStore {
     /// so a presence push never disturbs selection/scroll reconciliation or list derivation.
     public func setActiveUsers(_ members: [Member], forProjectID id: String) {
         guard let index = rows.firstIndex(where: { $0.id == id }) else { return }
+        guard rows[index].activity.activeUsers != members else { return }
         rows[index].activity.activeUsers = members
     }
 

@@ -5,16 +5,25 @@ import AppKit
 actor FaviconCache {
     static let shared = FaviconCache()
 
-    private let cache = NSCache<NSString, NSImage>()
+    // NSCache is thread-safe; shared between the actor and synchronous row peek.
+    nonisolated(unsafe) private static let imageCache: NSCache<NSString, NSImage> = {
+        let cache = NSCache<NSString, NSImage>()
+        cache.countLimit = 100
+        return cache
+    }()
+
     private var inFlight: [String: Task<NSImage?, Never>] = [:]
 
-    private init() {
-        cache.countLimit = 100
+    private init() {}
+
+    /// Thread-safe read of a cached favicon without awaiting the actor.
+    nonisolated static func peekCached(forHost host: String) -> NSImage? {
+        imageCache.object(forKey: host as NSString)
     }
 
     func favicon(forHost host: String) async -> NSImage? {
         let key = host as NSString
-        if let cached = cache.object(forKey: key) {
+        if let cached = Self.imageCache.object(forKey: key) {
             return cached
         }
         if let existing = inFlight[host] {
@@ -28,7 +37,7 @@ actor FaviconCache {
         defer { inFlight[host] = nil }
 
         guard let image = await task.value else { return nil }
-        cache.setObject(image, forKey: key)
+        Self.imageCache.setObject(image, forKey: key)
         return image
     }
 

@@ -50,8 +50,15 @@ struct ProjectRowView: View {
                 }
                 .animation(.easeInOut(duration: 0.12), value: store.showFavoriteShortcutLegends)
                 .task(id: faviconHost) {
+                    guard let faviconHost else {
+                        favicon = nil
+                        return
+                    }
+                    if let cached = FaviconCache.peekCached(forHost: faviconHost) {
+                        favicon = Image(nsImage: cached)
+                        return
+                    }
                     favicon = nil
-                    guard let faviconHost else { return }
                     if let image = await FaviconCache.shared.favicon(forHost: faviconHost) {
                         favicon = Image(nsImage: image)
                     }

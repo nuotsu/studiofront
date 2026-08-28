@@ -14,8 +14,15 @@ struct MenuBarIconLabel: View {
         .accessibilityLabel("Studiofront")
     }
 
+    private static let statusImageCache = NSCache<NSString, NSImage>()
+
     /// Template glyph sized to menu-bar height, preserving the SVG aspect ratio.
     static func menuBarStatusImage(named name: String) -> NSImage? {
+        let key = name as NSString
+        if let cached = statusImageCache.object(forKey: key) {
+            return cached
+        }
+
         guard let source = NSImage(named: name) else { return nil }
         let height: CGFloat = 16
         let aspect = source.size.width / max(source.size.height, 1)
@@ -34,6 +41,7 @@ struct MenuBarIconLabel: View {
         image.unlockFocus()
         image.isTemplate = true
         image.accessibilityDescription = "Studiofront"
+        statusImageCache.setObject(image, forKey: key)
         return image
     }
 }

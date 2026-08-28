@@ -1,6 +1,5 @@
 import AppKit
 import SwiftUI
-import ThemeKit
 import StudioStore
 import LicenseKit
 

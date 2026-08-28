@@ -101,12 +101,16 @@ enum MenuBarIconPreference: String, CaseIterable, Identifiable, Sendable {
 @Observable
 final class AppSettings {
     var themePreference: ThemePreference {
-        didSet { UserDefaults.standard.set(themePreference.rawValue, forKey: Keys.theme) }
+        didSet {
+            UserDefaults.standard.set(themePreference.rawValue, forKey: Keys.theme)
+            cachedResolvedTheme = nil
+        }
     }
 
     var appearancePreference: AppearancePreference {
         didSet {
             UserDefaults.standard.set(appearancePreference.rawValue, forKey: Keys.appearance)
+            cachedResolvedTheme = nil
             // Apply before the next SwiftUI render so theme colors that snapshot
             // against `NSApp.appearance` resolve to the new light/dark immediately.
             AppDelegate.shared?.applyAppearance(appearancePreference)
@@ -226,8 +230,16 @@ final class AppSettings {
         TimeInterval(max(1, refreshIntervalMinutes) * 60)
     }
 
+    private var cachedResolvedTheme: (key: String, theme: any Theme)?
+
     var resolvedTheme: any Theme {
-        themePreference.theme
+        let key = "\(themePreference.rawValue)-\(appearancePreference.rawValue)"
+        if let cached = cachedResolvedTheme, cached.key == key {
+            return cached.theme
+        }
+        let theme = themePreference.theme
+        cachedResolvedTheme = (key, theme)
+        return theme
     }
 
     var openStudioModifierFlags: NSEvent.ModifierFlags {

@@ -1,5 +1,4 @@
 import SwiftUI
-import ThemeKit
 
 struct GeneralSettingsView: View {
     @Environment(AppSettings.self) private var settings
