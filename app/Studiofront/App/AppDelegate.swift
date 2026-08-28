@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import ThemeKit
 import StudioStore
 import LicenseKit
 
@@ -8,8 +9,11 @@ extension Notification.Name {
 }
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowDelegate {
     static private(set) var shared: AppDelegate?
+
+    private static let statusItemAutosaveName = "dev.nuotsu.Studiofront.statusItem"
+    private static let statusItemPreferredPosition: Double = 48
 
     let settings = AppSettings.load()
     let store = StudioStore()
@@ -19,8 +23,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private(set) lazy var presence = PresenceCoordinator(store: store, settings: settings)
     private(set) lazy var documentSearch = DocumentSearchCoordinator(store: store, settings: settings)
 
-    /// Keeps the menu-bar widget window open for programmatic dismiss coordination.
-    var isMenuBarPresented = false
+    private var statusItem: NSStatusItem?
+    private var popover: NSPopover?
     private var keyMonitor: Any?
     private var settingsWindowController: NSWindowController?
     private var isSettingsWindowOpen = false
@@ -30,6 +34,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         applyActivationPolicy()
         NSApp.activate(ignoringOtherApps: true)
+        clearStaleStatusItemVisibility()
+        ensureStatusItem()
+
+        let pop = NSPopover()
+        pop.behavior = .transient
+        pop.animates = settings.animatePopover
+        pop.contentSize = NSSize(width: 516, height: 640)
+        pop.delegate = self
+        let hosting = NSHostingController(rootView: popoverRoot)
+        hosting.view.wantsLayer = true
+        hosting.view.layer?.backgroundColor = NSColor.clear.cgColor
+        pop.contentViewController = hosting
+        popover = pop
 
         applyAppearance(settings.appearancePreference)
         applyActivationPolicy()
@@ -76,76 +93,198 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         return true
     }
 
-    // MARK: - Menu bar widget
+    // MARK: - Status item
 
-    func openMenuBarWidget() {
-        applyAppearance(settings.appearancePreference)
-        NSApp.activate(ignoringOtherApps: true)
-        guard !isMenuBarPresented else { return }
-        // MenuBarExtra has no presentation binding — toggle via its status item.
-        performMenuBarExtraClick()
-    }
-
-    func closePopover() {
-        guard isMenuBarPresented else { return }
-        NotificationCenter.default.post(name: .dismissMenuBarWidget, object: nil)
-    }
-
-    func togglePopoverFromGlobalHotKey() {
-        applyAppearance(settings.appearancePreference)
-        // Activate first so the MenuBarExtra window can take key focus when
-        // another app was frontmost (same requirement as the old NSPopover path).
-        NSApp.activate(ignoringOtherApps: true)
-        if isMenuBarPresented {
-            closePopover()
-        } else {
-            performMenuBarExtraClick()
+    private func clearStaleStatusItemVisibility() {
+        let defaults = UserDefaults.standard
+        let keys = [
+            "NSStatusItem Visible \(Self.statusItemAutosaveName)",
+            "NSStatusItem Preferred Position \(Self.statusItemAutosaveName)",
+            "NSStatusItem Visible Item-0",
+            "NSStatusItem Preferred Position Item-0",
+        ]
+        for key in keys {
+            defaults.removeObject(forKey: key)
         }
+        defaults.set(true, forKey: "NSStatusItem Visible \(Self.statusItemAutosaveName)")
     }
 
-    /// `MenuBarExtra` owns the status item; SwiftUI does not expose show/hide.
-    /// Clicking its button is the supported AppKit toggle for `.window` style.
-    private func performMenuBarExtraClick() {
-        guard let button = menuBarExtraStatusItem()?.button else { return }
-        button.performClick(nil)
-    }
-
-    private func menuBarExtraStatusItem() -> NSStatusItem? {
-        for window in NSApp.windows {
-            if let statusItem = window.value(forKey: "statusItem") as? NSStatusItem {
-                return statusItem
-            }
+    private func ensureStatusItem() {
+        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        item.autosaveName = Self.statusItemAutosaveName
+        item.isVisible = true
+        if let button = item.button {
+            button.image = Self.menuBarStatusImage(named: settings.menuBarIconPreference.imageName)
+            button.imagePosition = .imageOnly
+            button.toolTip = "Studiofront"
+            button.target = self
+            button.action = #selector(statusItemClicked(_:))
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
-        return nil
-    }
-
-    func menuBarWidgetDidAppear() {
-        isMenuBarPresented = true
-        store.prepareForOpen()
-        applyAppearance(settings.appearancePreference)
-        installKeyMonitor()
-        presence.willShow()
-        documentSearch.willShow()
-        sync.refreshIfStale(interval: settings.refreshInterval)
-        license.refreshIfStale()
-    }
-
-    func menuBarWidgetDidDisappear() {
-        isMenuBarPresented = false
-        removeKeyMonitor()
-        presence.willHide()
-        documentSearch.willHide()
-        DispatchQueue.main.async { [weak self] in
-            self?.applyActivationPolicy()
+        statusItem = item
+        UserDefaults.standard.set(true, forKey: "NSStatusItem Visible \(Self.statusItemAutosaveName)")
+        if UserDefaults.standard.object(forKey: "NSStatusItem Preferred Position \(Self.statusItemAutosaveName)") == nil {
+            UserDefaults.standard.set(
+                Self.statusItemPreferredPosition,
+                forKey: "NSStatusItem Preferred Position \(Self.statusItemAutosaveName)"
+            )
         }
     }
 
     func applyMenuBarIcon(_ preference: MenuBarIconPreference) {
-        _ = preference
+        statusItem?.button?.image = Self.menuBarStatusImage(named: preference.imageName)
     }
 
-    func checkForUpdates() {
-        AppUpdater.shared.checkForUpdates(nil)
+    /// Template glyph sized to menu-bar height, preserving the SVG aspect ratio.
+    private static let statusImageCache = NSCache<NSString, NSImage>()
+
+    private static func menuBarStatusImage(named name: String) -> NSImage? {
+        let key = name as NSString
+        if let cached = statusImageCache.object(forKey: key) {
+            return cached
+        }
+        guard let source = NSImage(named: name) else { return nil }
+        let height: CGFloat = 16
+        let aspect = source.size.width / max(source.size.height, 1)
+        let size = NSSize(width: (height * aspect).rounded(), height: height)
+        let image = NSImage(size: size)
+        image.lockFocus()
+        NSGraphicsContext.current?.imageInterpolation = .high
+        source.draw(
+            in: NSRect(origin: .zero, size: size),
+            from: .zero,
+            operation: .sourceOver,
+            fraction: 1,
+            respectFlipped: true,
+            hints: [.interpolation: NSImageInterpolation.high]
+        )
+        image.unlockFocus()
+        image.isTemplate = true
+        image.accessibilityDescription = "Studiofront"
+        statusImageCache.setObject(image, forKey: key)
+        return image
+    }
+
+    @objc private func statusItemClicked(_ sender: NSStatusBarButton) {
+        guard let event = NSApp.currentEvent else {
+            togglePopover()
+            return
+        }
+        if event.type == .rightMouseUp || event.modifierFlags.contains(.control) {
+            showStatusItemMenu()
+        } else {
+            togglePopover()
+        }
+    }
+
+    private func showStatusItemMenu() {
+        guard let item = statusItem, let button = item.button else { return }
+        closePopover()
+
+        let menu = NSMenu()
+        let openItem = NSMenuItem(
+            title: "Open Studiofront",
+            action: #selector(openStudiofrontFromMenu(_:)),
+            keyEquivalent: ""
+        )
+        if !settings.openStudiofrontCharacters.isEmpty {
+            openItem.keyEquivalent = settings.openStudiofrontCharacters
+            openItem.keyEquivalentModifierMask = settings.openStudiofrontModifierFlags
+        }
+        menu.addItem(openItem)
+        menu.addItem(.separator())
+        menu.addItem(withTitle: "Settings", action: #selector(openSettingsFromMenu(_:)), keyEquivalent: "")
+        menu.addItem(withTitle: "Appearance", action: #selector(openAppearanceFromMenu(_:)), keyEquivalent: "")
+        menu.addItem(withTitle: "Keybindings", action: #selector(openKeybindingsFromMenu(_:)), keyEquivalent: "")
+        menu.addItem(withTitle: "Account", action: #selector(openAccountFromMenu(_:)), keyEquivalent: "")
+        menu.addItem(.separator())
+        menu.addItem(withTitle: "License", action: #selector(openLicenseFromMenu(_:)), keyEquivalent: "")
+        switch license.status {
+        case let .trial(daysLeft):
+            let title = daysLeft == 1 ? "1 day left" : "\(daysLeft) days left"
+            menu.addItem(withTitle: title, action: nil, keyEquivalent: "")
+        case .free, .expired:
+            menu.addItem(withTitle: "Upgrade", action: #selector(openLicenseFromMenu(_:)), keyEquivalent: "")
+        case .validating, .licensed:
+            break
+        }
+        menu.addItem(.separator())
+        menu.addItem(withTitle: "Check for Updates…", action: #selector(checkForUpdatesFromMenu(_:)), keyEquivalent: "")
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—"
+        menu.addItem(withTitle: "Current version: v\(version)", action: nil, keyEquivalent: "")
+        menu.addItem(.separator())
+        menu.addItem(withTitle: "Quit Studiofront", action: #selector(quitFromMenu(_:)), keyEquivalent: "q")
+        for menuItem in menu.items {
+            menuItem.target = self
+        }
+
+        // Native status-item menu presentation (rather than manual `popUp`) avoids an
+        // AppKit glitch where the menu renders truncated and resizes/relocates on hover.
+        item.menu = menu
+        button.performClick(nil)
+        item.menu = nil
+    }
+
+    @objc private func openStudiofrontFromMenu(_ sender: Any?) {
+        togglePopover()
+    }
+
+    @objc private func quitFromMenu(_ sender: Any?) {
+        NSApp.terminate(sender)
+    }
+
+    @objc private func openSettingsFromMenu(_ sender: Any?) {
+        openSettingsWindow(pane: .general)
+    }
+
+    @objc private func openAppearanceFromMenu(_ sender: Any?) {
+        openSettingsWindow(pane: .appearance)
+    }
+
+    @objc private func openKeybindingsFromMenu(_ sender: Any?) {
+        openSettingsWindow(pane: .keybindings)
+    }
+
+    @objc private func openAccountFromMenu(_ sender: Any?) {
+        openSettingsWindow(pane: .account)
+    }
+
+    @objc private func openLicenseFromMenu(_ sender: Any?) {
+        openSettingsWindow(pane: .license)
+    }
+
+    @objc private func checkForUpdatesFromMenu(_ sender: Any?) {
+        AppUpdater.shared.checkForUpdates(sender)
+    }
+
+    func togglePopover() {
+        guard let popover, let button = statusItem?.button else { return }
+        if popover.isShown {
+            popover.performClose(nil)
+        } else {
+            store.prepareForOpen()
+            applyAppearance(settings.appearancePreference)
+            popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+            popover.contentViewController?.view.window?.makeKey()
+            sync.refreshIfStale(interval: settings.refreshInterval)
+            license.refreshIfStale()
+        }
+    }
+
+    func closePopover() {
+        popover?.performClose(nil)
+    }
+
+    /// Summons the popover from the global hotkey. Unlike a status-item click,
+    /// another app is frontmost here, so activate first or the popover appears
+    /// without keyboard focus and its transient behavior closes it immediately.
+    func togglePopoverFromGlobalHotKey() {
+        if popover?.isShown == true {
+            closePopover()
+            return
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        togglePopover()
     }
 
     func applyGlobalHotKey() {
@@ -196,6 +335,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
             NSApp.appearance = appearance
 
+            popover?.appearance = appearance
+            if let view = popover?.contentViewController?.view {
+                view.appearance = appearance
+                Self.stripAnimations(from: view)
+            }
+
             for window in NSApp.windows where Self.isSettingsWindow(window) {
                 let previousBehavior = window.animationBehavior
                 window.animationBehavior = .none
@@ -229,6 +374,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     /// contradict the setting.
     func applyActivationPolicy() {
         NSApp.setActivationPolicy(settings.showInDock ? .regular : .accessory)
+    }
+
+    func applyPopoverAnimation() {
+        popover?.animates = settings.animatePopover
     }
 
     func openSettingsWindow(pane: SettingsPane = .general) {
@@ -345,7 +494,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             || window.title.localizedCaseInsensitiveContains("account")
     }
 
+    // MARK: - Popover root
+
+    private var popoverRoot: some View {
+        PopoverRootView()
+            .environment(store)
+            .environment(settings)
+            .environment(auth)
+            .environment(license)
+    }
+
     // MARK: - Keyboard
+
+    func popoverWillShow(_ notification: Notification) {
+        installKeyMonitor()
+        presence.willShow()
+        documentSearch.willShow()
+    }
+
+    func popoverDidClose(_ notification: Notification) {
+        removeKeyMonitor()
+        presence.willHide()
+        documentSearch.willHide()
+        DispatchQueue.main.async { [weak self] in
+            self?.applyActivationPolicy()
+        }
+    }
 
     private func installKeyMonitor() {
         removeKeyMonitor()
@@ -377,7 +551,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     private func handlePopoverKey(keyCode: UInt16, modifierRaw: UInt, characters: String) -> Bool {
-        guard isMenuBarPresented else { return false }
+        guard popover?.isShown == true else { return false }
         let flags = NSEvent.ModifierFlags(rawValue: modifierRaw).intersection(.deviceIndependentFlagsMask)
 
         if matchesOpenStudioBinding(keyCode: keyCode, flags: flags) {

@@ -125,6 +125,10 @@ final class AppSettings {
         didSet { UserDefaults.standard.set(showInDock, forKey: Keys.showInDock) }
     }
 
+    var animatePopover: Bool {
+        didSet { UserDefaults.standard.set(animatePopover, forKey: Keys.animatePopover) }
+    }
+
     /// `SMAppService` persists this itself, so there's no `UserDefaults` key here —
     /// the getter always reflects the OS's actual login-item registration.
     var launchAtLogin: Bool {
@@ -304,6 +308,7 @@ final class AppSettings {
         appearancePreference: AppearancePreference = .system,
         menuBarIconPreference: MenuBarIconPreference = .studiofront,
         showInDock: Bool = true,
+        animatePopover: Bool = true,
         refreshIntervalMinutes: Int = 5,
         hideArchivedProjects: Bool = true,
         studioURLPreference: StudioURLPreference = .external,
@@ -329,6 +334,7 @@ final class AppSettings {
         self.appearancePreference = appearancePreference
         self.menuBarIconPreference = menuBarIconPreference
         self.showInDock = showInDock
+        self.animatePopover = animatePopover
         self.refreshIntervalMinutes = refreshIntervalMinutes
         self.hideArchivedProjects = hideArchivedProjects
         self.studioURLPreference = studioURLPreference
@@ -357,6 +363,7 @@ final class AppSettings {
         let appearance = AppearancePreference(rawValue: defaults.string(forKey: Keys.appearance) ?? "") ?? .system
         let menuBarIcon = MenuBarIconPreference(rawValue: defaults.string(forKey: Keys.menuBarIcon) ?? "") ?? .studiofront
         let showInDock = defaults.object(forKey: Keys.showInDock) as? Bool ?? true
+        let animatePopover = defaults.object(forKey: Keys.animatePopover) as? Bool ?? true
         let storedInterval = defaults.object(forKey: Keys.refreshInterval) as? Int
         let refresh = Self.allowedRefreshIntervals.contains(storedInterval ?? -1) ? storedInterval! : 5
         let hideArchivedProjects = defaults.object(forKey: Keys.hideArchivedProjects) as? Bool ?? true
@@ -395,6 +402,7 @@ final class AppSettings {
             appearancePreference: appearance,
             menuBarIconPreference: menuBarIcon,
             showInDock: showInDock,
+            animatePopover: animatePopover,
             refreshIntervalMinutes: refresh,
             hideArchivedProjects: hideArchivedProjects,
             studioURLPreference: studioURLPreference,
@@ -425,6 +433,7 @@ final class AppSettings {
         static let appearance = "appearancePreference"
         static let menuBarIcon = "menuBarIconPreference"
         static let showInDock = "showInDock"
+        static let animatePopover = "animatePopover"
         static let refreshInterval = "refreshIntervalMinutes"
         static let hideArchivedProjects = "hideArchivedProjects"
         static let studioURLPreference = "studioURLPreference"

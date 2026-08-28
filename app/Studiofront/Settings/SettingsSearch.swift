@@ -5,6 +5,7 @@ import SwiftUI
 enum SettingsSearchTarget: String, Hashable, CaseIterable {
     case launchAtLogin
     case showInDock
+    case animatePopover
     case refreshInterval
     case hideArchivedProjects
     case studioURLPreference
@@ -51,6 +52,13 @@ enum SettingsSearchIndex {
             pane: .general,
             target: .showInDock,
             systemImage: "dock.rectangle"
+        ),
+        SettingsSearchItem(
+            title: "Animate popover",
+            keywords: ["animate", "animation", "popover", "instant", "snap", "scale"],
+            pane: .general,
+            target: .animatePopover,
+            systemImage: "rectangle.portrait.on.rectangle.portrait.angled"
         ),
         SettingsSearchItem(
             title: "Refresh interval",

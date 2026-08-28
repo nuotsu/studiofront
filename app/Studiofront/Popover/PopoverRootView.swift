@@ -9,7 +9,6 @@ struct PopoverRootView: View {
     @Environment(AuthSession.self) private var auth
     @Environment(LicenseService.self) private var license
     @Environment(\.openWindow) private var openWindow
-    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @FocusState private var searchFocused: Bool
     @State private var avatarTooltip: AvatarTooltipDisplay?
@@ -30,15 +29,6 @@ struct PopoverRootView: View {
         .frame(width: metrics.popoverWidth, height: metrics.popoverContentHeight)
         .background(ThemedSurface())
         .clipShape(RoundedRectangle(cornerRadius: theme.cornerRadius(metrics.panelCornerRadius), style: theme.cornerStyle))
-        .overlay {
-            RoundedRectangle(cornerRadius: theme.cornerRadius(metrics.panelCornerRadius), style: theme.cornerStyle)
-                .strokeBorder(theme.panelBorder(for: colorScheme), lineWidth: 0.5)
-        }
-        .shadow(
-            color: .black.opacity(colorScheme == .dark ? 0.16 : 0.08),
-            radius: 8,
-            y: 2
-        )
         // Rendered here — an ancestor of `list`'s scroll view — rather than
         // inside each row's avatar stack: a pinned section header gets an
         // elevated compositing layer that no `.zIndex` inside a scrolled row

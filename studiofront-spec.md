@@ -35,7 +35,7 @@ The governing rule: **the popover renders from local cache immediately, then rec
 
 ## 2. App shell
 
-- `MenuBarExtra` with `.menuBarExtraStyle(.window)` for the menu-bar widget (same shell as Deployfront). `NSPopover` was ruled out for the beaked chrome; `NSStatusItem` remains available only via the context menu on the extra's label.
+- `NSStatusItem` + `NSPopover` for the menu-bar widget (beaked system popover). `MenuBarExtra` was tried for Deployfront-style chrome but reverted for placement/hotkey reliability and the familiar beak presentation.
 - `LSUIElement = true` — no Dock icon, no app menu bar.
 - Optional "Launch at login" via `SMAppService.mainApp` (§10).
 - Optional global hotkey to summon the popover, default unset.

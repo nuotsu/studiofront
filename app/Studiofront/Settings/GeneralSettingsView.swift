@@ -12,6 +12,8 @@ struct GeneralSettingsView: View {
                         .settingsHighlight(.launchAtLogin)
                     Toggle("Show in Dock", isOn: $settings.showInDock)
                         .settingsHighlight(.showInDock)
+                    Toggle("Animate popover", isOn: $settings.animatePopover)
+                        .settingsHighlight(.animatePopover)
                 }
 
                 Section {
@@ -61,6 +63,9 @@ struct GeneralSettingsView: View {
         }
         .onChange(of: settings.showInDock) { _, _ in
             AppDelegate.shared?.applyActivationPolicy()
+        }
+        .onChange(of: settings.animatePopover) { _, _ in
+            AppDelegate.shared?.applyPopoverAnimation()
         }
     }
 }
