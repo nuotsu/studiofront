@@ -755,6 +755,7 @@ private struct KeyGlyphView: View {
 /// (e.g. ⌘ + K) shares one border, rather than each glyph getting its own box.
 public struct KeycapLegend: View {
     @Environment(\.studioTheme) private var theme
+    @Environment(\.colorScheme) private var colorScheme
     var glyphs: [KeyGlyph]
     var compact: Bool
     var foreground: Color?
@@ -773,14 +774,14 @@ public struct KeycapLegend: View {
                 KeyGlyphView(glyph)
             }
         }
-        .foregroundStyle(foreground ?? theme.colors.faint)
+        .foregroundStyle(foreground ?? theme.legendForeground(for: colorScheme))
         .frame(minHeight: compact ? 11 : 14)
         .padding(.horizontal, compact ? 2 : 5)
         .padding(.vertical, compact ? 1.5 : 2)
         .background(theme.colors.chipBackground)
         .overlay(
             RoundedRectangle(cornerRadius: theme.cornerRadius(4), style: theme.cornerStyle)
-                .strokeBorder(theme.colors.chipBorder, lineWidth: 1)
+                .strokeBorder(theme.legendBorder(for: colorScheme), lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: theme.cornerRadius(4), style: theme.cornerStyle))
         .accessibilityHidden(true)

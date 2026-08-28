@@ -35,7 +35,7 @@ The governing rule: **the popover renders from local cache immediately, then rec
 
 ## 2. App shell
 
-- `MenuBarExtra`-based menu bar app, or `NSStatusItem` + `NSPopover` if `MenuBarExtra` proves too limiting for the custom search field and keyboard handling. **VERIFY** which one supports a focused, first-responder `TextField` with full arrow-key interception on macOS 26; pick based on that, not preference.
+- `MenuBarExtra` with `.menuBarExtraStyle(.window)` for the menu-bar widget (same shell as Deployfront). `NSPopover` was ruled out for the beaked chrome; `NSStatusItem` remains available only via the context menu on the extra's label.
 - `LSUIElement = true` — no Dock icon, no app menu bar.
 - Optional "Launch at login" via `SMAppService.mainApp` (§10).
 - Optional global hotkey to summon the popover, default unset.

@@ -125,6 +125,8 @@ public struct TypographyTokens: @unchecked Sendable {
 public struct MetricTokens: @unchecked Sendable {
     public var popoverWidth: CGFloat
     public var popoverMaxHeight: CGFloat
+    /// Fixed menu-bar window height (matches the former `NSPopover` content size).
+    public var popoverContentHeight: CGFloat
     public var listMaxHeight: CGFloat
     public var panelCornerRadius: CGFloat
     public var rowPadding: CGFloat
@@ -144,6 +146,7 @@ public struct MetricTokens: @unchecked Sendable {
     public init(
         popoverWidth: CGFloat = 516,
         popoverMaxHeight: CGFloat = 700,
+        popoverContentHeight: CGFloat = 640,
         listMaxHeight: CGFloat = 640,
         panelCornerRadius: CGFloat = 12,
         rowPadding: CGFloat = 8,
@@ -162,6 +165,7 @@ public struct MetricTokens: @unchecked Sendable {
     ) {
         self.popoverWidth = popoverWidth
         self.popoverMaxHeight = popoverMaxHeight
+        self.popoverContentHeight = popoverContentHeight
         self.listMaxHeight = listMaxHeight
         self.panelCornerRadius = panelCornerRadius
         self.rowPadding = rowPadding
