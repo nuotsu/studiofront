@@ -1,5 +1,6 @@
 import type { SchemaPluginOptions } from 'sanity'
 // documents
+import announcement from './documents/announcement'
 import blogCategory from './documents/blog.category'
 import blogPost from './documents/blog.post'
 import form from './documents/form'
@@ -54,6 +55,7 @@ export const schema: SchemaPluginOptions = {
 		redirect,
 		form,
 		// references
+		announcement,
 		blogCategory,
 		logo,
 		navigation,
