@@ -1,4 +1,5 @@
 import { structureTool } from 'sanity/structure'
+import { BellIcon } from '@sanity/icons/Bell'
 import { DocumentIcon } from '@sanity/icons/Document'
 import { EarthGlobeIcon } from '@sanity/icons/EarthGlobe'
 import { EmptyIcon } from '@sanity/icons/Empty'
@@ -30,6 +31,9 @@ export default structureTool({
 				S.documentTypeListItem('redirect').title('Redirects'),
 
 				S.divider().title('References'),
+				S.documentTypeListItem('announcement')
+					.title('Announcements')
+					.icon(BellIcon),
 				S.documentTypeListItem('form').title('Forms'),
 				S.documentTypeListItem('logo').title('Logos'),
 				S.documentTypeListItem('person').title('People'),
