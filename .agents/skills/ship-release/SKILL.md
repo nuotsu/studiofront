@@ -117,9 +117,10 @@ All three assets ship every release. Never force-push tags. Never `--no-verify`.
 
 Two documents in the `production` dataset (project `zd7g2ch2`) hardcode the current version as a `vX.Y.Z` string and must be updated every release. Exact IDs and field paths in [reference.md](reference.md#sanity-version-fields) — do not re-derive them by searching the schema each time.
 
-1. `patch_documents` both documents, setting the version field to the new `vX.Y.Z`.
-2. `publish_documents` both draft IDs so the change goes live immediately (these are marketing-site content, not app code — no separate approval gate beyond the Step 2 version approval already given).
+1. `patch_documents` both documents, setting the version field to the new `vX.Y.Z`. That writes **drafts** — do not patch the published documents in place (in-place edits do not invalidate the Next.js `'use cache'` / Sanity Live page cache, so `/docs` keeps showing the old eyebrow).
+2. `publish_documents` both published IDs (not `drafts.` prefixed) so the change goes live and the site cache busts. These are marketing-site content, not app code — no separate approval gate beyond the Step 2 version approval already given.
 3. Verify with a GROQ query on the `published` perspective that both fields read the new version.
+4. **Hard gate — live page:** load `https://studiofront.nuotsu.dev/docs` and confirm the callout eyebrow above the "Documentation" heading is the new `vX.Y.Z`. Also confirm the footer inline-code version. GROQ-only success is not enough; if the live page is stale, create drafts from the published docs and publish them again so Live invalidation fires, then recheck.
 
 If a future release adds another version mention in Sanity content, add it to the reference table and this step — don't let new ones drift out of sync like the first two did (both were still `v0.0.1` after the `0.0.2` release).
 

@@ -178,9 +178,10 @@ Project `zd7g2ch2`, dataset `production`. Both documents are published (no draft
 
 Use the Sanity MCP tools:
 
-1. `patch_documents` with `resource: {projectId: "zd7g2ch2", dataset: "production"}`, one entry per document ID above, each with a single `set` patch on the field path with the new `vX.Y.Z` string. Pass `ifRevisionId` from a fresh `get_document` read if you want optimistic-lock safety.
-2. `publish_documents` with `ids: [<both document _ids>]` (published IDs, not `drafts.` prefixed) to make the change live.
+1. `patch_documents` with `resource: {projectId: "zd7g2ch2", dataset: "production"}`, one entry per document ID above, each with a single `set` patch on the field path with the new `vX.Y.Z` string. Pass `ifRevisionId` from a fresh `get_document` read if you want optimistic-lock safety. This writes drafts. **Do not patch published documents in place** — that updates the CMS without firing Sanity Live, so Next.js `'use cache'` keeps serving the old `/docs` eyebrow.
+2. `publish_documents` with `ids: [<both document _ids>]` (published IDs, not `drafts.` prefixed) to make the change live and bust the site cache. If MCP is authenticated to the wrong org, fall back to `bunx sanity exec … --with-user-token` from `web/`: create `drafts.<id>` from the published doc, then `sanity.action.document.publish` with both `publishedId` and `draftId`.
 3. Confirm with `query_documents`, `perspective: "published"`, e.g. `*[_id in [<ids>]]{_id, "blurbText": pt::text(blurb), "eyebrow": modules[_type=="callout"][0].eyebrow}`.
+4. Load `https://studiofront.nuotsu.dev/docs` and confirm the callout eyebrow above "Documentation" is the new version. GROQ matching is not sufficient.
 
 If the field `_key`s above ever stop matching (schema restructure, content re-authored from scratch), re-locate them with a targeted `query_documents` sweep rather than guessing — don't skip the sync silently.
 
