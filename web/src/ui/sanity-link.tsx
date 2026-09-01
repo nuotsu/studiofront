@@ -1,6 +1,7 @@
 import { stegaClean } from 'next-sanity'
 import NextLink, { type LinkProps } from 'next/link'
 import { FaApple } from 'react-icons/fa6'
+import { cn } from '@/lib/utils'
 import type { Link, Page } from '@/sanity/types'
 import DownloadMacosLink from './download-macos-link'
 
@@ -45,10 +46,14 @@ export default function ({
 		return (
 			<DownloadMacosLink
 				{...linkProps}
+				className={cn('relative', linkProps.className)}
 				children={
 					<>
 						{showIcon && <FaApple aria-hidden />}
 						{linkProps.children}
+						<small className="text-foreground/80 absolute top-full left-1/2 min-w-max -translate-x-1/2 translate-y-[.5lh] leading-none">
+							Try free for 7 days
+						</small>
 					</>
 				}
 			/>

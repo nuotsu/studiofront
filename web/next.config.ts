@@ -10,6 +10,29 @@ const nextConfig: NextConfig = {
 	cacheComponents: true,
 	cacheLife: { default: sanity },
 
+	transpilePackages: [
+		'sanity',
+		'next-sanity',
+		'@sanity/vision',
+		'@sanity/assist',
+		'@sanity/code-input',
+		'@sanity/dashboard',
+		'@sanity/block-insert-picker',
+	],
+
+	turbopack: {
+		// @sanity/sdk-react pins an older workbench whose "development" export
+		// points at TypeScript source, which Turbopack can't load from node_modules.
+		resolveAlias: {
+			'@sanity/workbench': './node_modules/@sanity/workbench/dist/index.js',
+			'@sanity/workbench/_internal':
+				'./node_modules/@sanity/workbench/dist/_internal.js',
+			'@sanity/workbench/core': './node_modules/@sanity/workbench/dist/core.js',
+			'@sanity/workbench/system':
+				'./node_modules/@sanity/workbench/dist/system.js',
+		},
+	},
+
 	images: {
 		localPatterns: [{ pathname: '/api/og' }],
 		remotePatterns: [{ protocol: 'https', hostname: 'cdn.sanity.io' }],
