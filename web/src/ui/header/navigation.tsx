@@ -25,6 +25,7 @@ export default async function ({ perspective, stega }: DynamicFetchOptions) {
 									topLevelClassName,
 									'text-current hover:underline',
 								)}
+								hideFreeTrial={true}
 								key={`${item._key}-${i}`}
 							/>
 						)

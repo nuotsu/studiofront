@@ -56,6 +56,7 @@ export default function ({
 														<SanityLink
 															link={link as unknown as SanityLinkType}
 															className="inline-block py-1 text-current [[href]]:hover:underline"
+															hideFreeTrial={true}
 														/>
 													</li>
 												)
@@ -65,9 +66,7 @@ export default function ({
 								)
 
 							case 'link.card':
-								return (
-									<LinkCard key={`${item._key}-${i}`} {...item} />
-								)
+								return <LinkCard key={`${item._key}-${i}`} {...item} />
 
 							case 'link':
 								return (
@@ -75,6 +74,7 @@ export default function ({
 										link={item as unknown as SanityLinkType}
 										className="py-1 text-current hover:underline"
 										key={`${item._key}-${i}`}
+										hideFreeTrial={true}
 									/>
 								)
 

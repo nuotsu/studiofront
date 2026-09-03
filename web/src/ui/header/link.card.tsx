@@ -23,6 +23,7 @@ export default function ({
 				<SanityLink
 					className="py-1 text-current after:absolute after:inset-0 hover:underline md:font-bold"
 					link={link as unknown as SanityLinkType}
+					hideFreeTrial={true}
 				/>
 
 				{content && (

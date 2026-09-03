@@ -15,10 +15,12 @@ export default function ({
 	link,
 	children,
 	showIcon,
+	hideFreeTrial,
 	...props
 }: {
 	link?: SanityLinkType
 	showIcon?: boolean
+	hideFreeTrial?: boolean
 } & Omit<React.ComponentProps<typeof NextLink>, 'href'>) {
 	const { label, type, internal, external, params } = link ?? {}
 
@@ -51,9 +53,11 @@ export default function ({
 					<>
 						{showIcon && <FaApple aria-hidden />}
 						{linkProps.children}
-						<small className="text-foreground/80 absolute top-full left-1/2 min-w-max -translate-x-1/2 translate-y-[.5lh] leading-none">
-							Try free for 7 days
-						</small>
+						{!hideFreeTrial && (
+							<small className="text-foreground/80 absolute top-full left-1/2 min-w-max -translate-x-1/2 translate-y-[.5lh] leading-none">
+								Try free for 7 days
+							</small>
+						)}
 					</>
 				}
 			/>

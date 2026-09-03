@@ -17,6 +17,7 @@ export default function ({
 					<SanityLink
 						className="text-foreground/50 [[href]]:hover:underline"
 						link={link as SanityLinkType}
+						hideFreeTrial={true}
 					/>
 				</div>
 			)}
@@ -27,6 +28,7 @@ export default function ({
 						<SanityLink
 							className="inline-block py-[.3ch] text-current hover:underline"
 							link={item as SanityLinkType}
+							hideFreeTrial={true}
 						/>
 					</li>
 				))}

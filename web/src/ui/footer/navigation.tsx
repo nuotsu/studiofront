@@ -18,6 +18,7 @@ export default async function ({ perspective, stega }: DynamicFetchOptions) {
 									<SanityLink
 										link={item as SanityLinkType}
 										className="text-current hover:underline"
+										hideFreeTrial
 									/>
 								</li>
 							)

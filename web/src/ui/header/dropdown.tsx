@@ -37,6 +37,7 @@ export default function ({
 						<SanityLink
 							link={link as SanityLinkType}
 							className="inline-block py-1 text-current hover:underline"
+							hideFreeTrial={true}
 						/>
 					</li>
 				))}
