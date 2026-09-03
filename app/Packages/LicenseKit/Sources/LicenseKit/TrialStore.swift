@@ -13,34 +13,23 @@ public struct TrialStore: Sendable {
     public init() {}
 
     public func loadStartDate() throws -> Date? {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne,
-        ]
-        var item: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &item)
-        if status == errSecItemNotFound { return nil }
-        guard status == errSecSuccess, let data = item as? Data, let string = String(data: data, encoding: .utf8) else {
+        switch KeychainPassword.readData(service: service, account: account) {
+        case .missing:
+            return nil
+        case .value(let data):
+            guard let string = String(data: data, encoding: .utf8) else {
+                throw LicenseError.transport("Couldn’t read the trial start date.")
+            }
+            return try? Date(string, strategy: Date.ISO8601FormatStyle())
+        case .inaccessible:
             throw LicenseError.transport("Couldn’t read the trial start date.")
         }
-        return try? Date(string, strategy: Date.ISO8601FormatStyle())
     }
 
     /// No-ops if a start date already exists — first-launch-only write.
     public func recordStartIfNeeded(now: Date = Date()) throws {
         guard try loadStartDate() == nil else { return }
-        let data = Data(now.ISO8601Format().utf8)
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-            kSecValueData as String: data,
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
-        ]
-        let status = SecItemAdd(query as CFDictionary, nil)
+        let status = KeychainPassword.addData(Data(now.ISO8601Format().utf8), service: service, account: account)
         guard status == errSecSuccess else {
             throw LicenseError.transport("Couldn’t record the trial start date.")
         }

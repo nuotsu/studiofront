@@ -12,20 +12,14 @@ public struct TokenStore: Sendable {
     public init() {}
 
     public func load() throws -> String? {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne,
-        ]
-        var item: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &item)
-        if status == errSecItemNotFound { return nil }
-        guard status == errSecSuccess, let data = item as? Data else {
+        switch KeychainPassword.readData(service: service, account: account) {
+        case .missing:
+            return nil
+        case .value(let data):
+            return String(data: data, encoding: .utf8)
+        case .inaccessible:
             throw SanityAuthError.unreadable("Couldn’t read the saved token.")
         }
-        return String(data: data, encoding: .utf8)
     }
 
     public func source() -> TokenSource? {
@@ -34,15 +28,7 @@ public struct TokenStore: Sendable {
 
     public func save(token: String, source: TokenSource) throws {
         try delete()
-        let data = Data(token.utf8)
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-            kSecValueData as String: data,
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
-        ]
-        let status = SecItemAdd(query as CFDictionary, nil)
+        let status = KeychainPassword.addData(Data(token.utf8), service: service, account: account)
         guard status == errSecSuccess else {
             throw SanityAuthError.unreadable("Couldn’t save the token securely.")
         }
@@ -50,12 +36,7 @@ public struct TokenStore: Sendable {
     }
 
     public func delete() throws {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-        ]
-        let status = SecItemDelete(query as CFDictionary)
+        let status = KeychainPassword.delete(service: service, account: account)
         guard status == errSecSuccess || status == errSecItemNotFound else {
             throw SanityAuthError.unreadable("Couldn’t clear the saved token.")
         }

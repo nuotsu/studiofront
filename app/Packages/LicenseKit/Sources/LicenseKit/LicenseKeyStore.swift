@@ -31,44 +31,25 @@ public struct LicenseKeyStore: Sendable {
     }
 
     private func load(account: String) throws -> String? {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne,
-        ]
-        var item: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &item)
-        if status == errSecItemNotFound { return nil }
-        guard status == errSecSuccess, let data = item as? Data else {
+        switch KeychainPassword.readData(service: service, account: account) {
+        case .missing:
+            return nil
+        case .value(let data):
+            return String(data: data, encoding: .utf8)
+        case .inaccessible:
             throw LicenseError.transport("Couldn’t read the saved license.")
         }
-        return String(data: data, encoding: .utf8)
     }
 
     private func add(value: String, account: String) throws {
-        let data = Data(value.utf8)
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-            kSecValueData as String: data,
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
-        ]
-        let status = SecItemAdd(query as CFDictionary, nil)
+        let status = KeychainPassword.addData(Data(value.utf8), service: service, account: account)
         guard status == errSecSuccess else {
             throw LicenseError.transport("Couldn’t save the license securely.")
         }
     }
 
     private func delete(account: String) throws {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-        ]
-        let status = SecItemDelete(query as CFDictionary)
+        let status = KeychainPassword.delete(service: service, account: account)
         guard status == errSecSuccess || status == errSecItemNotFound else {
             throw LicenseError.transport("Couldn’t clear the saved license.")
         }
