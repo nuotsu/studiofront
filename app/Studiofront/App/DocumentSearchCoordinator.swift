@@ -90,10 +90,12 @@ final class DocumentSearchCoordinator {
         let eligibleIDs = store.eligibleProjectIDs()
         guard !eligibleIDs.isEmpty else { return }
 
+        let rowByID = Dictionary(uniqueKeysWithValues: store.rows.map { ($0.id, $0) })
+
         var localUpdates: [String: [EditedDocument]] = [:]
         var remoteIDs: [String] = []
         for id in eligibleIDs {
-            guard let row = store.rows.first(where: { $0.id == id }) else { continue }
+            guard let row = rowByID[id] else { continue }
             remoteIDs.append(id)
             let local = store.cachedDocumentMatches(for: row)
             if !local.isEmpty {
@@ -135,7 +137,7 @@ final class DocumentSearchCoordinator {
 
             await withTaskGroup(of: (String, [RemoteEditedDocument]).self) { group in
                 for id in slice {
-                    guard let dataset = primaryDataset(for: id) else { continue }
+                    guard let dataset = primaryDataset(from: rowByID[id]) else { continue }
                     group.addTask {
                         let docs = try? await client.searchDocuments(
                             token: token,
@@ -148,7 +150,7 @@ final class DocumentSearchCoordinator {
                 }
                 for await (id, docs) in group {
                     guard generation == self.generation else { continue }
-                    let studioURL = store.rows.first(where: { $0.id == id })?.resolvedStudioURL(preferExternal: preferExternal)
+                    let studioURL = rowByID[id]?.resolvedStudioURL(preferExternal: preferExternal)
                     batchUpdates[id] = docs.map { doc in
                         EditedDocument(
                             id: doc.id,
@@ -199,8 +201,8 @@ final class DocumentSearchCoordinator {
         return byCanonical.values.sorted { $0.editedAt > $1.editedAt }
     }
 
-    private func primaryDataset(for projectId: String) -> String? {
-        guard let row = store.rows.first(where: { $0.id == projectId }) else { return nil }
+    private func primaryDataset(from row: ProjectRow?) -> String? {
+        guard let row else { return nil }
         return ProjectSyncService.primaryDataset(from: row.project.datasets)
     }
 }

@@ -24,13 +24,17 @@ struct StudioStorePresenceTests {
         #expect(cachedRow?.activity.activeUsers.isEmpty == true)
     }
 
-    @Test("empty presence removes the sidecar entry")
+    @Test("empty presence clears members but keeps the slice identity")
     func emptyClearsEntry() {
         let store = makePresenceStore(projectIDs: ["p1"])
+        let slice = store.presenceSlice(for: "p1")
         store.setActiveUsers([Member(id: "u1", displayName: "Alex")], forProjectID: "p1")
         store.setActiveUsers([], forProjectID: "p1")
         #expect(store.activeUsers(for: "p1").isEmpty)
         #expect(store.activeUsersByProjectID["p1"] == nil)
+        // Same slice object so Observation subscribers keep tracking it.
+        #expect(store.presenceSlice(for: "p1") === slice)
+        #expect(slice.members.isEmpty)
     }
 
     @Test("clearActiveUsers drops every entry")
@@ -40,6 +44,19 @@ struct StudioStorePresenceTests {
         store.setActiveUsers([Member(id: "u2", displayName: "Sam")], forProjectID: "p2")
         store.clearActiveUsers()
         #expect(store.activeUsersByProjectID.isEmpty)
+        #expect(store.activeUsers(for: "p1").isEmpty)
+        #expect(store.activeUsers(for: "p2").isEmpty)
+    }
+
+    @Test("presenceSlice is stable per project id")
+    func sliceIdentity() {
+        let store = makePresenceStore(projectIDs: ["p1"])
+        let a = store.presenceSlice(for: "p1")
+        let b = store.presenceSlice(for: "p1")
+        #expect(a === b)
+        store.setActiveUsers([Member(id: "u1", displayName: "Alex")], forProjectID: "p1")
+        #expect(store.presenceSlice(for: "p1") === a)
+        #expect(a.members.count == 1)
     }
 }
 

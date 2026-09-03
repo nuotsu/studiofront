@@ -253,7 +253,7 @@ public struct ProjectActivity: Sendable, Hashable, Codable {
     /// same fetch — `lastEditedDocument` still drives the row's activity
     /// line UI.
     public var recentDocuments: [EditedDocument]
-    /// Unused for live UI — presence lives on `StudioStore.activeUsersByProjectID`.
+    /// Unused for live UI — presence lives on `StudioStore` presence slices.
     /// Kept so cached JSON that still encodes this key continues to decode.
     public var activeUsers: [Member]
 
@@ -375,6 +375,19 @@ public enum RecencyBucket: String, CaseIterable, Sendable {
             return .lastMonth
         }
         return .earlier
+    }
+}
+
+/// Per-project live presence board. Rows observe `members` on the slice for
+/// their project id so a tick for one project does not rebuild every
+/// `AvatarStack` in the list.
+@MainActor
+@Observable
+public final class PresenceSlice {
+    public var members: [Member] = []
+
+    public init(members: [Member] = []) {
+        self.members = members
     }
 }
 

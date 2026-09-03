@@ -17,7 +17,9 @@ public final class StudioStore {
     /// Defaults to free caps until `LicenseService` resolves a concrete entitlement.
     public var entitlement: StudioStoreEntitlement = .free {
         didSet {
-            if !entitlement.isUnlimited {
+            // Only clear when dropping out of an unlimited plan — re-assigning
+            // `.free` (or any limited entitlement) must not wipe live favorites.
+            if !entitlement.isUnlimited, oldValue.isUnlimited {
                 clearAllFavorites()
             }
             invalidateListCache()
@@ -29,10 +31,20 @@ public final class StudioStore {
     /// eligible project ids for presence can change while the popover stays
     /// open (no per-row visibility/hide toggle exists yet).
     public var onRowsReplaced: (() -> Void)?
-    /// Live presence members, keyed by project id. Kept off the memoized
-    /// `groups` / `visibleRows` snapshots so a presence tick can update
-    /// avatars without regrouping the list. Session-lived — never persisted.
-    public private(set) var activeUsersByProjectID: [String: [Member]] = [:]
+    /// Live presence members, keyed by project id. Derived from per-project
+    /// `PresenceSlice`s so a tick only invalidates the row that observes that
+    /// slice — not every visible `AvatarStack`. Kept off the memoized
+    /// `groups` / `visibleRows` snapshots. Session-lived — never persisted.
+    public var activeUsersByProjectID: [String: [Member]] {
+        Dictionary(uniqueKeysWithValues: presenceSlices.compactMap { id, slice in
+            slice.members.isEmpty ? nil : (id, slice.members)
+        })
+    }
+    /// Per-project presence board. Stored behind `@ObservationIgnored` so
+    /// dictionary membership changes do not invalidate every row; views that
+    /// need avatars observe `presenceSlice(for:).members` instead.
+    @ObservationIgnored
+    private var presenceSlices: [String: PresenceSlice] = [:]
     /// Live, per-project document search results for the current query —
     /// populated by `DocumentSearchCoordinator` as each project's search
     /// resolves. Cleared whenever the query changes or drops below the
@@ -63,6 +75,10 @@ public final class StudioStore {
 
     private var normalizedQuerySource = ""
     private var normalizedQueryNeedle = ""
+    /// Per-row normalized searchable fields (project/org/id/datasets/links).
+    /// Invalidated on `replaceRows`, not on query changes.
+    @ObservationIgnored
+    private var searchHaystackByID: [String: [String]] = [:]
 
     public init(
         rows: [ProjectRow] = [],
@@ -71,6 +87,7 @@ public final class StudioStore {
         self.rows = rows
         self.organizations = organizations
         self.selectedID = rows.first(where: { $0.curation.isFavorite })?.id ?? rows.first?.id
+        rebuildSearchHaystacks()
     }
 
     public var totalCount: Int { rows.filter { !$0.curation.isHidden && !isArchivedAndHidden($0) }.count }
@@ -176,8 +193,25 @@ public final class StudioStore {
     }
 
     public func setSearchingProjectIDs(_ ids: Set<String>) {
+        guard searchingProjectIDs != ids else { return }
+        let previous = searchingProjectIDs
         searchingProjectIDs = ids
-        invalidateListCache()
+        // Header spinner observes `searchingProjectIDs` directly. Skip list
+        // invalidation when flipping searching↔idle would show the same docs
+        // (common after painting local matches that equal cached titles).
+        let flipped = previous.symmetricDifference(ids)
+        for id in flipped {
+            guard let row = rows.first(where: { $0.id == id }) else { continue }
+            let cached = cachedTitleMatches(for: row, needle: normalizedSearchNeedle)
+                .filter { !Self.excludedSearchTypeNames.contains($0.typeName) }
+            let idle = liveDocumentMatchesByProject[id] ?? cached
+            let before = previous.contains(id) ? cached : idle
+            let after = ids.contains(id) ? cached : idle
+            if before != after {
+                invalidateListCache()
+                return
+            }
+        }
     }
 
     /// Applies live search results in one observable update per batch.
@@ -186,13 +220,37 @@ public final class StudioStore {
         completedProjectIDs: Set<String>
     ) {
         guard !updates.isEmpty || !completedProjectIDs.isEmpty else { return }
+        var documentsChanged = false
         if !updates.isEmpty {
+            for (id, docs) in updates {
+                if liveDocumentMatchesByProject[id] != docs {
+                    documentsChanged = true
+                    break
+                }
+            }
             liveDocumentMatchesByProject.merge(updates) { _, new in new }
         }
         if !completedProjectIDs.isEmpty {
             searchingProjectIDs.subtract(completedProjectIDs)
         }
-        invalidateListCache()
+        // Always invalidate when document payloads change. Completing a search
+        // with identical docs still needs an invalidate when the project leaves
+        // `searchingProjectIDs` and switches cached→live source — handled above
+        // when payloads differ; when they match, skip.
+        if documentsChanged {
+            invalidateListCache()
+        } else if !completedProjectIDs.isEmpty {
+            for id in completedProjectIDs {
+                guard let row = rows.first(where: { $0.id == id }) else { continue }
+                let cached = cachedTitleMatches(for: row, needle: normalizedSearchNeedle)
+                    .filter { !Self.excludedSearchTypeNames.contains($0.typeName) }
+                let live = liveDocumentMatchesByProject[id] ?? cached
+                if live != cached {
+                    invalidateListCache()
+                    return
+                }
+            }
+        }
     }
 
     private func listState() -> ListState {
@@ -200,8 +258,28 @@ public final class StudioStore {
             return cached
         }
 
-        let visible = computeVisibleRows()
-        let groups = computeGroups(from: visible)
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        let isSearching = !trimmed.isEmpty
+        let needle = normalizedSearchNeedle
+
+        var documentsByProjectID: [String: [EditedDocument]] = [:]
+        if isSearching {
+            documentsByProjectID.reserveCapacity(rows.count)
+            for row in rows where !row.curation.isHidden && !isArchivedAndHidden(row) {
+                documentsByProjectID[row.id] = matchingDocuments(for: row)
+            }
+        }
+
+        let visible = computeVisibleRows(
+            documentsByProjectID: documentsByProjectID,
+            needle: needle,
+            isSearching: isSearching
+        )
+        let groups = computeGroups(
+            from: visible,
+            documentsByProjectID: documentsByProjectID,
+            isSearching: isSearching
+        )
         let flatVisibleIDs = groups.flatMap { $0.items.map(\.id) }
         var favoriteIndexByID: [String: Int] = [:]
         for (index, row) in sortedFavorites(from: visible).enumerated() where index < 9 {
@@ -259,64 +337,101 @@ public final class StudioStore {
         return normalizedQueryNeedle
     }
 
-    private func computeVisibleRows() -> [ProjectRow] {
-        rows.filter { !$0.curation.isHidden && !isArchivedAndHidden($0) && matches($0) }
+    private func computeVisibleRows(
+        documentsByProjectID: [String: [EditedDocument]],
+        needle: String,
+        isSearching: Bool
+    ) -> [ProjectRow] {
+        rows.filter { row in
+            guard !row.curation.isHidden, !isArchivedAndHidden(row) else { return false }
+            guard isSearching else { return true }
+            return matches(
+                row,
+                documents: documentsByProjectID[row.id] ?? [],
+                needle: needle
+            )
+        }
     }
 
-    private func computeGroups(from visible: [ProjectRow]) -> [ProjectGroup] {
+    private func computeGroups(
+        from visible: [ProjectRow],
+        documentsByProjectID: [String: [EditedDocument]],
+        isSearching: Bool
+    ) -> [ProjectGroup] {
         var result: [ProjectGroup] = []
-        let isSearching = !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
 
         // While searching, skip the Favorites pin and fold favorited projects into
         // their normal org / recency groups so results aren't reordered by star.
         if !isSearching {
             let favorites = sortedFavorites(from: visible)
             if !favorites.isEmpty {
-                result.append(ProjectGroup(id: "favorites", title: "Favorites", items: groupItems(from: favorites)))
+                result.append(ProjectGroup(
+                    id: "favorites",
+                    title: "Favorites",
+                    items: groupItems(from: favorites, documentsByProjectID: documentsByProjectID, isSearching: false)
+                ))
             }
         }
 
         let rest = isSearching ? visible : visible.filter { !$0.curation.isFavorite }
         switch groupBy {
         case .organization:
+            let byOrg = Dictionary(grouping: rest) { $0.project.organizationId ?? "" }
             let pinned = organizations.filter(\.isFavorite)
             let unpinned = organizations.filter { !$0.isFavorite }
             let orgOrder = isSearching ? organizations : pinned + unpinned
             var seen = Set<String>()
             for org in orgOrder {
                 seen.insert(org.id)
-                let items = rest.filter { $0.project.organizationId == org.id }
-                if !items.isEmpty {
-                    result.append(ProjectGroup(id: org.id, title: org.name, organizationId: org.id, items: groupItems(from: sortedByRecency(items))))
-                }
+                guard let items = byOrg[org.id], !items.isEmpty else { continue }
+                result.append(ProjectGroup(
+                    id: org.id,
+                    title: org.name,
+                    organizationId: org.id,
+                    items: groupItems(from: sortedByRecency(items), documentsByProjectID: documentsByProjectID, isSearching: isSearching)
+                ))
             }
-            let leftoverOrgs = Dictionary(grouping: rest.filter { row in
-                guard let id = row.project.organizationId else { return false }
-                return !seen.contains(id)
-            }, by: { $0.project.organizationId ?? "other" })
-            for (id, items) in leftoverOrgs.sorted(by: { lhs, rhs in
-                (lhs.value.first?.project.organizationName ?? lhs.key)
-                    .localizedCaseInsensitiveCompare(rhs.value.first?.project.organizationName ?? rhs.key)
+            let leftoverKeys = byOrg.keys.filter { !$0.isEmpty && !seen.contains($0) }
+            for id in leftoverKeys.sorted(by: { lhs, rhs in
+                (byOrg[lhs]?.first?.project.organizationName ?? lhs)
+                    .localizedCaseInsensitiveCompare(byOrg[rhs]?.first?.project.organizationName ?? rhs)
                     == .orderedAscending
             }) {
+                guard let items = byOrg[id], !items.isEmpty else { continue }
                 let title = items.first?.project.organizationName ?? id
-                result.append(ProjectGroup(id: id, title: title, organizationId: id, items: groupItems(from: sortedByRecency(items))))
+                result.append(ProjectGroup(
+                    id: id,
+                    title: title,
+                    organizationId: id,
+                    items: groupItems(from: sortedByRecency(items), documentsByProjectID: documentsByProjectID, isSearching: isSearching)
+                ))
             }
-            let orphans = rest.filter { $0.project.organizationId == nil }
-            if !orphans.isEmpty {
-                result.append(ProjectGroup(id: "other", title: "Other", items: groupItems(from: sortedByRecency(orphans))))
+            if let orphans = byOrg[""], !orphans.isEmpty {
+                result.append(ProjectGroup(
+                    id: "other",
+                    title: "Other",
+                    items: groupItems(from: sortedByRecency(orphans), documentsByProjectID: documentsByProjectID, isSearching: isSearching)
+                ))
             }
         case .lastEdited:
+            var buckets: [RecencyBucket: [ProjectRow]] = [:]
+            let now = Date()
+            for row in rest {
+                let bucket: RecencyBucket
+                if let edited = row.activity.lastEditedDocument?.editedAt {
+                    bucket = RecencyBucket.bucket(for: edited, now: now)
+                } else {
+                    bucket = .earlier
+                }
+                buckets[bucket, default: []].append(row)
+            }
             for bucket in RecencyBucket.allCases {
-                let items = rest.filter { row in
-                    guard let edited = row.activity.lastEditedDocument?.editedAt else {
-                        return bucket == .earlier
-                    }
-                    return RecencyBucket.bucket(for: edited) == bucket
-                }
-                if !items.isEmpty {
-                    result.append(ProjectGroup(id: bucket.rawValue, title: bucket.title, items: groupItems(from: sortedByRecency(items))))
-                }
+                guard let items = buckets[bucket], !items.isEmpty else { continue }
+                result.append(ProjectGroup(
+                    id: bucket.rawValue,
+                    title: bucket.title,
+                    items: groupItems(from: sortedByRecency(items), documentsByProjectID: documentsByProjectID, isSearching: isSearching)
+                ))
             }
         }
         return result
@@ -324,16 +439,19 @@ public final class StudioStore {
 
     /// Interleaves document search rows immediately after each project when a
     /// query is active; otherwise returns plain project rows.
-    private func groupItems(from projects: [ProjectRow]) -> [PopoverListItem] {
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
+    private func groupItems(
+        from projects: [ProjectRow],
+        documentsByProjectID: [String: [EditedDocument]],
+        isSearching: Bool
+    ) -> [PopoverListItem] {
+        guard isSearching else {
             return projects.map { .project($0) }
         }
         var items: [PopoverListItem] = []
         items.reserveCapacity(projects.count)
         for project in projects {
             items.append(.project(project))
-            for document in matchingDocuments(for: project) {
+            for document in documentsByProjectID[project.id] ?? [] {
                 items.append(.document(project: project, document: document))
             }
         }
@@ -419,6 +537,7 @@ public final class StudioStore {
         let previous = selectedID
         self.rows = rows
         self.organizations = organizations
+        rebuildSearchHaystacks()
         if let previous, rows.contains(where: { $0.id == previous }) {
             selectedID = previous
         } else {
@@ -434,31 +553,39 @@ public final class StudioStore {
         replaceRows([], organizations: [])
     }
 
-    /// Live members currently shown for a project. Avatar views must read
-    /// this rather than `row.activity.activeUsers` — that field is a stale
-    /// copy baked into the memoized list snapshot.
+    /// Stable per-project presence board. Avatar views must observe
+    /// `presenceSlice(for:).members` rather than `row.activity.activeUsers`
+    /// (stale copy in the memoized list snapshot) or the aggregate map.
+    public func presenceSlice(for projectID: String) -> PresenceSlice {
+        if let existing = presenceSlices[projectID] { return existing }
+        let slice = PresenceSlice()
+        presenceSlices[projectID] = slice
+        return slice
+    }
+
+    /// Live members currently shown for a project.
     public func activeUsers(for projectID: String) -> [Member] {
-        activeUsersByProjectID[projectID] ?? []
+        presenceSlices[projectID]?.members ?? []
     }
 
     /// Updates live presence without invalidating list derivation, so a
     /// presence push never disturbs selection or scroll reconciliation.
+    /// Only the matching `PresenceSlice` publishes, so other rows stay quiet.
     public func setActiveUsers(_ members: [Member], forProjectID id: String) {
         guard rows.contains(where: { $0.id == id }) else { return }
-        let previous = activeUsersByProjectID[id] ?? []
-        guard previous != members else { return }
-        if members.isEmpty {
-            activeUsersByProjectID.removeValue(forKey: id)
-        } else {
-            activeUsersByProjectID[id] = members
-        }
+        let slice = presenceSlice(for: id)
+        guard slice.members != members else { return }
+        slice.members = members
     }
 
     /// Drops every live presence entry. Used when the popover closes and on
     /// sign-out so the next open doesn't flash yesterday's editors.
     public func clearActiveUsers() {
-        guard !activeUsersByProjectID.isEmpty else { return }
-        activeUsersByProjectID.removeAll()
+        guard !presenceSlices.isEmpty else { return }
+        for slice in presenceSlices.values where !slice.members.isEmpty {
+            slice.members = []
+        }
+        presenceSlices.removeAll()
     }
 
     public func prepareForOpen() {
@@ -635,11 +762,37 @@ public final class StudioStore {
         }
     }
 
-    private func matches(_ row: ProjectRow) -> Bool {
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return true }
-        if !matchingDocuments(for: row).isEmpty { return true }
-        let needle = normalizedSearchNeedle
+    private func matches(
+        _ row: ProjectRow,
+        documents: [EditedDocument],
+        needle: String
+    ) -> Bool {
+        if !documents.isEmpty { return true }
+        let fields = haystack(for: row)
+        return fields.contains { field in
+            field.contains(needle) || initials(of: field).contains(needle)
+        }
+    }
+
+    private func rebuildSearchHaystacks() {
+        var next: [String: [String]] = [:]
+        next.reserveCapacity(rows.count)
+        for row in rows {
+            next[row.id] = buildSearchHaystack(for: row)
+        }
+        searchHaystackByID = next
+    }
+
+    private func haystack(for row: ProjectRow) -> [String] {
+        if let cached = searchHaystackByID[row.id] { return cached }
+        let built = buildSearchHaystack(for: row)
+        searchHaystackByID[row.id] = built
+        return built
+    }
+
+    /// Project / org / id / dataset / link fields only — document titles are
+    /// covered by `matchingDocuments` / `cachedTitleMatches`.
+    private func buildSearchHaystack(for row: ProjectRow) -> [String] {
         let fields: [String] = [
             row.displayTitle,
             row.project.displayName,
@@ -648,15 +801,10 @@ public final class StudioStore {
             row.project.organizationId ?? "",
             row.project.id,
             row.project.datasets.map(\.name).joined(separator: " "),
-            row.activity.lastEditedDocument?.title ?? "",
-            row.activity.recentDocuments.map(\.title).joined(separator: " "),
             row.curation.frontendLinks.map(\.label).joined(separator: " "),
             row.curation.extraStudioLinks.map(\.label).joined(separator: " "),
         ]
-        return fields.contains { field in
-            let normalized = normalize(field)
-            return normalized.contains(needle) || initials(of: normalized).contains(needle)
-        }
+        return fields.map { normalize($0) }.filter { !$0.isEmpty }
     }
 
     /// The document to show on a project row's activity caption line.

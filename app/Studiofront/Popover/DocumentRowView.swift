@@ -48,7 +48,7 @@ struct DocumentRowView: View {
                 }
                 identity
                 Spacer(minLength: 8)
-                ProjectRowTrailingActions(row: row)
+                ProjectRowTrailingActions(row: row, showPresence: false)
             }
         }
         .contentShape(Rectangle())

@@ -11,6 +11,7 @@ final class ProjectSyncService {
     private var snapshot = PersistedSnapshot()
     private var inFlight: Task<Void, Never>?
     private var refreshGeneration = 0
+    private var persistCurationTask: Task<Void, Never>?
     /// Which user's data `store.rows`/`store.organizations` currently reflect.
     /// Lets `loadCache`/`persistCuration` tell live in-memory edits apart from
     /// a *different* account's leftover state instead of assuming they always
@@ -56,7 +57,7 @@ final class ProjectSyncService {
         case .signedIn:
             await loadCache()
         case .signedOut:
-            persistCuration()
+            persistCurationNow()
             store.clearLiveRows()
             liveUserID = nil
         case .reconnectRequired:
@@ -67,6 +68,19 @@ final class ProjectSyncService {
     }
 
     func persistCuration() {
+        persistCurationTask?.cancel()
+        persistCurationTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(400))
+            guard !Task.isCancelled, let self else { return }
+            self.persistCurationNow()
+        }
+    }
+
+    /// Writes curation immediately — used on sign-out and before a full refresh
+    /// snapshot save so debounced toggles are not lost.
+    func persistCurationNow() {
+        persistCurationTask?.cancel()
+        persistCurationTask = nil
         guard let userID = currentUserID ?? liveUserID else { return }
         mergeLiveCurationAndOrgs(curation: store.curationSnapshot, orgs: store.organizationSnapshot, into: userID)
         PersistenceStore.save(snapshot)
@@ -147,7 +161,7 @@ final class ProjectSyncService {
                 snapshot.cachedAt = Date()
                 if let etag = projectsResult.etag { snapshot.etags["projects"] = etag }
                 guard generation == refreshGeneration else { return }
-                persistCuration()
+                persistCurationNow()
                 applySnapshotToStore()
                 return
             }
@@ -340,6 +354,8 @@ final class ProjectSyncService {
             )
 
             guard generation == refreshGeneration else { return }
+            persistCurationTask?.cancel()
+            persistCurationTask = nil
             PersistenceStore.save(snapshot)
             applySnapshotToStore()
         } catch is CancellationError {

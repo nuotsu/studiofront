@@ -157,8 +157,7 @@ final class PresenceCoordinator {
         }
 
         let preferExternal = settings.studioURLPreference == .external
-        let rowByID = Dictionary(uniqueKeysWithValues: store.rows.map { ($0.id, $0) })
-        guard let row = rowByID[id],
+        guard let row = store.rows.first(where: { $0.id == id }),
               let studioURL = row.resolvedStudioURL(preferExternal: preferExternal) else { return members }
         return members.map { member in
             var member = member

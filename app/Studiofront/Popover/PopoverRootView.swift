@@ -13,7 +13,9 @@ struct PopoverRootView: View {
     @FocusState private var searchFocused: Bool
     @State private var avatarTooltip: AvatarTooltipDisplay?
     @State private var avatarTooltipSize: CGSize = .zero
-    @State private var headerMinYs: [String: CGFloat] = [:]
+    /// Which section header is currently pinned under the glass fade — updated
+    /// only when the pinned id changes, not on every scroll-frame minY write.
+    @State private var pinnedGroupID: String?
 
     var body: some View {
         @Bindable var store = store
@@ -288,7 +290,7 @@ struct PopoverRootView: View {
                                 Color.clear.frame(height: 4)
                             }
                         } header: {
-                            let isGlassPinned = theme.surface.kind == .glass && pinnedGroup(in: groups)?.id == group.id
+                            let isGlassPinned = theme.surface.kind == .glass && pinnedGroupID == group.id
                             organizationSectionHeader(for: group)
                                 .opacity(isGlassPinned ? 0 : 1)
                                 .allowsHitTesting(!isGlassPinned)
@@ -355,11 +357,19 @@ struct PopoverRootView: View {
                 }
             }
             .overlay(alignment: .top) {
-                if theme.surface.kind == .glass, let group = pinnedGroup(in: groups) {
+                if theme.surface.kind == .glass,
+                   let pinnedID = pinnedGroupID,
+                   let group = groups.first(where: { $0.id == pinnedID })
+                {
                     organizationSectionHeader(for: group)
                 }
             }
-            .onPreferenceChange(SectionHeaderMinYKey.self) { headerMinYs = $0 }
+            .onPreferenceChange(SectionHeaderMinYKey.self) { minYs in
+                let next = groups.last { (minYs[$0.id] ?? .greatestFiniteMagnitude) <= 1 }?.id
+                if next != pinnedGroupID {
+                    pinnedGroupID = next
+                }
+            }
             .frame(maxHeight: .infinity)
             .onChange(of: store.selectedID) { _, id in
                 guard let id else { return }
@@ -372,10 +382,6 @@ struct PopoverRootView: View {
                 }
             }
         }
-    }
-
-    private func pinnedGroup(in groups: [ProjectGroup]) -> ProjectGroup? {
-        groups.last { (headerMinYs[$0.id] ?? .greatestFiniteMagnitude) <= 1 }
     }
 
     private func organizationSectionHeader(for group: ProjectGroup) -> SectionHeader {

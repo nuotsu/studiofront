@@ -47,26 +47,32 @@ struct ProjectRowTrailingActions: View {
     @Environment(StudioStore.self) private var store
 
     var row: ProjectRow
+    /// When false, skip the presence avatar stack (document search rows share
+    /// the parent project's avatars on the project row above).
+    var showPresence: Bool = true
 
     var body: some View {
         HStack(spacing: 11) {
-            AvatarStack(
-                items: store.activeUsers(for: row.id).map { member in
-                    AvatarStack.Item(
-                        id: member.id,
-                        name: member.displayName,
-                        initials: member.initials,
-                        color: PresenceSwatch.color(for: member.id),
-                        imageURL: member.imageURL,
-                        deepLinkURL: member.deepLinkURL
-                    )
-                },
-                onSelect: { item in
-                    if let url = item.deepLinkURL {
-                        AppDelegate.shared?.openUnlockedURL(url, projectID: row.id)
+            if showPresence {
+                let members = store.presenceSlice(for: row.id).members
+                AvatarStack(
+                    items: members.map { member in
+                        AvatarStack.Item(
+                            id: member.id,
+                            name: member.displayName,
+                            initials: member.initials,
+                            color: PresenceSwatch.color(for: member.id),
+                            imageURL: member.imageURL,
+                            deepLinkURL: member.deepLinkURL
+                        )
+                    },
+                    onSelect: { item in
+                        if let url = item.deepLinkURL {
+                            AppDelegate.shared?.openUnlockedURL(url, projectID: row.id)
+                        }
                     }
-                }
-            )
+                )
+            }
 
             HStack(spacing: 5) {
                 if let site = row.curation.primaryFrontendURL {

@@ -24,16 +24,25 @@ struct StudioStoreSearchTests {
         #expect(matches[0].title == "Thank You - Acru Webinar")
     }
 
-    @Test("initials match multi-word titles")
-    func initialsMatch() {
-        let store = makeSearchStore(recentTitles: ["Elevate Experiences"])
-        store.query = "ee"
-        #expect(store.cachedDocumentMatches(for: store.rows[0]).count == 1)
+    @Test("document-only title match shows project and interleaved document row")
+    func documentOnlyMatchInterleaves() {
+        let store = makeSearchStore(recentTitles: ["Thank You - Acru Webinar"], projectName: "Unrelated Project")
+        store.query = "thank you"
+        store.noteQueryChanged()
+        let items = store.groups.flatMap(\.items)
+        #expect(items.contains { item in
+            if case .project(let row) = item { return row.id == "p1" }
+            return false
+        })
+        #expect(items.contains { item in
+            if case .document(_, let doc) = item { return doc.title.contains("Thank You") }
+            return false
+        })
     }
 }
 
 @MainActor
-private func makeSearchStore(recentTitles: [String]) -> StudioStore {
+private func makeSearchStore(recentTitles: [String], projectName: String = "Project") -> StudioStore {
     let now = Date()
     let recentDocuments = recentTitles.enumerated().map { index, title in
         EditedDocument(
@@ -43,7 +52,7 @@ private func makeSearchStore(recentTitles: [String]) -> StudioStore {
             editedAt: now.addingTimeInterval(-Double(index) * 60)
         )
     }
-    let project = SanityProject(id: "p1", displayName: "Project")
+    let project = SanityProject(id: "p1", displayName: projectName)
     let curation = ProjectCuration(projectId: "p1")
     let activity = ProjectActivity(
         lastEditedDocument: recentDocuments.first,

@@ -94,7 +94,6 @@ public enum PersistenceStore {
         func save(_ snapshot: PersistedSnapshot) {
             let encoder = JSONEncoder()
             encoder.dateEncodingStrategy = .iso8601
-            encoder.outputFormatting = [.sortedKeys]
             guard let data = try? encoder.encode(snapshot) else { return }
             try? FileManager.default.createDirectory(at: PersistenceStore.directoryURL, withIntermediateDirectories: true)
             try? data.write(to: PersistenceStore.fileURL, options: .atomic)

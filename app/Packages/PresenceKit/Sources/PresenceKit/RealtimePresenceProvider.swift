@@ -28,8 +28,16 @@ public actor RealtimePresenceProvider: PresenceProvider {
     /// Per project, the live sessions currently known from the socket: sessionId -> (userId, lastActiveAt, documentId).
     /// Keyed by session (not user) because one user can have multiple open tabs/sessions.
     private var sessions: [String: [String: (userId: String, lastActiveAt: Date, documentId: String?)]] = [:]
+    /// Last emitted visible roster fingerprint per project — `(userId, documentId)`
+    /// pairs. `state` pings that only refresh `lastActiveAt` skip a yield.
+    private var lastEmittedRoster: [String: Set<RosterKey>] = [:]
     private var fallbackProjectIds: Set<String> = []
     private var tickerTask: Task<Void, Never>?
+
+    private struct RosterKey: Hashable {
+        var userId: String
+        var documentId: String?
+    }
 
     public init(
         client: SanityClient,
@@ -67,6 +75,7 @@ public actor RealtimePresenceProvider: PresenceProvider {
             connections[id]?.cancel()
             connections[id] = nil
             sessions[id] = nil
+            lastEmittedRoster[id] = nil
             fallbackProjectIds.remove(id)
             continuations[id]?.finish()
             continuations[id] = nil
@@ -77,13 +86,13 @@ public actor RealtimePresenceProvider: PresenceProvider {
 
         ensureTicker()
         let newIds = Array(desired.subtracting(running))
-        for batchStart in stride(from: 0, to: newIds.count, by: maxConcurrentConnections) {
-            let batchEnd = min(batchStart + maxConcurrentConnections, newIds.count)
-            for id in newIds[batchStart..<batchEnd] {
-                connections[id] = Task { [weak self, connectStagger] in
-                    try? await Task.sleep(for: connectStagger)
-                    await self?.runConnection(for: id)
+        for (index, id) in newIds.enumerated() {
+            let batchIndex = index / maxConcurrentConnections
+            connections[id] = Task { [weak self, connectStagger] in
+                if batchIndex > 0 {
+                    try? await Task.sleep(for: connectStagger * Double(batchIndex))
                 }
+                await self?.runConnection(for: id)
             }
         }
     }
@@ -92,6 +101,7 @@ public actor RealtimePresenceProvider: PresenceProvider {
         for task in connections.values { task.cancel() }
         connections.removeAll()
         sessions.removeAll()
+        lastEmittedRoster.removeAll()
         fallbackProjectIds.removeAll()
         tickerTask?.cancel()
         tickerTask = nil
@@ -163,21 +173,39 @@ public actor RealtimePresenceProvider: PresenceProvider {
     }
 
     private func handle(_ event: BifurPresenceSocket.WireEvent, for projectId: String) async {
+        var rosterChanged = false
         switch event {
         case .state(let userId, let sessionId, let lastActiveAt, let documentId):
             var projectSessions = sessions[projectId] ?? [:]
+            let previous = projectSessions[sessionId]
             projectSessions[sessionId] = (userId, lastActiveAt ?? Date(), documentId)
             sessions[projectId] = projectSessions
+            // Keep lastActiveAt for stale pruning, but only emit when the
+            // visible (userId, documentId) pair for this session changes.
+            if previous?.userId != userId || previous?.documentId != documentId {
+                rosterChanged = true
+            } else if previous == nil {
+                rosterChanged = true
+            }
         case .disconnect(_, let sessionId):
-            sessions[projectId]?[sessionId] = nil
+            if sessions[projectId]?[sessionId] != nil {
+                sessions[projectId]?[sessionId] = nil
+                rosterChanged = true
+            }
         }
-        await emitCurrentMembers(for: projectId)
+        if rosterChanged {
+            await emitCurrentMembers(for: projectId)
+        }
     }
 
     private func emitCurrentMembers(for projectId: String) async {
         let projectSessions = sessions[projectId] ?? [:]
         guard !projectSessions.isEmpty else {
-            continuations[projectId]?.yield([])
+            let alreadyEmpty = lastEmittedRoster[projectId]?.isEmpty == true
+            if !alreadyEmpty {
+                lastEmittedRoster[projectId] = []
+                continuations[projectId]?.yield([])
+            }
             return
         }
         // One user can have several open sessions (tabs) — surface the
@@ -189,6 +217,10 @@ public actor RealtimePresenceProvider: PresenceProvider {
             }
             mostRecentByUser[session.userId] = (session.lastActiveAt, session.documentId)
         }
+        let fingerprint = Set(mostRecentByUser.map { RosterKey(userId: $0.key, documentId: $0.value.documentId) })
+        if lastEmittedRoster[projectId] == fingerprint { return }
+        lastEmittedRoster[projectId] = fingerprint
+
         let roster = await rosterProvider(projectId)
         let byId = Dictionary(uniqueKeysWithValues: roster.map { ($0.id, $0) })
         continuations[projectId]?.yield(mostRecentByUser.map { userId, info in
