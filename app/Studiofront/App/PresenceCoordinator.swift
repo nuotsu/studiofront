@@ -77,6 +77,7 @@ final class PresenceCoordinator {
         order.removeAll()
         documentTypeCache.removeAll()
         rosterCache.removeAll()
+        store.clearActiveUsers()
         let outgoing = provider
         provider = nil
         Task { await outgoing?.stopAll() }

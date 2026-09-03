@@ -106,6 +106,10 @@ public actor RealtimePresenceProvider: PresenceProvider {
         // on a stream that will never receive another value or terminate.
         continuations[projectId]?.finish()
         continuations[projectId] = continuation
+        // PresenceCoordinator starts sockets and consumer streams concurrently,
+        // so rollcall can land before this continuation is attached. Yield the
+        // current set immediately (empty if nobody is connected yet).
+        Task { await self.emitCurrentMembers(for: projectId) }
     }
 
     private func detach(_ projectId: String) {

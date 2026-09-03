@@ -253,6 +253,8 @@ public struct ProjectActivity: Sendable, Hashable, Codable {
     /// same fetch — `lastEditedDocument` still drives the row's activity
     /// line UI.
     public var recentDocuments: [EditedDocument]
+    /// Unused for live UI — presence lives on `StudioStore.activeUsersByProjectID`.
+    /// Kept so cached JSON that still encodes this key continues to decode.
     public var activeUsers: [Member]
 
     public init(
@@ -270,13 +272,25 @@ public struct ProjectActivity: Sendable, Hashable, Codable {
     /// Decoded manually so cached JSON written before `recentDocuments`
     /// existed (`PersistenceStore`'s `cache-v1.json`) still decodes —
     /// matching the same forward-compatible pattern as
-    /// `SanityProject.studioApps`.
+    /// `SanityProject.studioApps`. Persisted `activeUsers` are ignored:
+    /// presence is session-lived, not cache-lived.
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         lastDeployedAt = try container.decodeIfPresent(Date.self, forKey: .lastDeployedAt)
         lastEditedDocument = try container.decodeIfPresent(EditedDocument.self, forKey: .lastEditedDocument)
         recentDocuments = try container.decodeIfPresent([EditedDocument].self, forKey: .recentDocuments) ?? []
-        activeUsers = try container.decode([Member].self, forKey: .activeUsers)
+        activeUsers = []
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(lastDeployedAt, forKey: .lastDeployedAt)
+        try container.encodeIfPresent(lastEditedDocument, forKey: .lastEditedDocument)
+        try container.encode(recentDocuments, forKey: .recentDocuments)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case lastDeployedAt, lastEditedDocument, recentDocuments, activeUsers
     }
 }
 

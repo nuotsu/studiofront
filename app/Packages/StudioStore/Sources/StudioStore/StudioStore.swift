@@ -29,6 +29,10 @@ public final class StudioStore {
     /// eligible project ids for presence can change while the popover stays
     /// open (no per-row visibility/hide toggle exists yet).
     public var onRowsReplaced: (() -> Void)?
+    /// Live presence members, keyed by project id. Kept off the memoized
+    /// `groups` / `visibleRows` snapshots so a presence tick can update
+    /// avatars without regrouping the list. Session-lived — never persisted.
+    public private(set) var activeUsersByProjectID: [String: [Member]] = [:]
     /// Live, per-project document search results for the current query —
     /// populated by `DocumentSearchCoordinator` as each project's search
     /// resolves. Cleared whenever the query changes or drops below the
@@ -426,15 +430,35 @@ public final class StudioStore {
     }
 
     public func clearLiveRows() {
+        clearActiveUsers()
         replaceRows([], organizations: [])
     }
 
-    /// Updates one row's live presence in place, distinct from `replaceRows`,
-    /// so a presence push never disturbs selection/scroll reconciliation or list derivation.
+    /// Live members currently shown for a project. Avatar views must read
+    /// this rather than `row.activity.activeUsers` — that field is a stale
+    /// copy baked into the memoized list snapshot.
+    public func activeUsers(for projectID: String) -> [Member] {
+        activeUsersByProjectID[projectID] ?? []
+    }
+
+    /// Updates live presence without invalidating list derivation, so a
+    /// presence push never disturbs selection or scroll reconciliation.
     public func setActiveUsers(_ members: [Member], forProjectID id: String) {
-        guard let index = rows.firstIndex(where: { $0.id == id }) else { return }
-        guard rows[index].activity.activeUsers != members else { return }
-        rows[index].activity.activeUsers = members
+        guard rows.contains(where: { $0.id == id }) else { return }
+        let previous = activeUsersByProjectID[id] ?? []
+        guard previous != members else { return }
+        if members.isEmpty {
+            activeUsersByProjectID.removeValue(forKey: id)
+        } else {
+            activeUsersByProjectID[id] = members
+        }
+    }
+
+    /// Drops every live presence entry. Used when the popover closes and on
+    /// sign-out so the next open doesn't flash yesterday's editors.
+    public func clearActiveUsers() {
+        guard !activeUsersByProjectID.isEmpty else { return }
+        activeUsersByProjectID.removeAll()
     }
 
     public func prepareForOpen() {

@@ -51,7 +51,7 @@ struct ProjectRowTrailingActions: View {
     var body: some View {
         HStack(spacing: 11) {
             AvatarStack(
-                items: row.activity.activeUsers.map { member in
+                items: store.activeUsers(for: row.id).map { member in
                     AvatarStack.Item(
                         id: member.id,
                         name: member.displayName,
