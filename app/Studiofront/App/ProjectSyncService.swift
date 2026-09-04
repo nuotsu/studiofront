@@ -230,13 +230,20 @@ final class ProjectSyncService {
                 try Task.checkCancellation()
                 let end = min(start + limit, projectIDs.count)
                 let slice = Array(projectIDs[start..<end])
+                // Per-project dataset access can 403/404 even when the account
+                // token is valid (same as `fetchActivity`). Swallow those so one
+                // restricted project never expires the whole session.
                 try await withThrowingTaskGroup(of: (String, SanityConditional<[RemoteDataset]>).self) { group in
                     for id in slice {
                         let etag = force ? nil : snapshot.etags["datasets:\(id)"]
                         group.addTask {
                             do {
                                 return (id, try await client.listDatasets(token: token, projectId: id, etag: etag))
-                            } catch SanityError.notFound {
+                            } catch is CancellationError {
+                                throw CancellationError()
+                            } catch SanityError.cancelled {
+                                throw SanityError.cancelled
+                            } catch {
                                 return (id, SanityConditional(value: [], etag: nil, notModified: false))
                             }
                         }

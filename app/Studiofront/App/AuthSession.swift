@@ -53,6 +53,9 @@ final class AuthSession {
 
     private let tokens = TokenStore.shared
     private let client = SanityClient.shared
+    /// Bumped at the start of each `validate` and on `signOut` so a slow
+    /// launch restore cannot overwrite a Connect that already succeeded.
+    private var validateGeneration = 0
 
     var isSignedIn: Bool {
         if case .signedIn = status { return true }
@@ -123,6 +126,7 @@ final class AuthSession {
     }
 
     func signOut() {
+        validateGeneration += 1
         lastError = nil
         try? tokens.delete()
         status = .signedOut
@@ -136,9 +140,12 @@ final class AuthSession {
     }
 
     private func validate(token: String, source: TokenSource, persist: Bool) async {
+        validateGeneration += 1
+        let generation = validateGeneration
         status = .connecting
         do {
             let user = try await client.currentUser(token: token)
+            guard generation == validateGeneration else { return }
             if persist {
                 try tokens.save(token: token, source: source)
             }
@@ -146,6 +153,7 @@ final class AuthSession {
             lastError = nil
             onStatusChange?()
         } catch SanityAuthError.unauthorized, SanityAuthError.invalidToken {
+            guard generation == validateGeneration else { return }
             if persist {
                 lastError = SanityAuthError.invalidToken.localizedDescription
                 status = .signedOut
@@ -154,10 +162,12 @@ final class AuthSession {
             }
             onStatusChange?()
         } catch let error as SanityAuthError {
+            guard generation == validateGeneration else { return }
             lastError = error.localizedDescription
             status = persist ? .signedOut : .reconnectRequired
             onStatusChange?()
         } catch {
+            guard generation == validateGeneration else { return }
             lastError = "Couldn’t reach Sanity."
             status = persist ? .signedOut : .reconnectRequired
             onStatusChange?()

@@ -138,8 +138,8 @@ public actor SanityClient {
     /// per-project recently-edited document list (§6.3) — drives both the
     /// activity line (its newest entry) and title search coverage beyond
     /// that single most-recent document. Never throws for lack of dataset
-    /// access — callers should treat `.unauthorized`/`.notFound` as a
-    /// normal, quiet "no activity" state rather than a reportable error.
+    /// access — callers should treat `.unauthorized`/`.forbidden`/`.notFound`
+    /// as a normal, quiet "no activity" state rather than a reportable error.
     public func recentEditedDocuments(
         token: String,
         projectId: String,
@@ -395,8 +395,10 @@ public actor SanityClient {
             } catch {
                 throw SanityError.decoding
             }
-        case 401, 403:
+        case 401:
             throw SanityError.unauthorized
+        case 403:
+            throw SanityError.forbidden
         case 404:
             throw SanityError.notFound
         default:
@@ -434,8 +436,10 @@ public actor SanityClient {
         switch http.statusCode {
         case 200:
             return data.split(separator: UInt8(ascii: "\n")).map { Data($0) }
-        case 401, 403:
+        case 401:
             throw SanityError.unauthorized
+        case 403:
+            throw SanityError.forbidden
         case 404:
             throw SanityError.notFound
         default:
