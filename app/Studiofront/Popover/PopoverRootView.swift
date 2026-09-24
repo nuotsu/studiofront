@@ -261,6 +261,11 @@ struct PopoverRootView: View {
                 LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
                     ForEach(Array(groups.enumerated()), id: \.element.id) { index, group in
                         Section {
+                            // Clears the top blur's fade so the first row isn't
+                            // softened while the list is scrolled to the top.
+                            if index == 0, theme.surface.kind == .glass {
+                                Color.clear.frame(height: 12)
+                            }
                             ForEach(group.items) { item in
                                 switch item {
                                 case let .project(row):
@@ -336,24 +341,11 @@ struct PopoverRootView: View {
                 .padding(.bottom, theme.metrics.listPadding.bottom)
             }
             .scrollIndicators(settings.hideScrollbar ? .hidden : .automatic)
+            .scrollEdgeEffectHidden(theme.surface.kind == .glass, for: .top)
             .coordinateSpace(name: "projectList")
             .overlay(alignment: .top) {
                 if theme.surface.kind == .glass {
-                    GlassSurface(cornerRadius: 0, blendingMode: .withinWindow, preferSimpleMaterial: true)
-                        .frame(height: 28)
-                        .padding(.horizontal, 1)
-                        .mask(
-                            LinearGradient(
-                                stops: [
-                                    .init(color: .black, location: 0),
-                                    .init(color: .black, location: 0.45),
-                                    .init(color: .clear, location: 1),
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                        .allowsHitTesting(false)
+                    ListTopBlur()
                 }
             }
             .overlay(alignment: .top) {
@@ -481,6 +473,32 @@ struct PopoverRootView: View {
         return modifierGlyphs + [keyGlyph]
     }
 
+}
+
+/// Progressive blur under the pinned section header in Liquid Glass.
+private struct ListTopBlur: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        Rectangle()
+            .fill(.ultraThinMaterial)
+            // The dark material's scrim reads darker than the popover glass.
+            .overlay(colorScheme == .dark ? Color.white.opacity(0.06) : Color.clear)
+            .frame(height: 36)
+            .padding(.horizontal, 1)
+            .mask(
+                LinearGradient(
+                    stops: [
+                        .init(color: .black, location: 0),
+                        .init(color: .black, location: 0.55),
+                        .init(color: .clear, location: 1),
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
+            .allowsHitTesting(false)
+    }
 }
 
 private struct SectionHeaderMinYKey: PreferenceKey {
