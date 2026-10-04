@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.2.0] - 2026-10-04
+
+- Remove all licensing, trials, and subscription features — Studiofront is now completely free with unlimited projects
+- Fix muddy Liquid Glass sticky-header blur on macOS 27
+- Cut open-popover jank from presence, scroll, and search
+- Fix live presence avatars stuck on memoized list rows
+
 ## [0.1.2] - 2026-08-28
 
 - Add License to the menu bar icon context menu, with trial days left or Upgrade
