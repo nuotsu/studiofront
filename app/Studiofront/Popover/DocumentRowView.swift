@@ -52,7 +52,7 @@ struct DocumentRowView: View {
             }
         }
         .contentShape(Rectangle())
-        .opacity(row.isUnavailable || row.project.isArchived || store.isProjectLocked(row.id) ? 0.45 : 1)
+        .opacity(row.isUnavailable || row.project.isArchived ? 0.45 : 1)
         .onHover { isHovered = $0 }
         .onTapGesture { store.select(listItemID) }
         .accessibilityElement(children: .contain)
@@ -108,13 +108,13 @@ struct DocumentRowView: View {
 
     private func openDocument() {
         if let url = document.deepLinkURL {
-            AppDelegate.shared?.openUnlockedURL(url, projectID: row.id)
+            AppDelegate.shared?.openURL(url)
         }
     }
 
     private func openStudio() {
         let preferExternal = settings.studioURLPreference == .external
         guard let url = row.project.resolvedStudioURL(preferExternal: preferExternal) else { return }
-        AppDelegate.shared?.openUnlockedURL(url, projectID: row.id)
+        AppDelegate.shared?.openURL(url)
     }
 }

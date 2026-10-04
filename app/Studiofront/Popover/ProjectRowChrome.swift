@@ -25,7 +25,6 @@ struct ProjectRowFavoriteButton: View {
     var isFavorite: Bool
 
     var body: some View {
-        let isLocked = !store.entitlement.isUnlimited
         Button {
             store.toggleFavorite(projectID)
         } label: {
@@ -35,8 +34,6 @@ struct ProjectRowFavoriteButton: View {
                 .frame(width: theme.metrics.starColumnWidth)
         }
         .buttonStyle(.plain)
-        .disabled(isLocked)
-        .opacity(isLocked ? 0.35 : 1)
         .accessibilityLabel(isFavorite ? "Remove from favorites" : "Add to favorites")
     }
 }
@@ -68,7 +65,7 @@ struct ProjectRowTrailingActions: View {
                     },
                     onSelect: { item in
                         if let url = item.deepLinkURL {
-                            AppDelegate.shared?.openUnlockedURL(url, projectID: row.id)
+                            AppDelegate.shared?.openURL(url)
                         }
                     }
                 )
@@ -85,13 +82,7 @@ struct ProjectRowTrailingActions: View {
                         AppDelegate.shared?.openURL(manage)
                     }
                 }
-                if store.isProjectLocked(row.id) {
-                    IconButton(systemName: "lock.fill", accessibilityLabel: "Locked — upgrade to unlock") {
-                        AppDelegate.shared?.openSettingsWindow(pane: .license)
-                    }
-                } else {
-                    studioButton
-                }
+                studioButton
             }
         }
     }
@@ -102,7 +93,7 @@ struct ProjectRowTrailingActions: View {
             guard let url = app.resolvedURL else { return nil }
             let label = app.title ?? (app.isExternal ? (url.host ?? app.host) : "\(app.host).sanity.studio")
             return SplitPrimaryButton.MenuItem(id: app.id, title: label) {
-                AppDelegate.shared?.openUnlockedURL(url, projectID: row.id)
+                AppDelegate.shared?.openURL(url)
             }
         }
 
@@ -116,6 +107,6 @@ struct ProjectRowTrailingActions: View {
     private func openStudio() {
         let preferExternal = settings.studioURLPreference == .external
         guard let url = row.project.resolvedStudioURL(preferExternal: preferExternal) else { return }
-        AppDelegate.shared?.openUnlockedURL(url, projectID: row.id)
+        AppDelegate.shared?.openURL(url)
     }
 }

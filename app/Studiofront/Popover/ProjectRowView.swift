@@ -69,7 +69,7 @@ struct ProjectRowView: View {
             }
         }
         .contentShape(Rectangle())
-        .opacity(row.isUnavailable || row.project.isArchived || store.isProjectLocked(row.id) ? 0.45 : 1)
+        .opacity(row.isUnavailable || row.project.isArchived ? 0.45 : 1)
         .onHover { isHovered = $0 }
         .onTapGesture { store.select(row.id) }
         .accessibilityElement(children: .contain)
@@ -126,7 +126,7 @@ struct ProjectRowView: View {
     private func documentLine(document: EditedDocument, emphasized: Bool) -> some View {
         Button {
             if let url = document.deepLinkURL {
-                AppDelegate.shared?.openUnlockedURL(url, projectID: row.id)
+                AppDelegate.shared?.openURL(url)
             }
         } label: {
             HStack(spacing: 5) {
@@ -153,6 +153,6 @@ struct ProjectRowView: View {
     private func openStudio() {
         let preferExternal = settings.studioURLPreference == .external
         guard let url = row.project.resolvedStudioURL(preferExternal: preferExternal) else { return }
-        AppDelegate.shared?.openUnlockedURL(url, projectID: row.id)
+        AppDelegate.shared?.openURL(url)
     }
 }
