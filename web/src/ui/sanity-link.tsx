@@ -53,11 +53,12 @@ export default function ({
 					<>
 						{showIcon && <FaApple aria-hidden />}
 						{linkProps.children}
-						{!hideFreeTrial && (
+						{/* v0.2.0: Studiofront is now fully free with unlimited usage */}
+						{/* {!hideFreeTrial && (
 							<small className="text-foreground/80 absolute top-full left-1/2 min-w-max -translate-x-1/2 translate-y-[.5lh] leading-none">
 								Try free for 7 days
 							</small>
-						)}
+						)} */}
 					</>
 				}
 			/>
