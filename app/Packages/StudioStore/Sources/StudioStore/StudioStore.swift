@@ -7,31 +7,32 @@ import Observation
 public final class StudioStore {
     public var rows: [ProjectRow]
     public var organizations: [OrganizationRecord]
-    public var query: String = ""
-    public var groupBy: GroupBy = .organization
+    // The list inputs below invalidate the memoized list themselves, so the
+    // first render after a change (e.g. a keystroke) already shows the new
+    // results instead of one stale frame plus a second render from `.onChange`.
+    public var query: String = "" {
+        didSet { listInputDidChange(query != oldValue) }
+    }
+    public var groupBy: GroupBy = .organization {
+        didSet { listInputDidChange(groupBy != oldValue) }
+    }
     public var selectedID: String?
     public var copiedKey: String?
     public var searchFocusToken: UInt = 0
     public var isRefreshing: Bool = false
-    public var hideArchivedProjects: Bool = true
+    public var hideArchivedProjects: Bool = true {
+        didSet { listInputDidChange(hideArchivedProjects != oldValue) }
+    }
     public var onCurationChanged: (() -> Void)?
     public var onRefreshRequested: (() -> Void)?
     /// Fired after `replaceRows` — the only point at which the set of
     /// eligible project ids for presence can change while the popover stays
     /// open (no per-row visibility/hide toggle exists yet).
     public var onRowsReplaced: (() -> Void)?
-    /// Live presence members, keyed by project id. Derived from per-project
-    /// `PresenceSlice`s so a tick only invalidates the row that observes that
-    /// slice — not every visible `AvatarStack`. Kept off the memoized
-    /// `groups` / `visibleRows` snapshots. Session-lived — never persisted.
-    public var activeUsersByProjectID: [String: [Member]] {
-        Dictionary(uniqueKeysWithValues: presenceSlices.compactMap { id, slice in
-            slice.members.isEmpty ? nil : (id, slice.members)
-        })
-    }
-    /// Per-project presence board. Stored behind `@ObservationIgnored` so
-    /// dictionary membership changes do not invalidate every row; views that
-    /// need avatars observe `presenceSlice(for:).members` instead.
+    /// Per-project presence board, session-lived and never persisted. Stored
+    /// behind `@ObservationIgnored` so dictionary membership changes do not
+    /// invalidate every row; views that need avatars observe
+    /// `presenceSlice(for:).members` instead.
     @ObservationIgnored
     private var presenceSlices: [String: PresenceSlice] = [:]
     /// Live, per-project document search results for the current query —
@@ -46,26 +47,33 @@ public final class StudioStore {
     /// True after Command has been held for 0.3s — drives the ⌘1–9 avatar overlays.
     public var showFavoriteShortcutLegends: Bool = false
 
-    private var copyResetTask: Task<Void, Never>?
-    private var commandHoldRevealTask: Task<Void, Never>?
+    @ObservationIgnored private var copyResetTask: Task<Void, Never>?
+    @ObservationIgnored private var commandHoldRevealTask: Task<Void, Never>?
 
     private struct ListState {
         var visibleRows: [ProjectRow]
         var groups: [ProjectGroup]
         var flatVisibleIDs: [String]
+        /// Recency-sorted favorites: what the Favorites group renders and what ⌘N selects.
+        var favorites: [ProjectRow]
         var favoriteIndexByID: [String: Int]
     }
 
+    /// The one observed piece of list memoization: bumping it is what tells
+    /// views to re-read `groups`. The cache itself is written from inside
+    /// `body` on a miss, so it stays unobserved or that write would
+    /// invalidate every other view that read the list.
     private var listStateGeneration = 0
-    private var cachedListStateGeneration: Int?
-    private var cachedListState: ListState?
+    @ObservationIgnored private var cachedListStateGeneration: Int?
+    @ObservationIgnored private var cachedListState: ListState?
 
-    private var normalizedQuerySource = ""
-    private var normalizedQueryNeedle = ""
-    /// Per-row normalized searchable fields (project/org/id/datasets/links).
-    /// Invalidated on `replaceRows`, not on query changes.
+    @ObservationIgnored private var normalizedQuerySource = ""
+    @ObservationIgnored private var normalizedQueryNeedle = ""
+    /// Per-row normalized search fields and document titles. Rebuilt on
+    /// `replaceRows`, not on query changes, so a keystroke only runs
+    /// `contains` checks.
     @ObservationIgnored
-    private var searchHaystackByID: [String: [String]] = [:]
+    private var searchIndexByID: [String: SearchIndex] = [:]
 
     public init(
         rows: [ProjectRow] = [],
@@ -74,7 +82,7 @@ public final class StudioStore {
         self.rows = rows
         self.organizations = organizations
         self.selectedID = rows.first(where: { $0.curation.isFavorite })?.id ?? rows.first?.id
-        rebuildSearchHaystacks()
+        rebuildSearchIndex()
     }
 
     public var totalCount: Int { rows.filter { !$0.curation.isHidden && !isArchivedAndHidden($0) }.count }
@@ -95,16 +103,6 @@ public final class StudioStore {
         organizations.map { PersistedOrganization(id: $0.id, name: $0.name, isFavorite: $0.isFavorite) }
     }
 
-    /// The single source of truth for favorites order — shared by `groups` (what renders)
-    /// and `jumpToFavorite` (what Cmd+N selects), so the two can never diverge.
-    public var sortedFavorites: [ProjectRow] {
-        sortedFavorites(from: visibleRows)
-    }
-
-    private func sortedFavorites(from visible: [ProjectRow]) -> [ProjectRow] {
-        sortedByRecency(visible.filter(\.curation.isFavorite))
-    }
-
     /// 1-based Cmd+N legend index for every current favorite, keyed by row id.
     public var favoriteIndexByID: [String: Int] {
         listState().favoriteIndexByID
@@ -119,30 +117,19 @@ public final class StudioStore {
     }
 
     /// Projects eligible for presence connections and live document search fan-out.
-    public func eligibleProjectIDs(respectingArchivedSetting: Bool = true) -> [String] {
-        rows
-            .filter { row in
-                !row.curation.isHidden
-                    && !row.isUnavailable
-                    && !(respectingArchivedSetting && hideArchivedProjects && row.project.isArchived)
-            }
-            .map(\.id)
+    public func eligibleProjectIDs() -> [String] {
+        eligibleRows().map(\.id)
+    }
+
+    private func eligibleRows() -> [ProjectRow] {
+        rows.filter { row in
+            !row.curation.isHidden && !row.isUnavailable && !isArchivedAndHidden(row)
+        }
     }
 
     /// Eligible projects capped by recency — limits presence/socket fan-out on large accounts.
     public func eligibleProjectIDsForPresence(maxCount: Int = 40) -> [String] {
-        let eligible = Set(eligibleProjectIDs())
-        let sorted = rows
-            .filter { eligible.contains($0.id) }
-            .sorted { lhs, rhs in
-                switch (lhs.activity.lastEditedDocument?.editedAt, rhs.activity.lastEditedDocument?.editedAt) {
-                case let (l?, r?): return l > r
-                case (.some, .none): return true
-                case (.none, .some): return false
-                case (.none, .none): return false
-                }
-            }
-        return Array(sorted.prefix(maxCount).map(\.id))
+        sortedByRecency(eligibleRows()).prefix(maxCount).map(\.id)
     }
 
     /// Cached document title matches from recent activity — instant first paint
@@ -150,22 +137,17 @@ public final class StudioStore {
     public func cachedDocumentMatches(for row: ProjectRow) -> [EditedDocument] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
-        return cachedTitleMatches(for: row, needle: normalizedSearchNeedle)
+        return cachedTitleMatches(forProjectID: row.id, needle: normalizedSearchNeedle)
     }
 
-    public func noteQueryChanged() {
+    private func listInputDidChange(_ changed: Bool) {
+        guard changed else { return }
         invalidateListCache()
-    }
-
-    public func noteGroupByChanged() {
-        invalidateListCache()
-    }
-
-    public func noteHideArchivedChanged() {
-        invalidateListCache()
+        reconcileSelection()
     }
 
     public func clearDocumentSearchState() {
+        guard !liveDocumentMatchesByProject.isEmpty || !searchingProjectIDs.isEmpty else { return }
         liveDocumentMatchesByProject = [:]
         searchingProjectIDs = []
         invalidateListCache()
@@ -179,10 +161,8 @@ public final class StudioStore {
         // invalidation when flipping searching↔idle would show the same docs
         // (common after painting local matches that equal cached titles).
         let flipped = previous.symmetricDifference(ids)
-        for id in flipped {
-            guard let row = rows.first(where: { $0.id == id }) else { continue }
-            let cached = cachedTitleMatches(for: row, needle: normalizedSearchNeedle)
-                .filter { !Self.excludedSearchTypeNames.contains($0.typeName) }
+        for id in flipped where searchIndexByID[id] != nil {
+            let cached = cachedTitleMatches(forProjectID: id, needle: normalizedSearchNeedle)
             let idle = liveDocumentMatchesByProject[id] ?? cached
             let before = previous.contains(id) ? cached : idle
             let after = ids.contains(id) ? cached : idle
@@ -219,10 +199,8 @@ public final class StudioStore {
         if documentsChanged {
             invalidateListCache()
         } else if !completedProjectIDs.isEmpty {
-            for id in completedProjectIDs {
-                guard let row = rows.first(where: { $0.id == id }) else { continue }
-                let cached = cachedTitleMatches(for: row, needle: normalizedSearchNeedle)
-                    .filter { !Self.excludedSearchTypeNames.contains($0.typeName) }
+            for id in completedProjectIDs where searchIndexByID[id] != nil {
+                let cached = cachedTitleMatches(forProjectID: id, needle: normalizedSearchNeedle)
                 let live = liveDocumentMatchesByProject[id] ?? cached
                 if live != cached {
                     invalidateListCache()
@@ -254,14 +232,16 @@ public final class StudioStore {
             needle: needle,
             isSearching: isSearching
         )
+        let favorites = sortedByRecency(visible.filter(\.curation.isFavorite))
         let groups = computeGroups(
             from: visible,
+            favorites: favorites,
             documentsByProjectID: documentsByProjectID,
             isSearching: isSearching
         )
         let flatVisibleIDs = groups.flatMap { $0.items.map(\.id) }
         var favoriteIndexByID: [String: Int] = [:]
-        for (index, row) in sortedFavorites(from: visible).enumerated() where index < 9 {
+        for (index, row) in favorites.prefix(9).enumerated() {
             favoriteIndexByID[row.id] = index + 1
         }
 
@@ -269,6 +249,7 @@ public final class StudioStore {
             visibleRows: visible,
             groups: groups,
             flatVisibleIDs: flatVisibleIDs,
+            favorites: favorites,
             favoriteIndexByID: favoriteIndexByID
         )
         cachedListState = state
@@ -284,7 +265,7 @@ public final class StudioStore {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         if normalizedQuerySource == trimmed { return normalizedQueryNeedle }
         normalizedQuerySource = trimmed
-        normalizedQueryNeedle = normalize(trimmed)
+        normalizedQueryNeedle = Self.normalize(trimmed)
         return normalizedQueryNeedle
     }
 
@@ -306,6 +287,7 @@ public final class StudioStore {
 
     private func computeGroups(
         from visible: [ProjectRow],
+        favorites: [ProjectRow],
         documentsByProjectID: [String: [EditedDocument]],
         isSearching: Bool
     ) -> [ProjectGroup] {
@@ -314,7 +296,6 @@ public final class StudioStore {
         // While searching, skip the Favorites pin and fold favorited projects into
         // their normal org / recency groups so results aren't reordered by star.
         if !isSearching {
-            let favorites = sortedFavorites(from: visible)
             if !favorites.isEmpty {
                 result.append(ProjectGroup(
                     id: "favorites",
@@ -414,42 +395,33 @@ public final class StudioStore {
     func matchingDocuments(for row: ProjectRow) -> [EditedDocument] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
-        let matches: [EditedDocument]
-        if searchingProjectIDs.contains(row.id) {
-            matches = cachedTitleMatches(for: row, needle: normalizedSearchNeedle)
-        } else if let live = liveDocumentMatchesByProject[row.id] {
-            matches = live
-        } else {
-            matches = cachedTitleMatches(for: row, needle: normalizedSearchNeedle)
+        if !searchingProjectIDs.contains(row.id), let live = liveDocumentMatchesByProject[row.id] {
+            return live.filter { !Self.excludedSearchTypeNames.contains($0.typeName) }
         }
-        return matches.filter { !Self.excludedSearchTypeNames.contains($0.typeName) }
+        return cachedTitleMatches(forProjectID: row.id, needle: normalizedSearchNeedle)
     }
 
     /// Plugin / infra types that can still sit in the local recent-docs cache
-    /// from older syncs — keep them out of interleaved search rows.
-    private static let excludedSearchTypeNames: Set<String> = [
+    /// from older syncs — keep them out of interleaved search rows. Cached
+    /// titles are dropped when the search index is built.
+    nonisolated private static let excludedSearchTypeNames: Set<String> = [
         "vercel.deploymentTarget",
         "webhook_deploy",
     ]
 
-    private func cachedTitleMatches(for row: ProjectRow, needle: String) -> [EditedDocument] {
-        func titleMatches(_ title: String) -> Bool {
-            let normalized = normalize(title)
-            return normalized.contains(needle) || initials(of: normalized).contains(needle)
-        }
+    private func cachedTitleMatches(forProjectID id: String, needle: String) -> [EditedDocument] {
+        guard let index = searchIndexByID[id] else { return [] }
         var seen = Set<String>()
         var result: [EditedDocument] = []
-        for doc in row.activity.recentDocuments where titleMatches(doc.title) {
-            let key = doc.listItemID
-            if seen.insert(key).inserted {
-                result.append(doc)
+        for entry in index.recentDocuments where entry.title.matches(needle) {
+            if seen.insert(entry.document.listItemID).inserted {
+                result.append(entry.document)
             }
         }
-        if let lastEdited = row.activity.lastEditedDocument, titleMatches(lastEdited.title) {
-            let key = lastEdited.listItemID
-            if seen.insert(key).inserted {
-                result.insert(lastEdited, at: 0)
-            }
+        if let lastEdited = index.lastEditedDocument, lastEdited.title.matches(needle),
+           seen.insert(lastEdited.document.listItemID).inserted
+        {
+            result.insert(lastEdited.document, at: 0)
         }
         return result
     }
@@ -488,7 +460,7 @@ public final class StudioStore {
         let previous = selectedID
         self.rows = rows
         self.organizations = organizations
-        rebuildSearchHaystacks()
+        rebuildSearchIndex()
         if let previous, rows.contains(where: { $0.id == previous }) {
             selectedID = previous
         } else {
@@ -505,8 +477,8 @@ public final class StudioStore {
     }
 
     /// Stable per-project presence board. Avatar views must observe
-    /// `presenceSlice(for:).members` rather than `row.activity.activeUsers`
-    /// (stale copy in the memoized list snapshot) or the aggregate map.
+    /// `presenceSlice(for:).members`; the memoized list snapshot carries no
+    /// presence, so a tick never rebuilds the list.
     public func presenceSlice(for projectID: String) -> PresenceSlice {
         if let existing = presenceSlices[projectID] { return existing }
         let slice = PresenceSlice()
@@ -597,7 +569,6 @@ public final class StudioStore {
         let all = GroupBy.allCases
         guard let index = all.firstIndex(of: groupBy) else { return }
         groupBy = all[(index + 1) % all.count]
-        invalidateListCache()
     }
 
     public func isOrganizationFavorite(_ id: String) -> Bool {
@@ -620,7 +591,7 @@ public final class StudioStore {
     }
 
     public func jumpToFavorite(_ oneBasedIndex: Int) {
-        let favorites = sortedFavorites
+        let favorites = listState().favorites
         guard favorites.indices.contains(oneBasedIndex - 1) else { return }
         selectedID = favorites[oneBasedIndex - 1].id
     }
@@ -670,14 +641,10 @@ public final class StudioStore {
     }
 
     public func clearQueryOrSignalDismiss() -> Bool {
-        if !query.isEmpty {
-            query = ""
-            clearDocumentSearchState()
-            invalidateListCache()
-            reconcileSelection()
-            return false
-        }
-        return true
+        guard !query.isEmpty else { return true }
+        clearDocumentSearchState()
+        query = ""
+        return false
     }
 
     private func copy(_ value: String, key: String) {
@@ -700,51 +667,80 @@ public final class StudioStore {
         needle: String
     ) -> Bool {
         if !documents.isEmpty { return true }
-        let fields = haystack(for: row)
-        return fields.contains { field in
-            field.contains(needle) || initials(of: field).contains(needle)
+        let fields = searchIndex(for: row).fields
+        return fields.contains { $0.matches(needle) }
+    }
+
+    /// A string folded for search once up front, plus its word initials.
+    private struct SearchText {
+        let text: String
+        let initials: String
+
+        init(_ raw: String) {
+            text = StudioStore.normalize(raw)
+            initials = StudioStore.initials(of: text)
+        }
+
+        func matches(_ needle: String) -> Bool {
+            text.contains(needle) || initials.contains(needle)
         }
     }
 
-    private func rebuildSearchHaystacks() {
-        var next: [String: [String]] = [:]
+    private struct IndexedDocument {
+        let document: EditedDocument
+        let title: SearchText
+
+        init(_ document: EditedDocument) {
+            self.document = document
+            title = SearchText(document.title)
+        }
+    }
+
+    private struct SearchIndex {
+        /// Project / org / id / dataset / link fields; document titles are
+        /// matched separately through `cachedTitleMatches`.
+        var fields: [SearchText]
+        var recentDocuments: [IndexedDocument]
+        var lastEditedDocument: IndexedDocument?
+
+        init(_ row: ProjectRow) {
+            let rawFields: [String] = [
+                row.displayTitle,
+                row.project.displayName,
+                row.curation.nickname ?? "",
+                row.project.organizationName ?? "",
+                row.project.organizationId ?? "",
+                row.project.id,
+                row.project.datasets.map(\.name).joined(separator: " "),
+                row.curation.frontendLinks.map(\.label).joined(separator: " "),
+                row.curation.extraStudioLinks.map(\.label).joined(separator: " "),
+            ]
+            fields = rawFields.map(SearchText.init).filter { !$0.text.isEmpty }
+            func isSearchable(_ document: EditedDocument) -> Bool {
+                !StudioStore.excludedSearchTypeNames.contains(document.typeName)
+            }
+            recentDocuments = row.activity.recentDocuments.filter(isSearchable).map(IndexedDocument.init)
+            lastEditedDocument = row.activity.lastEditedDocument.flatMap { isSearchable($0) ? IndexedDocument($0) : nil }
+        }
+    }
+
+    private func rebuildSearchIndex() {
+        var next: [String: SearchIndex] = [:]
         next.reserveCapacity(rows.count)
         for row in rows {
-            next[row.id] = buildSearchHaystack(for: row)
+            next[row.id] = SearchIndex(row)
         }
-        searchHaystackByID = next
+        searchIndexByID = next
     }
 
-    private func haystack(for row: ProjectRow) -> [String] {
-        if let cached = searchHaystackByID[row.id] { return cached }
-        let built = buildSearchHaystack(for: row)
-        searchHaystackByID[row.id] = built
+    private func searchIndex(for row: ProjectRow) -> SearchIndex {
+        if let cached = searchIndexByID[row.id] { return cached }
+        let built = SearchIndex(row)
+        searchIndexByID[row.id] = built
         return built
     }
 
-    /// Project / org / id / dataset / link fields only — document titles are
-    /// covered by `matchingDocuments` / `cachedTitleMatches`.
-    private func buildSearchHaystack(for row: ProjectRow) -> [String] {
-        let fields: [String] = [
-            row.displayTitle,
-            row.project.displayName,
-            row.curation.nickname ?? "",
-            row.project.organizationName ?? "",
-            row.project.organizationId ?? "",
-            row.project.id,
-            row.project.datasets.map(\.name).joined(separator: " "),
-            row.curation.frontendLinks.map(\.label).joined(separator: " "),
-            row.curation.extraStudioLinks.map(\.label).joined(separator: " "),
-        ]
-        return fields.map { normalize($0) }.filter { !$0.isEmpty }
-    }
-
-    /// The document to show on a project row's activity caption line.
-    public func documentDisplay(for row: ProjectRow) -> EditedDocument? {
-        row.activity.lastEditedDocument
-    }
-
-    private func normalize(_ string: String) -> String {
+    nonisolated private static func normalize(_ string: String) -> String {
         let folded = string.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
         let separatorsNormalized = folded
             .replacingOccurrences(of: "-", with: " ")
@@ -756,7 +752,7 @@ public final class StudioStore {
 
     /// First letter of each word, e.g. "elevate experiences" -> "ee", so a
     /// query like "ee" matches "Elevate Experiences" the way an acronym would.
-    private func initials(of normalizedString: String) -> String {
+    nonisolated private static func initials(of normalizedString: String) -> String {
         normalizedString
             .split(whereSeparator: { !$0.isLetter && !$0.isNumber })
             .compactMap(\.first)

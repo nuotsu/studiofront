@@ -1,7 +1,9 @@
 import Foundation
 
-enum SanityJSON {
-    static let decoder: JSONDecoder = {
+/// Sanity's ISO 8601 timestamps come with or without fractional seconds.
+/// Shared with PresenceKit's socket decoding.
+public enum SanityJSON {
+    public static let decoder: JSONDecoder = {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .custom { decoder in
             let string = try decoder.singleValueContainer().decode(String.self)

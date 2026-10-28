@@ -1,4 +1,5 @@
 import Foundation
+import SanityKit
 
 /// One websocket connection to Sanity's presence channel, speaking the same
 /// JSON-RPC 2.0 protocol Sanity Studio itself uses (`@sanity/bifur-client`).
@@ -15,7 +16,6 @@ actor BifurPresenceSocket {
     }
 
     enum SocketError: Error, Sendable {
-        case timedOut
         case rejected
         case closed
     }
@@ -49,8 +49,8 @@ actor BifurPresenceSocket {
             self.setEventContinuation(continuation)
         }
 
-        try await withThrowingTimeout(timeout) { try await self.authorize(token: token) }
-        let subscriptionId = try await withThrowingTimeout(timeout) { try await self.subscribeToPresence() }
+        try await withHandshakeDeadline(timeout) { try await self.authorize(token: token) }
+        let subscriptionId = try await withHandshakeDeadline(timeout) { try await self.subscribeToPresence() }
         self.subscriptionId = subscriptionId
         await send(method: "presence_rollcall", params: ["session": sessionId], id: nextRequestId())
 
@@ -68,6 +68,33 @@ actor BifurPresenceSocket {
     }
 
     // MARK: - Handshake
+
+    /// Runs one handshake step, abandoning the socket if the step outlasts
+    /// `timeout` or the calling task is cancelled. Closing is what unblocks
+    /// the step: its reply continuation ignores cancellation, so a task-group
+    /// race against a sleep would still wait for the server forever.
+    private func withHandshakeDeadline<T: Sendable>(
+        _ timeout: Duration,
+        _ step: () async throws -> T
+    ) async throws -> T {
+        let deadline = Task { [weak self] in
+            try await Task.sleep(for: timeout)
+            await self?.abandonHandshake()
+        }
+        defer { deadline.cancel() }
+        return try await withTaskCancellationHandler {
+            try await step()
+        } onCancel: {
+            Task { await self.abandonHandshake() }
+        }
+    }
+
+    /// Closes only while a handshake reply is still outstanding, so a
+    /// deadline that fires just as the step succeeds can't kill a live socket.
+    private func abandonHandshake() {
+        guard !authContinuations.isEmpty || !subscribeContinuations.isEmpty else { return }
+        close()
+    }
 
     private func authorize(token: String) async throws {
         let id = nextRequestId()
@@ -267,36 +294,5 @@ actor BifurPresenceSocket {
         var message: String?
     }
 
-    private static let decoder: JSONDecoder = {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .custom { decoder in
-            let string = try decoder.singleValueContainer().decode(String.self)
-            if let date = try? Date(string, strategy: Date.ISO8601FormatStyle(includingFractionalSeconds: true)) {
-                return date
-            }
-            if let date = try? Date(string, strategy: Date.ISO8601FormatStyle()) {
-                return date
-            }
-            throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "Invalid date"))
-        }
-        return decoder
-    }()
-}
-
-private func withThrowingTimeout<T: Sendable>(
-    _ duration: Duration,
-    operation: @escaping @Sendable () async throws -> T
-) async throws -> T {
-    try await withThrowingTaskGroup(of: T.self) { group in
-        group.addTask { try await operation() }
-        group.addTask {
-            try await Task.sleep(for: duration)
-            throw BifurPresenceSocket.SocketError.timedOut
-        }
-        defer { group.cancelAll() }
-        guard let result = try await group.next() else {
-            throw BifurPresenceSocket.SocketError.timedOut
-        }
-        return result
-    }
+    private static var decoder: JSONDecoder { SanityJSON.decoder }
 }

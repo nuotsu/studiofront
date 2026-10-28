@@ -1,29 +1,14 @@
 import AppKit
 import SwiftUI
 
-/// Prefers macOS 26 `NSGlassEffectView`, falls back to `NSVisualEffectView`.
+/// macOS 26 `NSGlassEffectView` chrome.
 /// Installed as a background: `hitTest` returns nil so SwiftUI controls stay clickable.
 public struct GlassSurface: NSViewRepresentable {
     var cornerRadius: CGFloat
-    var material: NSVisualEffectView.Material
-    var blendingMode: NSVisualEffectView.BlendingMode
-    /// Skips `NSGlassEffectView` even when available. That view's "Liquid Glass"
-    /// rendering has its own baked-in lift/rounding/brightening independent of
-    /// `cornerRadius`, which looks wrong for a plain flat blur strip — use this
-    /// for a predictable, ordinary frosted-glass look instead.
-    var preferSimpleMaterial: Bool
     @Environment(\.colorScheme) private var colorScheme
 
-    public init(
-        cornerRadius: CGFloat,
-        material: NSVisualEffectView.Material = .popover,
-        blendingMode: NSVisualEffectView.BlendingMode = .behindWindow,
-        preferSimpleMaterial: Bool = false
-    ) {
+    public init(cornerRadius: CGFloat) {
         self.cornerRadius = cornerRadius
-        self.material = material
-        self.blendingMode = blendingMode
-        self.preferSimpleMaterial = preferSimpleMaterial
     }
 
     public func makeNSView(context: Context) -> PassthroughGlassView {
@@ -45,83 +30,34 @@ public struct GlassSurface: NSViewRepresentable {
             return
         }
 
-        guard let chrome = container.chromeView else { return }
-
-        if let glass = chrome as? NSGlassEffectView {
-            if container.appliedCornerRadius != cornerRadius {
-                container.appliedCornerRadius = cornerRadius
-                glass.cornerRadius = cornerRadius
-            }
-            return
-        }
-
-        if container.appliedCornerRadius != cornerRadius {
-            container.appliedCornerRadius = cornerRadius
-            Self.applyCornerRadius(cornerRadius, to: chrome)
-        }
-
-        guard let visualEffect = chrome as? NSVisualEffectView else { return }
-        guard container.appliedMaterial != material
-            || container.appliedBlendingMode != blendingMode
-            || visualEffect.state != .active
+        guard let glass = container.chromeView as? NSGlassEffectView,
+              container.appliedCornerRadius != cornerRadius
         else { return }
-
-        container.appliedMaterial = material
-        container.appliedBlendingMode = blendingMode
-        visualEffect.material = material
-        visualEffect.blendingMode = blendingMode
-        visualEffect.state = .active
-        visualEffect.needsDisplay = true
+        container.appliedCornerRadius = cornerRadius
+        glass.cornerRadius = cornerRadius
     }
 
     private func installChrome(in container: PassthroughGlassView) {
         container.chromeView?.removeFromSuperview()
 
         let appearance = NSAppearance(named: colorScheme == .dark ? .darkAqua : .aqua)
-        let chrome: NSView
-        if !preferSimpleMaterial {
-            let glass = NSGlassEffectView(frame: .zero)
-            glass.autoresizingMask = [.width, .height]
-            glass.cornerRadius = cornerRadius
-            glass.style = .regular
-            glass.appearance = appearance
-            chrome = glass
-        } else {
-            let view = NSVisualEffectView()
-            view.autoresizingMask = [.width, .height]
-            view.wantsLayer = true
-            view.layerContentsRedrawPolicy = .onSetNeedsDisplay
-            view.material = material
-            view.blendingMode = blendingMode
-            view.state = .active
-            view.appearance = appearance
-            Self.applyCornerRadius(cornerRadius, to: view)
-            chrome = view
-        }
+        let glass = NSGlassEffectView(frame: container.bounds)
+        glass.autoresizingMask = [.width, .height]
+        glass.cornerRadius = cornerRadius
+        glass.style = .regular
+        glass.appearance = appearance
 
-        chrome.frame = container.bounds
         container.appearance = appearance
-        container.addSubview(chrome)
-        container.chromeView = chrome
+        container.addSubview(glass)
+        container.chromeView = glass
         container.appliedCornerRadius = cornerRadius
-        container.appliedMaterial = material
-        container.appliedBlendingMode = blendingMode
         container.appliedColorScheme = colorScheme
-    }
-
-    private static func applyCornerRadius(_ radius: CGFloat, to view: NSView) {
-        view.wantsLayer = true
-        view.layer?.cornerRadius = radius
-        view.layer?.cornerCurve = .continuous
-        view.layer?.masksToBounds = radius > 0
     }
 }
 
 public final class PassthroughGlassView: NSView {
     var chromeView: NSView?
     var appliedCornerRadius: CGFloat?
-    var appliedMaterial: NSVisualEffectView.Material?
-    var appliedBlendingMode: NSVisualEffectView.BlendingMode?
     var appliedColorScheme: ColorScheme?
 
     public override func hitTest(_ point: NSPoint) -> NSView? { nil }

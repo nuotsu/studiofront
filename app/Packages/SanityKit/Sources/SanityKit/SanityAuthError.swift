@@ -1,7 +1,6 @@
 import Foundation
 
 public enum SanityAuthError: Error, LocalizedError, Sendable, Equatable {
-    case notAuthenticated
     case unauthorized
     case invalidToken
     case cliConfigNotFound
@@ -11,8 +10,6 @@ public enum SanityAuthError: Error, LocalizedError, Sendable, Equatable {
 
     public var errorDescription: String? {
         switch self {
-        case .notAuthenticated:
-            "Not connected to Sanity."
         case .unauthorized:
             "Session expired. Reconnect to continue."
         case .invalidToken:

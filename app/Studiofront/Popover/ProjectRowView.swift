@@ -6,7 +6,6 @@ struct ProjectRowView: View {
     @Environment(\.studioTheme) private var theme
     @Environment(\.colorScheme) private var colorScheme
     @Environment(StudioStore.self) private var store
-    @Environment(AppSettings.self) private var settings
 
     var row: ProjectRow
     var isSelected: Bool
@@ -19,6 +18,8 @@ struct ProjectRowView: View {
     var body: some View {
         let metrics = theme.metrics
         let isDark = colorScheme == .dark
+        // Short-circuits so only favorite rows observe the Command-hold flag.
+        let showsShortcutLegend = favoriteIndex != nil && store.showFavoriteShortcutLegends
         RowContainer(isSelected: isSelected, isHovered: isHovered) {
             HStack(alignment: .center, spacing: metrics.rowGap) {
                 ProjectRowFavoriteButton(projectID: row.id, isFavorite: row.curation.isFavorite)
@@ -30,7 +31,7 @@ struct ProjectRowView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("Open Studio, \(row.displayTitle)")
                 .overlay {
-                    if store.showFavoriteShortcutLegends, let favoriteIndex {
+                    if showsShortcutLegend, let favoriteIndex {
                         KeycapLegend(
                             [.symbol("command"), .text("\(favoriteIndex)")],
                             compact: true,
@@ -48,21 +49,8 @@ struct ProjectRowView: View {
                             .transition(.opacity)
                     }
                 }
-                .animation(.easeInOut(duration: 0.12), value: store.showFavoriteShortcutLegends)
-                .task(id: faviconHost) {
-                    guard let faviconHost else {
-                        favicon = nil
-                        return
-                    }
-                    if let cached = FaviconCache.peekCached(forHost: faviconHost) {
-                        favicon = Image(nsImage: cached)
-                        return
-                    }
-                    favicon = nil
-                    if let image = await FaviconCache.shared.favicon(forHost: faviconHost) {
-                        favicon = Image(nsImage: image)
-                    }
-                }
+                .animation(.easeInOut(duration: 0.12), value: showsShortcutLegend)
+                .projectFavicon(for: row, into: $favicon)
                 identity
                 Spacer(minLength: 8)
                 ProjectRowTrailingActions(row: row)
@@ -85,14 +73,10 @@ struct ProjectRowView: View {
         return row.displayTitle
     }
 
-    private var faviconHost: String? {
-        ProjectRowChrome.faviconHost(for: row)
-    }
-
     private var identity: some View {
         VStack(alignment: .leading, spacing: 4) {
             projectLine(emphasized: true)
-            if let document = store.documentDisplay(for: row) {
+            if let document = row.activity.lastEditedDocument {
                 documentLine(document: document, emphasized: false)
             }
         }
@@ -151,8 +135,6 @@ struct ProjectRowView: View {
     }
 
     private func openStudio() {
-        let preferExternal = settings.studioURLPreference == .external
-        guard let url = row.project.resolvedStudioURL(preferExternal: preferExternal) else { return }
-        AppDelegate.shared?.openURL(url)
+        AppDelegate.shared?.openStudio(for: row)
     }
 }

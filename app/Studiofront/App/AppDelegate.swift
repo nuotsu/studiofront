@@ -47,7 +47,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         popover = pop
 
         applyAppearance(settings.appearancePreference)
-        applyActivationPolicy()
         applyGlobalHotKey()
         store.onCurationChanged = { [weak self] in
             self?.sync.persistCuration()
@@ -58,6 +57,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         }
         store.onRowsReplaced = { [weak self] in
             self?.presence.refreshEligibleProjects()
+            self?.documentSearch.resetSessionCache()
         }
         auth.onStatusChange = { [weak self] in
             Task { await self?.sync.handleAuthChange() }
@@ -268,15 +268,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         }
     }
 
-    func openURL(_ url: URL, dismiss: Bool = true) {
+    func openURL(_ url: URL) {
         NSWorkspace.shared.open(url)
-        if dismiss {
-            closePopover()
-        }
+        closePopover()
     }
 
     func openSelectedStudio() {
         guard let row = store.selectedRow else { return }
+        openStudio(for: row)
+    }
+
+    /// Opens a project's Studio, honoring the user's Studio URL preference.
+    func openStudio(for row: ProjectRow) {
         guard let url = row.resolvedStudioURL(preferExternal: settings.studioURLPreference == .external) else { return }
         openURL(url)
     }
@@ -603,11 +606,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
     private func openSelectedDocument() {
         guard let item = store.selectedListItem else { return }
         switch item {
-        case let .document(project, document):
+        case let .document(_, document):
             guard let url = document.deepLinkURL else { return }
             openURL(url)
         case let .project(row):
-            guard let url = store.documentDisplay(for: row)?.deepLinkURL else { return }
+            guard let url = row.activity.lastEditedDocument?.deepLinkURL else { return }
             openURL(url)
         }
     }

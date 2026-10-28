@@ -6,14 +6,12 @@ public struct RemoteProject: Sendable, Identifiable, Equatable {
     public var studioHost: String?
     public var externalStudioHost: URL?
     public var organizationId: String?
-    public var createdAt: Date
     public var color: String?
     /// From `isDisabledByUser` — confirmed against the live API: this is what
     /// Sanity Manage calls "Archived" (its two archived projects both have
     /// `isDisabledByUser: true` and literally "(Archived)" in their name).
     public var isArchived: Bool
     public var members: [RemoteMember]
-    public var datasets: [RemoteDataset]
 }
 
 public struct RemoteMember: Sendable, Identifiable, Equatable {
@@ -56,7 +54,6 @@ struct ProjectDTO: Decodable {
     var displayName: String?
     var studioHost: String?
     var organizationId: String?
-    var createdAt: Date?
     var metadata: MetadataDTO?
     var members: [MemberDTO]?
     var isDisabledByUser: Bool?
@@ -82,11 +79,9 @@ struct ProjectDTO: Decodable {
             studioHost: studioHost.flatMap { $0.isEmpty ? nil : $0 },
             externalStudioHost: metadata?.externalStudioHost.flatMap { URL(string: $0) },
             organizationId: organizationId.flatMap { $0.isEmpty ? nil : $0 },
-            createdAt: createdAt ?? .distantPast,
             color: metadata?.color,
             isArchived: isDisabledByUser ?? false,
-            members: (members ?? []).map { RemoteMember(id: $0.id, role: $0.role) },
-            datasets: []
+            members: (members ?? []).map { RemoteMember(id: $0.id, role: $0.role) }
         )
     }
 }
@@ -188,19 +183,8 @@ struct TransactionLogEntryDTO: Decodable, Sendable {
     var documentIDs: [String]
 }
 
-/// A malformed or error line (`{"error": {...}}`) in the transactions NDJSON
-/// stream — decoded separately so one bad line doesn't fail the whole batch.
-struct TransactionLogErrorDTO: Decodable, Sendable {
-    var error: ErrorBody
-
-    struct ErrorBody: Decodable, Sendable {
-        var type: String?
-        var description: String?
-    }
-}
-
 /// The Query API's generic response shape (`{"query": ..., "result": [...], "ms": ...}`)
-/// for queries whose result is a plain array, rather than `QueryEnvelope`'s
+/// for queries whose result is a plain array, rather than `QueryListEnvelope`'s
 /// fixed `{published, draft}` object shape.
 struct ArrayQueryEnvelope<Element: Decodable & Sendable>: Decodable, Sendable {
     var result: [Element]

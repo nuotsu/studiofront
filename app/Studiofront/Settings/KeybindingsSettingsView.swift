@@ -139,6 +139,7 @@ private struct ConfigurableKeybindingRow: View {
             .foregroundStyle(isDefault ? Color.secondary.opacity(0.5) : Color.blue)
             .disabled(isDefault)
             ShortcutRecorderControl(
+                actionName: label,
                 keyCode: $keyCode,
                 modifierRawValue: $modifierRawValue,
                 characters: $characters,

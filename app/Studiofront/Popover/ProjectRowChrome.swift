@@ -17,6 +17,29 @@ enum ProjectRowChrome {
     }
 }
 
+extension View {
+    /// Loads the row's favicon into `favicon`, synchronously from the shared
+    /// cache when it's already there so a recycled row never flashes its
+    /// letter avatar.
+    func projectFavicon(for row: ProjectRow, into favicon: Binding<Image?>) -> some View {
+        let host = ProjectRowChrome.faviconHost(for: row)
+        return task(id: host) {
+            guard let host else {
+                favicon.wrappedValue = nil
+                return
+            }
+            if let cached = FaviconCache.peekCached(forHost: host) {
+                favicon.wrappedValue = Image(nsImage: cached)
+                return
+            }
+            favicon.wrappedValue = nil
+            if let image = await FaviconCache.shared.favicon(forHost: host) {
+                favicon.wrappedValue = Image(nsImage: image)
+            }
+        }
+    }
+}
+
 struct ProjectRowFavoriteButton: View {
     @Environment(\.studioTheme) private var theme
     @Environment(StudioStore.self) private var store
@@ -39,8 +62,6 @@ struct ProjectRowFavoriteButton: View {
 }
 
 struct ProjectRowTrailingActions: View {
-    @Environment(\.studioTheme) private var theme
-    @Environment(AppSettings.self) private var settings
     @Environment(StudioStore.self) private var store
 
     var row: ProjectRow
@@ -105,8 +126,6 @@ struct ProjectRowTrailingActions: View {
     }
 
     private func openStudio() {
-        let preferExternal = settings.studioURLPreference == .external
-        guard let url = row.project.resolvedStudioURL(preferExternal: preferExternal) else { return }
-        AppDelegate.shared?.openURL(url)
+        AppDelegate.shared?.openStudio(for: row)
     }
 }

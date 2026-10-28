@@ -35,8 +35,6 @@ public struct SanityProject: Sendable, Identifiable, Hashable, Codable {
     public var externalStudioHost: URL?
     public var datasets: [Dataset]
     public var members: [Member]
-    public var currentUserRole: String?
-    public var createdAt: Date
     /// Fixture / favicon stand-in. Nil → initials on the theme tag background.
     public var brandColorHex: String?
     /// From `isDisabledByUser` — Sanity Manage's "Archived" state.
@@ -55,8 +53,6 @@ public struct SanityProject: Sendable, Identifiable, Hashable, Codable {
         externalStudioHost: URL? = nil,
         datasets: [Dataset] = [],
         members: [Member] = [],
-        currentUserRole: String? = nil,
-        createdAt: Date = Date(),
         brandColorHex: String? = nil,
         isArchived: Bool = false,
         studioApps: [StudioApp] = []
@@ -69,8 +65,6 @@ public struct SanityProject: Sendable, Identifiable, Hashable, Codable {
         self.externalStudioHost = externalStudioHost
         self.datasets = datasets
         self.members = members
-        self.currentUserRole = currentUserRole
-        self.createdAt = createdAt
         self.isArchived = isArchived
         self.brandColorHex = brandColorHex
         self.studioApps = studioApps
@@ -89,8 +83,6 @@ public struct SanityProject: Sendable, Identifiable, Hashable, Codable {
         externalStudioHost = try container.decodeIfPresent(URL.self, forKey: .externalStudioHost)
         datasets = try container.decode([Dataset].self, forKey: .datasets)
         members = try container.decode([Member].self, forKey: .members)
-        currentUserRole = try container.decodeIfPresent(String.self, forKey: .currentUserRole)
-        createdAt = try container.decode(Date.self, forKey: .createdAt)
         brandColorHex = try container.decodeIfPresent(String.self, forKey: .brandColorHex)
         isArchived = try container.decode(Bool.self, forKey: .isArchived)
         studioApps = try container.decodeIfPresent([StudioApp].self, forKey: .studioApps) ?? []
@@ -185,7 +177,6 @@ public struct ProjectCuration: Sendable, Codable, Hashable {
     public let projectId: String
     public var isFavorite: Bool
     public var isHidden: Bool
-    public var manualSortIndex: Int?
     public var nickname: String?
     public var frontendLinks: [NamedLink]
     public var extraStudioLinks: [NamedLink]
@@ -194,7 +185,6 @@ public struct ProjectCuration: Sendable, Codable, Hashable {
         projectId: String,
         isFavorite: Bool = false,
         isHidden: Bool = false,
-        manualSortIndex: Int? = nil,
         nickname: String? = nil,
         frontendLinks: [NamedLink] = [],
         extraStudioLinks: [NamedLink] = []
@@ -202,7 +192,6 @@ public struct ProjectCuration: Sendable, Codable, Hashable {
         self.projectId = projectId
         self.isFavorite = isFavorite
         self.isHidden = isHidden
-        self.manualSortIndex = manualSortIndex
         self.nickname = nickname
         self.frontendLinks = frontendLinks
         self.extraStudioLinks = extraStudioLinks
@@ -244,8 +233,10 @@ public struct EditedDocument: Sendable, Hashable, Codable {
     }
 }
 
+/// Presence is not here: it is session-lived and lives on `StudioStore`'s
+/// presence slices. Older caches that still carry `activeUsers` or
+/// `lastDeployedAt` keys decode fine; unknown keys are ignored.
 public struct ProjectActivity: Sendable, Hashable, Codable {
-    public var lastDeployedAt: Date?
     public var lastEditedDocument: EditedDocument?
     /// Newest-first, deduped draft/published documents, for title search
     /// coverage beyond the single most-recently-edited one. Equals
@@ -253,44 +244,23 @@ public struct ProjectActivity: Sendable, Hashable, Codable {
     /// same fetch — `lastEditedDocument` still drives the row's activity
     /// line UI.
     public var recentDocuments: [EditedDocument]
-    /// Unused for live UI — presence lives on `StudioStore` presence slices.
-    /// Kept so cached JSON that still encodes this key continues to decode.
-    public var activeUsers: [Member]
 
     public init(
-        lastDeployedAt: Date? = nil,
         lastEditedDocument: EditedDocument? = nil,
-        recentDocuments: [EditedDocument] = [],
-        activeUsers: [Member] = []
+        recentDocuments: [EditedDocument] = []
     ) {
-        self.lastDeployedAt = lastDeployedAt
         self.lastEditedDocument = lastEditedDocument
         self.recentDocuments = recentDocuments
-        self.activeUsers = activeUsers
     }
 
     /// Decoded manually so cached JSON written before `recentDocuments`
     /// existed (`PersistenceStore`'s `cache-v1.json`) still decodes —
     /// matching the same forward-compatible pattern as
-    /// `SanityProject.studioApps`. Persisted `activeUsers` are ignored:
-    /// presence is session-lived, not cache-lived.
+    /// `SanityProject.studioApps`.
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        lastDeployedAt = try container.decodeIfPresent(Date.self, forKey: .lastDeployedAt)
         lastEditedDocument = try container.decodeIfPresent(EditedDocument.self, forKey: .lastEditedDocument)
         recentDocuments = try container.decodeIfPresent([EditedDocument].self, forKey: .recentDocuments) ?? []
-        activeUsers = []
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encodeIfPresent(lastDeployedAt, forKey: .lastDeployedAt)
-        try container.encodeIfPresent(lastEditedDocument, forKey: .lastEditedDocument)
-        try container.encode(recentDocuments, forKey: .recentDocuments)
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case lastDeployedAt, lastEditedDocument, recentDocuments, activeUsers
     }
 }
 

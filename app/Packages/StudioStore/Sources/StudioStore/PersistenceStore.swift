@@ -26,7 +26,7 @@ public struct PersistedSnapshot: Sendable, Codable {
     public var cachedAt: Date?
     public var projects: [SanityProject]
     public var organizations: [PersistedOrganization]
-    /// Project curation (favorites, hidden, nickname, links, sort order),
+    /// Project curation (favorites, hidden, nickname, links),
     /// scoped per Sanity user id — never shared across accounts, even when
     /// two accounts see the same project id.
     public var curationByUser: [String: [ProjectCuration]]

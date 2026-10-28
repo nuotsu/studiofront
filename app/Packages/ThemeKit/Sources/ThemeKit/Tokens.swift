@@ -64,43 +64,34 @@ public struct ColorTokens: @unchecked Sendable {
 public struct TypographyTokens: @unchecked Sendable {
     public var search: Font
     public var projectName: Font
-    public var projectID: Font
     public var meta: Font
     public var timestamp: Font
     public var section: Font
-    public var footer: Font
     public var chip: Font
     public var button: Font
     public var avatar: Font
     public var presence: Font
-    public var shortcut: Font
 
     public init(
         search: Font = .system(size: 11.5),
         projectName: Font = .system(size: 12.5, weight: .semibold),
-        projectID: Font = .system(size: 9, weight: .medium, design: .monospaced),
         meta: Font = .system(size: 10.5),
         timestamp: Font = .system(size: 10),
         section: Font = .system(size: 9.5, weight: .bold),
-        footer: Font = .system(size: 9.5),
         chip: Font = .system(size: 9, weight: .medium, design: .monospaced),
         button: Font = .system(size: 10, weight: .semibold),
         avatar: Font = .system(size: 10, weight: .bold),
-        presence: Font = .system(size: 7.5, weight: .bold),
-        shortcut: Font = .system(size: 9, weight: .semibold, design: .monospaced)
+        presence: Font = .system(size: 7.5, weight: .bold)
     ) {
         self.search = search
         self.projectName = projectName
-        self.projectID = projectID
         self.meta = meta
         self.timestamp = timestamp
         self.section = section
-        self.footer = footer
         self.chip = chip
         self.button = button
         self.avatar = avatar
         self.presence = presence
-        self.shortcut = shortcut
     }
 }
 

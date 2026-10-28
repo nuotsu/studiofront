@@ -19,9 +19,6 @@ struct StudioStorePresenceTests {
         #expect(idsAfter == idsBefore)
         #expect(store.activeUsers(for: "p1") == [member])
         #expect(store.activeUsers(for: "p2").isEmpty)
-        // Memoized list rows must not be the source of truth for presence.
-        let cachedRow = groupsAfter.flatMap(\.items).map(\.projectRow).first { $0.id == "p1" }
-        #expect(cachedRow?.activity.activeUsers.isEmpty == true)
     }
 
     @Test("empty presence clears members but keeps the slice identity")
@@ -31,7 +28,6 @@ struct StudioStorePresenceTests {
         store.setActiveUsers([Member(id: "u1", displayName: "Alex")], forProjectID: "p1")
         store.setActiveUsers([], forProjectID: "p1")
         #expect(store.activeUsers(for: "p1").isEmpty)
-        #expect(store.activeUsersByProjectID["p1"] == nil)
         // Same slice object so Observation subscribers keep tracking it.
         #expect(store.presenceSlice(for: "p1") === slice)
         #expect(slice.members.isEmpty)
@@ -43,7 +39,6 @@ struct StudioStorePresenceTests {
         store.setActiveUsers([Member(id: "u1", displayName: "Alex")], forProjectID: "p1")
         store.setActiveUsers([Member(id: "u2", displayName: "Sam")], forProjectID: "p2")
         store.clearActiveUsers()
-        #expect(store.activeUsersByProjectID.isEmpty)
         #expect(store.activeUsers(for: "p1").isEmpty)
         #expect(store.activeUsers(for: "p2").isEmpty)
     }

@@ -17,6 +17,8 @@ public actor ActivityPresenceProvider: PresenceProvider {
     private let rosterProvider: RosterProvider
 
     private var continuations: [String: AsyncStream<[Member]>.Continuation] = [:]
+    /// Which subscription owns `continuations[projectId]`; see `detach`.
+    private var continuationTokens: [String: UUID] = [:]
     private var pollTasks: [String: Task<Void, Never>] = [:]
     private var lastKnownMembers: [String: [Member]] = [:]
 
@@ -35,10 +37,11 @@ public actor ActivityPresenceProvider: PresenceProvider {
     }
 
     public func presence(for projectId: String) async -> AsyncStream<[Member]> {
-        AsyncStream { continuation in
-            self.attach(continuation, for: projectId)
+        let token = UUID()
+        return AsyncStream { continuation in
+            self.attach(continuation, token: token, for: projectId)
             continuation.onTermination = { [weak self] _ in
-                Task { await self?.detach(projectId) }
+                Task { await self?.detach(projectId, token: token) }
             }
         }
     }
@@ -63,18 +66,27 @@ public actor ActivityPresenceProvider: PresenceProvider {
         pollTasks.removeAll()
         for continuation in continuations.values { continuation.finish() }
         continuations.removeAll()
+        continuationTokens.removeAll()
         lastKnownMembers.removeAll()
     }
 
-    private func attach(_ continuation: AsyncStream<[Member]>.Continuation, for projectId: String) {
+    private func attach(_ continuation: AsyncStream<[Member]>.Continuation, token: UUID, for projectId: String) {
+        // Finish the replaced stream so its consumer's `for await` ends
+        // instead of waiting forever.
+        continuations[projectId]?.finish()
         continuations[projectId] = continuation
+        continuationTokens[projectId] = token
         if let cached = lastKnownMembers[projectId] {
             continuation.yield(cached)
         }
     }
 
-    private func detach(_ projectId: String) {
+    /// A finished stream's `onTermination` runs later, possibly after a new
+    /// subscription replaced it; only the owning subscription may detach.
+    private func detach(_ projectId: String, token: UUID) {
+        guard continuationTokens[projectId] == token else { return }
         continuations[projectId] = nil
+        continuationTokens[projectId] = nil
     }
 
     private func pollLoop(for projectId: String) async {

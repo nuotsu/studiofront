@@ -1,7 +1,11 @@
 import Foundation
 
 /// Single network entry point. Typed errors only — never surface `URLError` or tokens.
-public actor SanityClient {
+///
+/// Stateless, so a plain `Sendable` class rather than an actor: concurrent
+/// fan-out requests (refresh, live search, presence) decode their responses
+/// in parallel instead of queueing behind one serial executor.
+public final class SanityClient: Sendable {
     public static let shared = SanityClient()
 
     public static let datasetConcurrencyLimit = 5
@@ -242,7 +246,7 @@ public actor SanityClient {
     /// connects to (`getBifurClient` in `prepareConfig.tsx`): `wss://<projectId
     /// >.api.sanity.io/<presenceVersion>/socket/<dataset>?tag=...`. Pure — does
     /// not open a connection.
-    public nonisolated func socketURL(projectId: String, dataset: String) -> URL {
+    public func socketURL(projectId: String, dataset: String) -> URL {
         var components = URLComponents()
         components.scheme = "wss"
         components.host = "\(projectId).api.sanity.io"
@@ -353,6 +357,9 @@ public actor SanityClient {
         return try await performGET(url: url, token: token, etag: etag)
     }
 
+    /// `@concurrent` so the response is decoded off the caller's actor, even
+    /// when a `@MainActor` caller awaits it directly.
+    @concurrent
     private func performGET<T: Decodable & Sendable>(
         url: URL,
         token: String,
@@ -408,6 +415,7 @@ public actor SanityClient {
     /// that fails to decode downstream (including error lines, e.g.
     /// `{"error": {...}}`) is simply dropped by the caller rather than failing
     /// the whole batch.
+    @concurrent
     private func performNDJSONGET(url: URL, token: String) async throws -> [Data] {
         try Task.checkCancellation()
         var request = URLRequest(url: url)

@@ -74,10 +74,6 @@ public enum CLICredentialReader {
         return data
     }
 
-    public static func clearBookmark() {
-        UserDefaults.standard.removeObject(forKey: bookmarkDefaultsKey)
-    }
-
     private static func probe(url: URL, scoped: Bool) -> Probe {
         let accessed = scoped ? url.startAccessingSecurityScopedResource() : true
         defer {

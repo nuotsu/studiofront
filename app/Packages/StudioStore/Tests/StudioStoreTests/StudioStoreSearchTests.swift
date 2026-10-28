@@ -28,7 +28,6 @@ struct StudioStoreSearchTests {
     func documentOnlyMatchInterleaves() {
         let store = makeSearchStore(recentTitles: ["Thank You - Acru Webinar"], projectName: "Unrelated Project")
         store.query = "thank you"
-        store.noteQueryChanged()
         let items = store.groups.flatMap(\.items)
         #expect(items.contains { item in
             if case .project(let row) = item { return row.id == "p1" }
@@ -38,6 +37,40 @@ struct StudioStoreSearchTests {
             if case .document(_, let doc) = item { return doc.title.contains("Thank You") }
             return false
         })
+    }
+
+    @Test("memoized groups refresh as soon as the query changes")
+    func queryChangeInvalidatesGroups() {
+        let store = makeSearchStore(recentTitles: ["Home"], projectName: "Acme")
+        #expect(store.groups.flatMap(\.items).count == 1)
+
+        store.query = "zzz"
+        #expect(store.groups.isEmpty)
+        #expect(store.selectedID == nil)
+
+        store.query = ""
+        #expect(store.groups.flatMap(\.items).count == 1)
+        #expect(store.selectedID == "p1")
+    }
+
+    @Test("project acronyms match through precomputed initials")
+    func acronymMatchesProject() {
+        let store = makeSearchStore(recentTitles: [], projectName: "Elevate Experiences")
+        store.query = "ee"
+        #expect(store.visibleRows.map(\.id) == ["p1"])
+    }
+
+    @Test("plugin document types never surface as cached title matches")
+    func excludedTypesAreNotSearchable() {
+        let deployment = EditedDocument(id: "d1", title: "Thank You", typeName: "vercel.deploymentTarget", editedAt: Date())
+        let row = ProjectRow(
+            project: SanityProject(id: "p1", displayName: "Project"),
+            curation: ProjectCuration(projectId: "p1"),
+            activity: ProjectActivity(lastEditedDocument: deployment, recentDocuments: [deployment])
+        )
+        let store = StudioStore(rows: [row])
+        store.query = "thank"
+        #expect(store.cachedDocumentMatches(for: row).isEmpty)
     }
 }
 

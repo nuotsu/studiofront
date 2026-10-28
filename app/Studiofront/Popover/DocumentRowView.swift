@@ -5,7 +5,6 @@ import StudioStore
 struct DocumentRowView: View {
     @Environment(\.studioTheme) private var theme
     @Environment(StudioStore.self) private var store
-    @Environment(AppSettings.self) private var settings
 
     var row: ProjectRow
     var document: EditedDocument
@@ -32,20 +31,7 @@ struct DocumentRowView: View {
                 .buttonStyle(.plain)
                 .disabled(document.deepLinkURL == nil)
                 .accessibilityLabel("Open document, \(document.title)")
-                .task(id: faviconHost) {
-                    guard let faviconHost else {
-                        favicon = nil
-                        return
-                    }
-                    if let cached = FaviconCache.peekCached(forHost: faviconHost) {
-                        favicon = Image(nsImage: cached)
-                        return
-                    }
-                    favicon = nil
-                    if let image = await FaviconCache.shared.favicon(forHost: faviconHost) {
-                        favicon = Image(nsImage: image)
-                    }
-                }
+                .projectFavicon(for: row, into: $favicon)
                 identity
                 Spacer(minLength: 8)
                 ProjectRowTrailingActions(row: row, showPresence: false)
@@ -60,10 +46,6 @@ struct DocumentRowView: View {
         .accessibilityLabel("\(document.typeName.isEmpty ? "" : "\(document.typeName), ")\(document.title), \(row.displayTitle)")
         .padding(.leading, metrics.listPadding.leading)
         .padding(.trailing, metrics.listPadding.trailing)
-    }
-
-    private var faviconHost: String? {
-        ProjectRowChrome.faviconHost(for: row)
     }
 
     private var identity: some View {
@@ -113,8 +95,6 @@ struct DocumentRowView: View {
     }
 
     private func openStudio() {
-        let preferExternal = settings.studioURLPreference == .external
-        guard let url = row.project.resolvedStudioURL(preferExternal: preferExternal) else { return }
-        AppDelegate.shared?.openURL(url)
+        AppDelegate.shared?.openStudio(for: row)
     }
 }

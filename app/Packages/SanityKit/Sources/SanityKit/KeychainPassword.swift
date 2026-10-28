@@ -46,6 +46,9 @@ enum KeychainPassword {
             .inaccessible(status)
         }
 
+        // Failures aren't cached: `errSecInteractionNotAllowed` (keychain still
+        // locked at login, say) would otherwise stick until relaunch.
+        if case .inaccessible = result { return result }
         lock.lock()
         cache[key] = result
         lock.unlock()
@@ -82,16 +85,9 @@ enum KeychainPassword {
         return SecItemDelete(query as CFDictionary)
     }
 
-    static func invalidate(service: String, account: String? = nil) {
+    static func invalidate(service: String, account: String) {
         lock.lock()
         defer { lock.unlock() }
-        if let account {
-            cache.removeValue(forKey: cacheKey(service: service, account: account))
-        } else {
-            let prefix = "\(service)\u{1E}"
-            for key in cache.keys where key.hasPrefix(prefix) {
-                cache.removeValue(forKey: key)
-            }
-        }
+        cache.removeValue(forKey: cacheKey(service: service, account: account))
     }
 }

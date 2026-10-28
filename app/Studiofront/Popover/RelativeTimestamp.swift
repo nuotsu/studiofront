@@ -17,10 +17,14 @@ enum RelativeTimestamp {
 }
 
 enum PresenceSwatch {
+    /// FNV-1a over the id's UTF-8 bytes. `Hasher` is randomly seeded per
+    /// launch, which gave the same teammate a different color every relaunch.
     static func color(for id: String) -> Color {
-        var hasher = Hasher()
-        hasher.combine(id)
-        let hue = Double(abs(hasher.finalize() % 360)) / 360.0
+        var hash: UInt64 = 0xcbf2_9ce4_8422_2325
+        for byte in id.utf8 {
+            hash = (hash ^ UInt64(byte)) &* 0x0000_0100_0000_01b3
+        }
+        let hue = Double(hash % 360) / 360.0
         return Color(hue: hue, saturation: 0.55, brightness: 0.72)
     }
 }

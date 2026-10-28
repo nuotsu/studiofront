@@ -897,9 +897,9 @@ public struct ProjectAvatar: View {
     }
 
     private func avatarBody(size: CGFloat) -> some View {
-        let letter = String(name.prefix(1)).uppercased()
-        let initials = DisplayInitials.from(name)
-        return ZStack {
+        // Letters are derived only in the branch that shows them; most rows
+        // render a favicon.
+        ZStack {
             if let favicon {
                 theme.colors.tagBackground
                 favicon
@@ -909,12 +909,12 @@ public struct ProjectAvatar: View {
                     .clipped()
             } else if let brandHex {
                 Color(hex: brandHex)
-                Text(letter)
+                Text(name.prefix(1).uppercased())
                     .font(theme.typography.avatar)
                     .foregroundStyle(.white)
             } else {
                 theme.colors.tagBackground
-                Text(initials)
+                Text(DisplayInitials.from(name))
                     .font(theme.typography.avatar)
                     .foregroundStyle(theme.colors.sub)
             }
@@ -979,7 +979,7 @@ public struct DocumentProjectAvatar: View {
 
 public enum DisplayInitials {
     public static func from(_ name: String) -> String {
-        let cleaned = name.replacingOccurrences(of: #"[()]"#, with: "", options: .regularExpression)
+        let cleaned = name.filter { $0 != "(" && $0 != ")" }
         let parts = cleaned.split { $0 == " " || $0 == "&" }.filter { !$0.isEmpty }
         return parts.prefix(2).compactMap { $0.first }.map(String.init).joined().uppercased()
     }

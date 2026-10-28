@@ -17,6 +17,7 @@ final class DocumentSearchCoordinator {
     private static let debounceDelay: Duration = .milliseconds(280)
     /// When many projects are eligible, cap remote GROQ fan-out to the most recently edited.
     private static let remoteSearchCap = 40
+    private static let sessionCacheLimit = 64
 
     private let store: StudioStore
     private let settings: AppSettings
@@ -120,8 +121,21 @@ final class DocumentSearchCoordinator {
             store.applyDocumentSearchBatch(updates: [:], completedProjectIDs: cappedOutIDs)
         }
 
-        guard !remoteIDs.isEmpty else {
-            sessionCache[text] = localUpdates
+        // Projects without a dataset have nothing to query; settle them now
+        // with their local matches.
+        let requests = remoteIDs.compactMap { id in
+            primaryDataset(from: rowByID[id]).map { (id: id, dataset: $0) }
+        }
+        let noDatasetIDs = Set(remoteIDs).subtracting(requests.map(\.id))
+        if !noDatasetIDs.isEmpty {
+            store.applyDocumentSearchBatch(
+                updates: localUpdates.filter { noDatasetIDs.contains($0.key) },
+                completedProjectIDs: noDatasetIDs
+            )
+        }
+
+        guard !requests.isEmpty else {
+            cacheResults(localUpdates, for: text)
             return
         }
 
@@ -129,53 +143,60 @@ final class DocumentSearchCoordinator {
         let client = self.client
         let preferExternal = settings.studioURLPreference == .external
         var allUpdates = localUpdates
+        var pending: [String: [EditedDocument]] = [:]
 
-        for start in stride(from: 0, to: remoteIDs.count, by: limit) {
-            guard generation == self.generation else { return }
-            let slice = Array(remoteIDs[start..<min(start + limit, remoteIDs.count)])
-            var batchUpdates: [String: [EditedDocument]] = [:]
-
-            await withTaskGroup(of: (String, [RemoteEditedDocument]).self) { group in
-                for id in slice {
-                    guard let dataset = primaryDataset(from: rowByID[id]) else { continue }
-                    group.addTask {
-                        let docs = try? await client.searchDocuments(
-                            token: token,
-                            projectId: id,
-                            dataset: dataset,
-                            text: text
-                        )
-                        return (id, docs ?? [])
-                    }
-                }
-                for await (id, docs) in group {
-                    guard generation == self.generation else { continue }
-                    let studioURL = rowByID[id]?.resolvedStudioURL(preferExternal: preferExternal)
-                    batchUpdates[id] = docs.map { doc in
-                        EditedDocument(
-                            id: doc.id,
-                            title: doc.title,
-                            typeName: doc.typeName,
-                            editedAt: doc.updatedAt,
-                            deepLinkURL: studioURL.flatMap {
-                                ProjectSyncService.editIntentURL(studioURL: $0, documentId: doc.id, typeName: doc.typeName)
-                            }
-                        )
-                    }
-                }
-            }
-
-            var mergedBatch: [String: [EditedDocument]] = [:]
-            for id in slice {
-                let local = localUpdates[id] ?? allUpdates[id] ?? []
-                let remote = batchUpdates[id] ?? []
-                mergedBatch[id] = Self.mergeDocumentMatches(local: local, remote: remote)
-            }
-            allUpdates.merge(mergedBatch) { _, new in new }
-            store.applyDocumentSearchBatch(updates: mergedBatch, completedProjectIDs: Set(slice))
+        func flush() {
+            guard !pending.isEmpty else { return }
+            allUpdates.merge(pending) { _, new in new }
+            store.applyDocumentSearchBatch(updates: pending, completedProjectIDs: Set(pending.keys))
+            pending = [:]
         }
 
-        sessionCache[text] = allUpdates
+        await forEachConcurrently(requests, limit: limit) { request -> (String, [RemoteEditedDocument]) in
+            let docs = try? await client.searchDocuments(
+                token: token,
+                projectId: request.id,
+                dataset: request.dataset,
+                text: text
+            )
+            return (request.id, docs ?? [])
+        } onResult: { id, docs in
+            guard generation == self.generation else { return }
+            let studioURL = rowByID[id]?.resolvedStudioURL(preferExternal: preferExternal)
+            let remote = docs.map { doc in
+                EditedDocument(
+                    id: doc.id,
+                    title: doc.title,
+                    typeName: doc.typeName,
+                    editedAt: doc.updatedAt,
+                    deepLinkURL: studioURL.flatMap {
+                        ProjectSyncService.editIntentURL(studioURL: $0, documentId: doc.id, typeName: doc.typeName)
+                    }
+                )
+            }
+            pending[id] = Self.mergeDocumentMatches(local: localUpdates[id] ?? [], remote: remote)
+            // One store update per `limit` results keeps list rebuilds as
+            // coarse as fixed batches, without waiting on the slowest project.
+            if pending.count >= limit { flush() }
+        }
+
+        guard generation == self.generation else { return }
+        flush()
+        cacheResults(allUpdates, for: text)
+    }
+
+    /// Bounded so a long-running menu bar session can't grow it without limit.
+    private func cacheResults(_ results: [String: [EditedDocument]], for text: String) {
+        if sessionCache.count >= Self.sessionCacheLimit {
+            sessionCache.removeAll()
+        }
+        sessionCache[text] = results
+    }
+
+    /// Drops cached results after a project refresh so a repeated query
+    /// can't keep serving documents from before the latest sync.
+    func resetSessionCache() {
+        sessionCache.removeAll()
     }
 
     /// Unions cached and live matches by canonical document id, preferring the

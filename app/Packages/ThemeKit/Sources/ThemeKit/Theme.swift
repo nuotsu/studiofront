@@ -52,17 +52,6 @@ extension Theme {
             return colors.chipBorder
         }
     }
-
-    /// Widget outline — resolved from SwiftUI `colorScheme` for the same reason
-    /// as legend colors.
-    public func panelBorder(for colorScheme: ColorScheme) -> Color {
-        switch surface.kind {
-        case .glass:
-            return colorScheme == .dark ? .rgba(1, 1, 1, 0.16) : .rgba(0, 0, 0, 0.14)
-        case .flat:
-            return colorScheme == .dark ? Color(hex: "3a404a") : Color(hex: "d9dbe0")
-        }
-    }
 }
 
 public enum ThemePreference: String, CaseIterable, Identifiable, Sendable {

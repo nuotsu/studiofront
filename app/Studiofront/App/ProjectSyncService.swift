@@ -171,87 +171,63 @@ final class ProjectSyncService {
                 snapshot.etags["projects"] = etag
             }
 
-            var orgNames: [String: String]
-            if let orgs = try? await client.listOrganizations(token: token) {
-                orgNames = Dictionary(uniqueKeysWithValues: orgs.map { ($0.id, $0.name) })
-                snapshot.organizations = orgs.map { PersistedOrganization(id: $0.id, name: $0.name) }
-                let existingFavorites = snapshot.organizationFavoritesByUser[userID] ?? []
-                let liveFavorites = Dictionary(uniqueKeysWithValues: store.organizationSnapshot.map { ($0.id, $0.isFavorite) })
-                var favoriteIDs = existingFavorites
-                for org in orgs {
-                    guard let live = liveFavorites[org.id] else { continue }
-                    if live { favoriteIDs.insert(org.id) } else { favoriteIDs.remove(org.id) }
-                }
-                snapshot.organizationFavoritesByUser[userID] = favoriteIDs
-            } else {
-                orgNames = Dictionary(uniqueKeysWithValues: snapshot.organizations.map { ($0.id, $0.name) })
-            }
+            let client = self.client
+            let limit = SanityClient.datasetConcurrencyLimit
+            // Independent of everything below; only needed once projects are assembled.
+            async let fetchedOrganizations = try? client.listOrganizations(token: token)
 
             var studioHosts: [String: String] = [:]
             var externalStudioHostsFromApps: [String: URL] = [:]
             var studioAppsByProject: [String: [StudioApp]] = [:]
-            let client = self.client
             let orgIDs = Array(Set(remote.compactMap(\.organizationId)))
-            let orgLimit = SanityClient.datasetConcurrencyLimit
-            for start in stride(from: 0, to: orgIDs.count, by: orgLimit) {
-                try Task.checkCancellation()
-                let slice = Array(orgIDs[start..<min(start + orgLimit, orgIDs.count)])
-                await withTaskGroup(of: (String, [RemoteStudioApp]).self) { group in
-                    for orgID in slice {
-                        group.addTask {
-                            let apps = try? await client.listStudioApplications(token: token, organizationId: orgID)
-                            return (orgID, apps ?? [])
+            await forEachConcurrently(orgIDs, limit: limit) { orgID in
+                (try? await client.listStudioApplications(token: token, organizationId: orgID)) ?? []
+            } onResult: { apps in
+                for app in apps {
+                    guard let projectId = app.projectId else { continue }
+                    studioAppsByProject[projectId, default: []].append(
+                        StudioApp(host: app.appHost, isExternal: app.isExternal, title: app.title)
+                    )
+                    if app.isExternal {
+                        if let url = URL(string: app.appHost) {
+                            externalStudioHostsFromApps[projectId] = url
                         }
-                    }
-                    for await (_, apps) in group {
-                        for app in apps {
-                            guard let projectId = app.projectId else { continue }
-                            studioAppsByProject[projectId, default: []].append(
-                                StudioApp(host: app.appHost, isExternal: app.isExternal, title: app.title)
-                            )
-                            if app.isExternal {
-                                if let url = URL(string: app.appHost) {
-                                    externalStudioHostsFromApps[projectId] = url
-                                }
-                            } else {
-                                studioHosts[projectId] = app.appHost
-                            }
-                        }
+                    } else {
+                        studioHosts[projectId] = app.appHost
                     }
                 }
             }
+            try Task.checkCancellation()
 
             var datasetsByProject: [String: [Dataset]] = Dictionary(
                 uniqueKeysWithValues: snapshot.projects.map { ($0.id, $0.datasets) }
             )
             let projectIDs = remote.map(\.id)
-            let limit = SanityClient.datasetConcurrencyLimit
-            for start in stride(from: 0, to: projectIDs.count, by: limit) {
-                try Task.checkCancellation()
-                let end = min(start + limit, projectIDs.count)
-                let slice = Array(projectIDs[start..<end])
-                try await withThrowingTaskGroup(of: (String, SanityConditional<[RemoteDataset]>).self) { group in
-                    for id in slice {
-                        let etag = force ? nil : snapshot.etags["datasets:\(id)"]
-                        group.addTask {
-                            do {
-                                return (id, try await client.listDatasets(token: token, projectId: id, etag: etag))
-                            } catch SanityError.notFound {
-                                return (id, SanityConditional(value: [], etag: nil, notModified: false))
-                            }
-                        }
+            let datasetRequests = projectIDs.map { id in (id: id, etag: force ? nil : snapshot.etags["datasets:\(id)"]) }
+            var datasetsError: (any Error)?
+            await forEachConcurrently(datasetRequests, limit: limit) { request -> (String, Result<SanityConditional<[RemoteDataset]>, any Error>) in
+                do {
+                    return (request.id, .success(try await client.listDatasets(token: token, projectId: request.id, etag: request.etag)))
+                } catch SanityError.notFound {
+                    return (request.id, .success(SanityConditional(value: [], etag: nil, notModified: false)))
+                } catch {
+                    return (request.id, .failure(error))
+                }
+            } onResult: { id, outcome in
+                switch outcome {
+                case let .success(result):
+                    if let etag = result.etag {
+                        snapshot.etags["datasets:\(id)"] = etag
                     }
-                    for try await (id, result) in group {
-                        if let etag = result.etag {
-                            snapshot.etags["datasets:\(id)"] = etag
-                        }
-                        if result.notModified { continue }
-                        if let value = result.value {
-                            datasetsByProject[id] = value.map { Dataset(name: $0.name, aclMode: $0.aclMode) }
-                        }
+                    if !result.notModified, let value = result.value {
+                        datasetsByProject[id] = value.map { Dataset(name: $0.name, aclMode: $0.aclMode) }
                     }
+                case let .failure(error):
+                    datasetsError = datasetsError ?? error
                 }
             }
+            if let datasetsError { throw datasetsError }
+            try Task.checkCancellation()
 
             // Drop cached etags/activity for projects no longer in `remote` (deleted,
             // moved, or access revoked) so the persisted snapshot doesn't grow forever.
@@ -268,26 +244,35 @@ final class ProjectSyncService {
             snapshot.activity = snapshot.activity.filter { validProjectIDs.contains($0.key) }
 
             var memberProfilesByProject: [String: [String: RemoteMemberProfile]] = [:]
-            for start in stride(from: 0, to: remote.count, by: limit) {
-                try Task.checkCancellation()
-                let slice = Array(remote[start..<min(start + limit, remote.count)])
-                await withTaskGroup(of: (String, [RemoteMemberProfile]).self) { group in
-                    for project in slice {
-                        let ids = project.members.map(\.id)
-                        group.addTask {
-                            guard !ids.isEmpty else { return (project.id, []) }
-                            let profiles = try? await client.projectMemberProfiles(
-                                token: token,
-                                projectId: project.id,
-                                ids: ids
-                            )
-                            return (project.id, profiles ?? [])
-                        }
-                    }
-                    for await (id, profiles) in group {
-                        memberProfilesByProject[id] = Dictionary(uniqueKeysWithValues: profiles.map { ($0.id, $0) })
-                    }
+            let memberRequests = remote
+                .map { (projectID: $0.id, memberIDs: $0.members.map(\.id)) }
+                .filter { !$0.memberIDs.isEmpty }
+            await forEachConcurrently(memberRequests, limit: limit) { request in
+                let profiles = try? await client.projectMemberProfiles(
+                    token: token,
+                    projectId: request.projectID,
+                    ids: request.memberIDs
+                )
+                return (request.projectID, profiles ?? [])
+            } onResult: { id, profiles in
+                memberProfilesByProject[id] = Dictionary(uniqueKeysWithValues: profiles.map { ($0.id, $0) })
+            }
+            try Task.checkCancellation()
+
+            var orgNames: [String: String]
+            if let orgs = await fetchedOrganizations {
+                orgNames = Dictionary(uniqueKeysWithValues: orgs.map { ($0.id, $0.name) })
+                snapshot.organizations = orgs.map { PersistedOrganization(id: $0.id, name: $0.name) }
+                let existingFavorites = snapshot.organizationFavoritesByUser[userID] ?? []
+                let liveFavorites = Dictionary(uniqueKeysWithValues: store.organizationSnapshot.map { ($0.id, $0.isFavorite) })
+                var favoriteIDs = existingFavorites
+                for org in orgs {
+                    guard let live = liveFavorites[org.id] else { continue }
+                    if live { favoriteIDs.insert(org.id) } else { favoriteIDs.remove(org.id) }
                 }
+                snapshot.organizationFavoritesByUser[userID] = favoriteIDs
+            } else {
+                orgNames = Dictionary(uniqueKeysWithValues: snapshot.organizations.map { ($0.id, $0.name) })
             }
 
             snapshot.projects = remote.map { project in
@@ -324,8 +309,6 @@ final class ProjectSyncService {
                             role: member.role
                         )
                     },
-                    currentUserRole: project.members.first(where: { $0.id == userID })?.role,
-                    createdAt: project.createdAt == .distantPast ? Date() : project.createdAt,
                     brandColorHex: project.color.flatMap(Self.normalizedHex),
                     isArchived: project.isArchived,
                     studioApps: studioApps
@@ -385,60 +368,52 @@ final class ProjectSyncService {
         force: Bool
     ) async -> [String: ProjectActivity] {
         var result = previous
-        let limit = SanityClient.datasetConcurrencyLimit
         let client = self.client
-        for start in stride(from: 0, to: projectIDs.count, by: limit) {
-            if Task.isCancelled { break }
-            let end = min(start + limit, projectIDs.count)
-            let slice = Array(projectIDs[start..<end])
-            await withTaskGroup(of: (String, ProjectActivity?, String?).self) { group in
-                for id in slice {
-                    guard let dataset = Self.primaryDataset(from: datasetsByProject[id] ?? []) else { continue }
-                    let etag = force ? nil : snapshot.etags["activity:\(id)"]
-                    group.addTask {
-                        do {
-                            let conditional = try await client.recentEditedDocuments(
-                                token: token,
-                                projectId: id,
-                                dataset: dataset,
-                                etag: etag
-                            )
-                            if conditional.notModified {
-                                return (id, nil, conditional.etag)
-                            }
-                            let docs: [RemoteEditedDocument] = conditional.value ?? []
-                            let recentDocuments = docs.map { doc in
-                                EditedDocument(
-                                    id: doc.id,
-                                    title: doc.title,
-                                    typeName: doc.typeName,
-                                    editedAt: doc.updatedAt,
-                                    deepLinkURL: studioURLByProject[id].flatMap {
-                                        Self.editIntentURL(studioURL: $0, documentId: doc.id, typeName: doc.typeName)
-                                    }
-                                )
-                            }
-                            return (id, ProjectActivity(
-                                lastEditedDocument: recentDocuments.first,
-                                recentDocuments: recentDocuments
-                            ), conditional.etag)
-                        } catch is CancellationError {
-                            return (id, nil, nil)
-                        } catch SanityError.cancelled {
-                            return (id, nil, nil)
-                        } catch {
-                            return (id, ProjectActivity(), nil)
+        let requests = projectIDs.compactMap { id -> (id: String, dataset: String, etag: String?, studioURL: URL?)? in
+            guard let dataset = Self.primaryDataset(from: datasetsByProject[id] ?? []) else { return nil }
+            return (id, dataset, force ? nil : snapshot.etags["activity:\(id)"], studioURLByProject[id])
+        }
+        await forEachConcurrently(requests, limit: SanityClient.datasetConcurrencyLimit) { request -> (String, ProjectActivity?, String?) in
+            let id = request.id
+            do {
+                let conditional = try await client.recentEditedDocuments(
+                    token: token,
+                    projectId: id,
+                    dataset: request.dataset,
+                    etag: request.etag
+                )
+                if conditional.notModified {
+                    return (id, nil, conditional.etag)
+                }
+                let docs: [RemoteEditedDocument] = conditional.value ?? []
+                let recentDocuments = docs.map { doc in
+                    EditedDocument(
+                        id: doc.id,
+                        title: doc.title,
+                        typeName: doc.typeName,
+                        editedAt: doc.updatedAt,
+                        deepLinkURL: request.studioURL.flatMap {
+                            Self.editIntentURL(studioURL: $0, documentId: doc.id, typeName: doc.typeName)
                         }
-                    }
+                    )
                 }
-                for await (id, activity, etag) in group {
-                    if let etag {
-                        snapshot.etags["activity:\(id)"] = etag
-                    }
-                    if let activity {
-                        result[id] = activity
-                    }
-                }
+                return (id, ProjectActivity(
+                    lastEditedDocument: recentDocuments.first,
+                    recentDocuments: recentDocuments
+                ), conditional.etag)
+            } catch is CancellationError {
+                return (id, nil, nil)
+            } catch SanityError.cancelled {
+                return (id, nil, nil)
+            } catch {
+                return (id, ProjectActivity(), nil)
+            }
+        } onResult: { id, activity, etag in
+            if let etag {
+                snapshot.etags["activity:\(id)"] = etag
+            }
+            if let activity {
+                result[id] = activity
             }
         }
         return result

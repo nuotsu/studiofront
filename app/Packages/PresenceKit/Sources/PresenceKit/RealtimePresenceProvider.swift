@@ -24,6 +24,9 @@ public actor RealtimePresenceProvider: PresenceProvider {
     private let ownSessionId = UUID().uuidString
 
     private var continuations: [String: AsyncStream<[Member]>.Continuation] = [:]
+    /// Which subscription owns `continuations[projectId]`, so a finished
+    /// stream's late `detach` can't remove the one that replaced it.
+    private var continuationTokens: [String: UUID] = [:]
     private var connections: [String: Task<Void, Never>] = [:]
     /// Per project, the live sessions currently known from the socket: sessionId -> (userId, lastActiveAt, documentId).
     /// Keyed by session (not user) because one user can have multiple open tabs/sessions.
@@ -58,10 +61,11 @@ public actor RealtimePresenceProvider: PresenceProvider {
     }
 
     public func presence(for projectId: String) async -> AsyncStream<[Member]> {
-        AsyncStream { continuation in
-            self.attach(continuation, for: projectId)
+        let token = UUID()
+        return AsyncStream { continuation in
+            self.attach(continuation, token: token, for: projectId)
             continuation.onTermination = { [weak self] _ in
-                Task { await self?.detach(projectId) }
+                Task { await self?.detach(projectId, token: token) }
             }
         }
     }
@@ -79,6 +83,7 @@ public actor RealtimePresenceProvider: PresenceProvider {
             fallbackProjectIds.remove(id)
             continuations[id]?.finish()
             continuations[id] = nil
+            continuationTokens[id] = nil
         }
         if !removed.isEmpty {
             await fallback.start(projectIds: Array(fallbackProjectIds))
@@ -108,22 +113,26 @@ public actor RealtimePresenceProvider: PresenceProvider {
         await fallback.stopAll()
         for continuation in continuations.values { continuation.finish() }
         continuations.removeAll()
+        continuationTokens.removeAll()
     }
 
-    private func attach(_ continuation: AsyncStream<[Member]>.Continuation, for projectId: String) {
+    private func attach(_ continuation: AsyncStream<[Member]>.Continuation, token: UUID, for projectId: String) {
         // Finish any prior continuation for this project before replacing it —
         // otherwise its consumer's `for await` loop would hang forever, waiting
         // on a stream that will never receive another value or terminate.
         continuations[projectId]?.finish()
         continuations[projectId] = continuation
+        continuationTokens[projectId] = token
         // PresenceCoordinator starts sockets and consumer streams concurrently,
         // so rollcall can land before this continuation is attached. Yield the
         // current set immediately (empty if nobody is connected yet).
         Task { await self.emitCurrentMembers(for: projectId) }
     }
 
-    private func detach(_ projectId: String) {
+    private func detach(_ projectId: String, token: UUID) {
+        guard continuationTokens[projectId] == token else { return }
         continuations[projectId] = nil
+        continuationTokens[projectId] = nil
     }
 
     private func ensureTicker() {
@@ -182,9 +191,8 @@ public actor RealtimePresenceProvider: PresenceProvider {
             sessions[projectId] = projectSessions
             // Keep lastActiveAt for stale pruning, but only emit when the
             // visible (userId, documentId) pair for this session changes.
+            // (A new session has `previous == nil`, which already differs.)
             if previous?.userId != userId || previous?.documentId != documentId {
-                rosterChanged = true
-            } else if previous == nil {
                 rosterChanged = true
             }
         case .disconnect(_, let sessionId):

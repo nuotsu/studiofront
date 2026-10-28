@@ -5,31 +5,28 @@ import StudioStore
 struct PopoverRootView: View {
     @Environment(StudioStore.self) private var store
     @Environment(AppSettings.self) private var settings
-    @Environment(AuthSession.self) private var auth
     @Environment(\.openWindow) private var openWindow
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @FocusState private var searchFocused: Bool
     @State private var avatarTooltip: AvatarTooltipDisplay?
     @State private var avatarTooltipSize: CGSize = .zero
-    /// Which section header is currently pinned under the glass fade — updated
-    /// only when the pinned id changes, not on every scroll-frame minY write.
-    @State private var pinnedGroupID: String?
 
+    // Header and list are separate views so each only re-renders for the
+    // state it reads: arrow keys, copy feedback, and the pinned glass header
+    // leave the search field alone, and the refresh spinner leaves the list
+    // alone.
     var body: some View {
-        @Bindable var store = store
         let theme = settings.resolvedTheme
         let metrics = theme.metrics
 
         VStack(spacing: 0) {
-            header
+            PopoverHeader()
             Divider().overlay(theme.colors.divider)
-            list
+            ProjectList()
                 .layoutPriority(1)
         }
         .frame(width: metrics.popoverWidth, height: metrics.popoverContentHeight)
         .background(ThemedSurface())
         .clipShape(RoundedRectangle(cornerRadius: theme.cornerRadius(metrics.panelCornerRadius), style: theme.cornerStyle))
-        // Rendered here — an ancestor of `list`'s scroll view — rather than
+        // Rendered here — an ancestor of `ProjectList`'s scroll view — rather than
         // inside each row's avatar stack: a pinned section header gets an
         // elevated compositing layer that no `.zIndex` inside a scrolled row
         // can out-rank, so the tooltip has to sit outside that hierarchy
@@ -68,26 +65,11 @@ struct PopoverRootView: View {
         // Remount on appearance so adaptive Liquid Glass colors don't crossfade.
         .id("\(settings.themePreference.rawValue)-\(settings.appearancePreference.rawValue)")
         .onAppear {
-            searchFocused = true
             store.hideArchivedProjects = settings.hideArchivedProjects
-            store.reconcileSelection()
-        }
-        .onChange(of: store.searchFocusToken) { _, _ in
-            searchFocused = true
-        }
-        .onChange(of: store.query) { _, newValue in
-            store.noteQueryChanged()
-            store.reconcileSelection()
-            AppDelegate.shared?.documentSearch.queryDidChange(newValue)
-        }
-        .onChange(of: store.groupBy) { _, _ in
-            store.noteGroupByChanged()
             store.reconcileSelection()
         }
         .onChange(of: settings.hideArchivedProjects) { _, hide in
             store.hideArchivedProjects = hide
-            store.noteHideArchivedChanged()
-            store.reconcileSelection()
         }
         .onChange(of: settings.appearancePreference) { _, preference in
             AppDelegate.shared?.applyAppearance(preference)
@@ -99,11 +81,19 @@ struct PopoverRootView: View {
             openWindow(id: "settings")
         }
     }
+}
 
-    private var header: some View {
+/// Search field, status line, and keyboard legends.
+private struct PopoverHeader: View {
+    @Environment(StudioStore.self) private var store
+    @Environment(AppSettings.self) private var settings
+    @Environment(AuthSession.self) private var auth
+    @FocusState private var searchFocused: Bool
+
+    var body: some View {
         @Bindable var store = store
         let theme = settings.resolvedTheme
-        return VStack(spacing: 9) {
+        VStack(spacing: 9) {
             if auth.needsReconnect || auth.status == .signedOut {
                 authBanner
             }
@@ -201,6 +191,15 @@ struct PopoverRootView: View {
         }
         .padding(theme.metrics.headerPadding)
         .background(theme.surface.kind == .glass ? Color.clear : theme.colors.panelFill)
+        .onAppear {
+            searchFocused = true
+        }
+        .onChange(of: store.searchFocusToken) { _, _ in
+            searchFocused = true
+        }
+        .onChange(of: store.query) { _, newValue in
+            AppDelegate.shared?.documentSearch.queryDidChange(newValue)
+        }
     }
 
     private var authBanner: some View {
@@ -228,12 +227,60 @@ struct PopoverRootView: View {
         .clipShape(RoundedRectangle(cornerRadius: theme.cornerRadius(8), style: theme.cornerStyle))
     }
 
-    private var list: some View {
+    private var projectCountLabel: String {
+        if store.isRefreshing, store.totalCount == 0 {
+            return "Refreshing…"
+        }
+        let isSearching = !store.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if isSearching {
+            let count = store.flatVisibleIDs.count
+            return count == 1 ? "1 result" : "\(count) results"
+        }
+        return "\(store.visibleRows.count) projects"
+    }
+
+    /// Reflects the user's current "Open Studio" binding (default Return, or whatever
+    /// they recorded in Settings → Keybindings) so this legend never drifts from reality.
+    private var openStudioGlyphs: [KeyGlyph] {
+        let modifierGlyphs = KeyGlyphMapping.modifierGlyphs(settings.openStudioModifierFlags)
+        let keyGlyph = KeyGlyphMapping.glyph(forKeyCode: UInt16(settings.openStudioKeyCode), characters: settings.openStudioCharacters)
+        return modifierGlyphs + [keyGlyph]
+    }
+
+    /// Reflects the user's current "Open Document" binding (default ⌘Return,
+    /// or whatever they recorded in Settings → Keybindings) so this legend
+    /// never drifts from reality.
+    private var openDocumentGlyphs: [KeyGlyph] {
+        let modifierGlyphs = KeyGlyphMapping.modifierGlyphs(settings.openDocumentModifierFlags)
+        let keyGlyph = KeyGlyphMapping.glyph(forKeyCode: UInt16(settings.openDocumentKeyCode), characters: settings.openDocumentCharacters)
+        return modifierGlyphs + [keyGlyph]
+    }
+
+    /// Reflects the user's current "Cycle group by" binding (default ⌘/, or whatever
+    /// they recorded in Settings → Keybindings) so this legend never drifts from reality.
+    private var groupByCycleGlyphs: [KeyGlyph] {
+        let modifierGlyphs = KeyGlyphMapping.modifierGlyphs(settings.groupByCycleModifierFlags)
+        let keyGlyph = KeyGlyphMapping.glyph(forKeyCode: UInt16(settings.groupByCycleKeyCode), characters: settings.groupByCycleCharacters)
+        return modifierGlyphs + [keyGlyph]
+    }
+}
+
+/// The grouped, scrolling project and document list.
+private struct ProjectList: View {
+    @Environment(StudioStore.self) private var store
+    @Environment(AppSettings.self) private var settings
+    @Environment(AuthSession.self) private var auth
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Which section header is currently pinned under the glass fade — updated
+    /// only when the pinned id changes, not on every scroll-frame minY write.
+    @State private var pinnedGroupID: String?
+
+    var body: some View {
         let theme = settings.resolvedTheme
         let groups = store.groups
         let favoriteIndexByID = store.favoriteIndexByID
         let showFavoriteShortcuts = store.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        return ScrollViewReader { proxy in
+        ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
                     ForEach(Array(groups.enumerated()), id: \.element.id) { index, group in
@@ -352,18 +399,6 @@ struct PopoverRootView: View {
         )
     }
 
-    private var projectCountLabel: String {
-        if store.isRefreshing, store.totalCount == 0 {
-            return "Refreshing…"
-        }
-        let isSearching = !store.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        if isSearching {
-            let count = store.flatVisibleIDs.count
-            return count == 1 ? "1 result" : "\(count) results"
-        }
-        return "\(store.visibleRows.count) projects"
-    }
-
     private var emptyListMessage: String {
         if !store.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             if store.isSearchingDocuments {
@@ -379,32 +414,6 @@ struct PopoverRootView: View {
         }
         return "Connect Sanity to load projects"
     }
-
-    /// Reflects the user's current "Open Studio" binding (default Return, or whatever
-    /// they recorded in Settings → Keybindings) so this legend never drifts from reality.
-    private var openStudioGlyphs: [KeyGlyph] {
-        let modifierGlyphs = KeyGlyphMapping.modifierGlyphs(settings.openStudioModifierFlags)
-        let keyGlyph = KeyGlyphMapping.glyph(forKeyCode: UInt16(settings.openStudioKeyCode), characters: settings.openStudioCharacters)
-        return modifierGlyphs + [keyGlyph]
-    }
-
-    /// Reflects the user's current "Open Document" binding (default ⌘Return,
-    /// or whatever they recorded in Settings → Keybindings) so this legend
-    /// never drifts from reality.
-    private var openDocumentGlyphs: [KeyGlyph] {
-        let modifierGlyphs = KeyGlyphMapping.modifierGlyphs(settings.openDocumentModifierFlags)
-        let keyGlyph = KeyGlyphMapping.glyph(forKeyCode: UInt16(settings.openDocumentKeyCode), characters: settings.openDocumentCharacters)
-        return modifierGlyphs + [keyGlyph]
-    }
-
-    /// Reflects the user's current "Cycle group by" binding (default ⌘/, or whatever
-    /// they recorded in Settings → Keybindings) so this legend never drifts from reality.
-    private var groupByCycleGlyphs: [KeyGlyph] {
-        let modifierGlyphs = KeyGlyphMapping.modifierGlyphs(settings.groupByCycleModifierFlags)
-        let keyGlyph = KeyGlyphMapping.glyph(forKeyCode: UInt16(settings.groupByCycleKeyCode), characters: settings.groupByCycleCharacters)
-        return modifierGlyphs + [keyGlyph]
-    }
-
 }
 
 /// Progressive blur under the pinned section header in Liquid Glass.

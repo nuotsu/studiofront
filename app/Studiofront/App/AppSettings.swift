@@ -101,16 +101,12 @@ enum MenuBarIconPreference: String, CaseIterable, Identifiable, Sendable {
 @Observable
 final class AppSettings {
     var themePreference: ThemePreference {
-        didSet {
-            UserDefaults.standard.set(themePreference.rawValue, forKey: Keys.theme)
-            cachedResolvedTheme = nil
-        }
+        didSet { UserDefaults.standard.set(themePreference.rawValue, forKey: Keys.theme) }
     }
 
     var appearancePreference: AppearancePreference {
         didSet {
             UserDefaults.standard.set(appearancePreference.rawValue, forKey: Keys.appearance)
-            cachedResolvedTheme = nil
             // Apply before the next SwiftUI render so theme colors that snapshot
             // against `NSApp.appearance` resolve to the new light/dark immediately.
             AppDelegate.shared?.applyAppearance(appearancePreference)
@@ -234,15 +230,20 @@ final class AppSettings {
         TimeInterval(max(1, refreshIntervalMinutes) * 60)
     }
 
-    private var cachedResolvedTheme: (key: String, theme: any Theme)?
+    /// Rebuilt when theme or appearance changes, since theme colors snapshot
+    /// against the app appearance. Unobserved: it's written from inside view
+    /// bodies, and the two preferences it's keyed on are what views track.
+    @ObservationIgnored
+    private var cachedResolvedTheme: (theme: ThemePreference, appearance: AppearancePreference, value: any Theme)?
 
     var resolvedTheme: any Theme {
-        let key = "\(themePreference.rawValue)-\(appearancePreference.rawValue)"
-        if let cached = cachedResolvedTheme, cached.key == key {
-            return cached.theme
+        if let cached = cachedResolvedTheme,
+           cached.theme == themePreference, cached.appearance == appearancePreference
+        {
+            return cached.value
         }
         let theme = themePreference.theme
-        cachedResolvedTheme = (key, theme)
+        cachedResolvedTheme = (themePreference, appearancePreference, theme)
         return theme
     }
 

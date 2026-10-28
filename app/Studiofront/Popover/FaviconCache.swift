@@ -12,7 +12,20 @@ actor FaviconCache {
         return cache
     }()
 
-    private var inFlight: [String: Task<NSImage?, Never>] = [:]
+    private var inFlight: [String: Task<FetchResult, Never>] = [:]
+    /// Hosts that answered without a usable favicon, and when. Rows reappear
+    /// on every scroll and popover open, so without this a site with no
+    /// `/favicon.ico` is re-requested each time. Transient failures (timeouts,
+    /// DNS) are never recorded, so they still retry on the next access.
+    private var missingSince: [String: Date] = [:]
+    private static let missingRetryInterval: TimeInterval = 30 * 60
+
+    private enum FetchResult: Sendable {
+        case image(NSImage)
+        /// The server responded, but not with a decodable image.
+        case missing
+        case failed
+    }
 
     private init() {}
 
@@ -26,35 +39,48 @@ actor FaviconCache {
         if let cached = Self.imageCache.object(forKey: key) {
             return cached
         }
+        if let since = missingSince[host], Date().timeIntervalSince(since) < Self.missingRetryInterval {
+            return nil
+        }
         if let existing = inFlight[host] {
-            return await existing.value
+            if case let .image(image) = await existing.value { return image }
+            return nil
         }
 
-        let task = Task<NSImage?, Never> {
+        let task = Task<FetchResult, Never> {
             await Self.fetch(host: host)
         }
         inFlight[host] = task
         defer { inFlight[host] = nil }
 
-        guard let image = await task.value else { return nil }
-        Self.imageCache.setObject(image, forKey: key)
-        return image
+        switch await task.value {
+        case let .image(image):
+            missingSince[host] = nil
+            Self.imageCache.setObject(image, forKey: key)
+            return image
+        case .missing:
+            missingSince[host] = Date()
+            return nil
+        case .failed:
+            return nil
+        }
     }
 
-    private static func fetch(host: String) async -> NSImage? {
-        guard let url = URL(string: "https://\(host)/favicon.ico") else { return nil }
+    private static func fetch(host: String) async -> FetchResult {
+        guard let url = URL(string: "https://\(host)/favicon.ico") else { return .missing }
         var request = URLRequest(url: url)
         request.timeoutInterval = 6
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
             guard let http = response as? HTTPURLResponse, http.statusCode == 200, !data.isEmpty else {
-                return nil
+                return .missing
             }
-            return await Task.detached(priority: .utility) {
+            let image = await Task.detached(priority: .utility) {
                 NSImage(data: data)
             }.value
+            return image.map(FetchResult.image) ?? .missing
         } catch {
-            return nil
+            return .failed
         }
     }
 }

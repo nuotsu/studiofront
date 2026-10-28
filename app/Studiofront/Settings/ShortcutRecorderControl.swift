@@ -46,7 +46,7 @@ private enum ReservedShortcut {
         switch AppSettings.normalizedEnterKeyCode(keyCode) {
         case 126: return "Already used by ↑ — Move selection up"
         case 125: return "Already used by ↓ — Move selection down"
-        case 53: return "Already used by Esc — Close popover / clear search"
+        // Esc (53) never gets here: it cancels recording before this check.
         default: return nil
         }
     }
@@ -61,6 +61,8 @@ struct ShortcutRecorderControl: View {
     @Environment(\.studioTheme) private var theme
     @Environment(\.colorScheme) private var colorScheme
 
+    /// The action being bound, for VoiceOver ("Record new shortcut for …").
+    var actionName: String
     @Binding var keyCode: Int
     @Binding var modifierRawValue: Int
     @Binding var characters: String
@@ -96,7 +98,7 @@ struct ShortcutRecorderControl: View {
                 .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(isRecording ? "Recording new shortcut" : "Record new shortcut for Open Studio")
+            .accessibilityLabel(isRecording ? "Recording new shortcut" : "Record new shortcut for \(actionName)")
 
             if let errorMessage {
                 Text(errorMessage)
