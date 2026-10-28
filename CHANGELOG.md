@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.2.1] - 2026-10-28
+
+- Faster search: results update on the first render after each keystroke, with less work per keystroke on large accounts
+- Faster refresh: project details, datasets, and recent activity load through a sliding request window, so one slow project no longer holds up the rest
+- Smoother popover: moving the selection, scrolling, and refreshing no longer redraw the whole popover
+- Repeating a document search after a refresh shows current documents instead of results cached earlier in the session
+- Sites without a favicon aren't re-requested every time their row scrolls into view
+- Fix live presence avatars that could stop updating after the project list changed
+- Fix a realtime presence connection that could stay open after the popover closed
+- Fix a saved token staying unreadable until relaunch if the keychain was locked at login
+- Fix teammate avatar colors changing on every launch
+- Fix VoiceOver naming the wrong action on Settings shortcut recorders
+
 ## [0.2.0] - 2026-10-04
 
 - Remove all licensing, trials, and subscription features — Studiofront is now completely free with unlimited projects
