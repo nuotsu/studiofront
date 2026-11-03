@@ -609,7 +609,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         case let .document(_, document):
             guard let url = document.deepLinkURL else { return }
             openURL(url)
-        case let .project(row):
+        case let .project(row), let .studio(row):
             guard let url = row.activity.lastEditedDocument?.deepLinkURL else { return }
             openURL(url)
         }

@@ -292,20 +292,39 @@ public final class StudioStore {
         isSearching: Bool
     ) -> [ProjectGroup] {
         var result: [ProjectGroup] = []
+        var rest = visible
 
         // While searching, skip the Favorites pin and fold favorited projects into
         // their normal org / recency groups so results aren't reordered by star.
-        if !isSearching {
+        // Projects whose own name matches are pinned in "Studios" instead, and
+        // only repeat below when they also carry matching documents.
+        if isSearching {
+            let needle = normalizedSearchNeedle
+            let studioMatches = sortedByRecency(visible.filter { row in
+                searchIndex(for: row).titleFields.contains { $0.matches(needle) }
+            })
+            if !studioMatches.isEmpty {
+                result.append(ProjectGroup(
+                    id: Self.studiosGroupID,
+                    title: "Studios",
+                    items: studioMatches.map { .studio($0) }
+                ))
+                let studioIDs = Set(studioMatches.map(\.id))
+                rest = visible.filter { row in
+                    !studioIDs.contains(row.id) || !(documentsByProjectID[row.id] ?? []).isEmpty
+                }
+            }
+        } else {
             if !favorites.isEmpty {
                 result.append(ProjectGroup(
-                    id: "favorites",
+                    id: Self.favoritesGroupID,
                     title: "Favorites",
                     items: groupItems(from: favorites, documentsByProjectID: documentsByProjectID, isSearching: false)
                 ))
             }
+            rest = visible.filter { !$0.curation.isFavorite }
         }
 
-        let rest = isSearching ? visible : visible.filter { !$0.curation.isFavorite }
         switch groupBy {
         case .organization:
             let byOrg = Dictionary(grouping: rest) { $0.project.organizationId ?? "" }
@@ -368,6 +387,9 @@ public final class StudioStore {
         }
         return result
     }
+
+    public static let favoritesGroupID = "favorites"
+    public static let studiosGroupID = "studios"
 
     /// Interleaves document search rows immediately after each project when a
     /// query is active; otherwise returns plain project rows.
@@ -700,6 +722,8 @@ public final class StudioStore {
         /// Project / org / id / dataset / link fields; document titles are
         /// matched separately through `cachedTitleMatches`.
         var fields: [SearchText]
+        /// Name fields only, for the pinned "Studios" search group.
+        var titleFields: [SearchText]
         var recentDocuments: [IndexedDocument]
         var lastEditedDocument: IndexedDocument?
 
@@ -716,6 +740,9 @@ public final class StudioStore {
                 row.curation.extraStudioLinks.map(\.label).joined(separator: " "),
             ]
             fields = rawFields.map(SearchText.init).filter { !$0.text.isEmpty }
+            titleFields = [row.displayTitle, row.project.displayName, row.curation.nickname ?? ""]
+                .map(SearchText.init)
+                .filter { !$0.text.isEmpty }
             func isSearchable(_ document: EditedDocument) -> Bool {
                 !StudioStore.excludedSearchTypeNames.contains(document.typeName)
             }

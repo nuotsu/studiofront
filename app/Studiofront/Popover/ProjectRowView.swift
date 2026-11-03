@@ -8,8 +8,14 @@ struct ProjectRowView: View {
     @Environment(StudioStore.self) private var store
 
     var row: ProjectRow
+    /// Selection id when it differs from the project id (the search "Studios"
+    /// group lists the same project under its own list item id).
+    var listItemID: String?
     var isSelected: Bool
     var favoriteIndex: Int?
+    /// Shown where the row sits outside its organization's section (Favorites,
+    /// search "Studios"), so the org id isn't otherwise visible.
+    var showsOrganizationID = false
 
     @State private var isHovered = false
     @State private var isDocumentHovered = false
@@ -59,7 +65,7 @@ struct ProjectRowView: View {
         .contentShape(Rectangle())
         .opacity(row.isUnavailable || row.project.isArchived ? 0.45 : 1)
         .onHover { isHovered = $0 }
-        .onTapGesture { store.select(row.id) }
+        .onTapGesture { store.select(listItemID ?? row.id) }
         .accessibilityElement(children: .contain)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityLabel(accessibilityStatusLabel)
@@ -96,12 +102,28 @@ struct ProjectRowView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Open Studio, \(row.displayTitle)")
-            CopyChip(
-                text: row.project.id,
-                copied: store.copiedProjectID == row.project.id,
-                accessibilityName: "Copy project ID \(row.project.id)"
-            ) {
-                store.copyProjectID(row.project.id)
+            // Reads "<projectId> in <orgId>"; each id copies on its own.
+            HStack(spacing: 4) {
+                CopyChip(
+                    text: row.project.id,
+                    copied: store.copiedProjectID == row.project.id,
+                    accessibilityName: "Copy project ID \(row.project.id)"
+                ) {
+                    store.copyProjectID(row.project.id)
+                }
+                if showsOrganizationID, let organizationID = row.project.organizationId {
+                    Text("in")
+                        .font(theme.typography.chip)
+                        .foregroundStyle(theme.colors.faint.opacity(0.6))
+                        .accessibilityHidden(true)
+                    CopyChip(
+                        text: organizationID,
+                        copied: store.copiedOrganizationID == organizationID,
+                        accessibilityName: "Copy organization ID \(organizationID)"
+                    ) {
+                        store.copyOrganizationID(organizationID)
+                    }
+                }
             }
         }
     }

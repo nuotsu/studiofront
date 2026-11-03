@@ -72,6 +72,26 @@ struct StudioStoreSearchTests {
         store.query = "thank"
         #expect(store.cachedDocumentMatches(for: row).isEmpty)
     }
+
+    @Test("name match pins the project in a leading Studios group")
+    func nameMatchPinsStudiosGroup() {
+        let store = makeSearchStore(recentTitles: ["Home"], projectName: "Acru Website")
+        store.query = "acru"
+        #expect(store.groups.first?.id == StudioStore.studiosGroupID)
+        #expect(store.groups.first?.items.map(\.id) == ["studio:p1"])
+        // No matching documents, so the project isn't repeated below.
+        #expect(store.groups.count == 1)
+    }
+
+    @Test("name match with matching documents also lists the project below")
+    func nameAndDocumentMatchRepeatsBelow() {
+        let store = makeSearchStore(recentTitles: ["Acru Webinar"], projectName: "Acru Website")
+        store.query = "acru"
+        let ids = store.flatVisibleIDs
+        #expect(ids.first == "studio:p1")
+        #expect(ids.contains("p1"))
+        #expect(ids.contains { $0.hasPrefix("doc:p1:") })
+    }
 }
 
 @MainActor

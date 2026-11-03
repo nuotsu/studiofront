@@ -375,12 +375,18 @@ public struct OrganizationRecord: Sendable, Hashable, Identifiable {
 
 public enum PopoverListItem: Identifiable, Sendable, Hashable {
     case project(ProjectRow)
+    /// A project whose own title matched the search query, listed in the
+    /// pinned "Studios" group. Separate from `.project` so the same project
+    /// can also appear below as the parent of its matching documents.
+    case studio(ProjectRow)
     case document(project: ProjectRow, document: EditedDocument)
 
     public var id: String {
         switch self {
         case let .project(row):
             row.id
+        case let .studio(row):
+            "studio:\(row.id)"
         case let .document(project, document):
             "doc:\(project.id):\(document.listItemID)"
         }
@@ -388,7 +394,7 @@ public enum PopoverListItem: Identifiable, Sendable, Hashable {
 
     public var projectRow: ProjectRow {
         switch self {
-        case let .project(row):
+        case let .project(row), let .studio(row):
             row
         case let .document(project, _):
             project
@@ -397,7 +403,7 @@ public enum PopoverListItem: Identifiable, Sendable, Hashable {
 
     public var document: EditedDocument? {
         switch self {
-        case .project:
+        case .project, .studio:
             nil
         case let .document(_, document):
             document

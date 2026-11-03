@@ -296,10 +296,20 @@ private struct ProjectList: View {
                                     ProjectRowView(
                                         row: row,
                                         isSelected: store.selectedID == item.id,
-                                        favoriteIndex: showFavoriteShortcuts ? favoriteIndexByID[row.id] : nil
+                                        favoriteIndex: showFavoriteShortcuts ? favoriteIndexByID[row.id] : nil,
+                                        showsOrganizationID: group.id == StudioStore.favoritesGroupID
                                     )
                                     // Favorite toggling moves the row across Section boundaries (into/out of the "Favorites" group), which LazyVStack can repaint stale on macOS unless the identity itself changes.
                                     .id("\(item.id)-\(row.curation.isFavorite)")
+                                case let .studio(row):
+                                    ProjectRowView(
+                                        row: row,
+                                        listItemID: item.id,
+                                        isSelected: store.selectedID == item.id,
+                                        favoriteIndex: nil,
+                                        showsOrganizationID: true
+                                    )
+                                    .id(item.id)
                                 case let .document(project, document):
                                     DocumentRowView(
                                         row: project,
