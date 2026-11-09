@@ -96,7 +96,10 @@ public struct TypographyTokens: @unchecked Sendable {
 }
 
 public struct MetricTokens: @unchecked Sendable {
+    /// Full popover width, sidebar included.
     public var popoverWidth: CGFloat
+    /// The organization / date sidebar on the popover's left edge.
+    public var sidebarWidth: CGFloat
     /// Fixed menu-bar window height (matches the former `NSPopover` content size).
     public var popoverContentHeight: CGFloat
     public var panelCornerRadius: CGFloat
@@ -114,7 +117,8 @@ public struct MetricTokens: @unchecked Sendable {
     public var listPadding: EdgeInsets
 
     public init(
-        popoverWidth: CGFloat = 516,
+        popoverWidth: CGFloat = 716,
+        sidebarWidth: CGFloat = 232,
         popoverContentHeight: CGFloat = 640,
         panelCornerRadius: CGFloat = 12,
         rowPadding: CGFloat = 8,
@@ -131,6 +135,7 @@ public struct MetricTokens: @unchecked Sendable {
         listPadding: EdgeInsets = EdgeInsets(top: 6, leading: 6, bottom: 8, trailing: 6)
     ) {
         self.popoverWidth = popoverWidth
+        self.sidebarWidth = sidebarWidth
         self.popoverContentHeight = popoverContentHeight
         self.panelCornerRadius = panelCornerRadius
         self.rowPadding = rowPadding

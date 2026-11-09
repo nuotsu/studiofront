@@ -158,6 +158,21 @@ final class AppSettings {
         didSet { UserDefaults.standard.set(hideScrollbar, forKey: Keys.hideScrollbar) }
     }
 
+    /// Organizations hidden from the popover sidebar (and the browse list).
+    var hiddenOrganizationIDs: [String] = [] {
+        didSet { UserDefaults.standard.set(hiddenOrganizationIDs, forKey: Keys.hiddenOrganizationIDs) }
+    }
+
+    /// User-chosen order of pinned projects in the Pinned group.
+    var pinnedProjectOrder: [String] = [] {
+        didSet { UserDefaults.standard.set(pinnedProjectOrder, forKey: Keys.pinnedProjectOrder) }
+    }
+
+    /// User-chosen order of pinned organizations in the sidebar and list.
+    var pinnedOrganizationOrder: [String] = [] {
+        didSet { UserDefaults.standard.set(pinnedOrganizationOrder, forKey: Keys.pinnedOrganizationOrder) }
+    }
+
     // TODO: move to Settings > Advanced once that tab exists (spec §10).
     var presenceMode: PresenceMode {
         didSet { UserDefaults.standard.set(presenceMode.rawValue, forKey: Keys.presenceMode) }
@@ -398,7 +413,7 @@ final class AppSettings {
             ?? Self.defaultOpenDocumentModifierRawValue
         let openDocumentCharacters = defaults.string(forKey: Keys.openDocumentCharacters)
             ?? Self.defaultOpenDocumentCharacters
-        return AppSettings(
+        let settings = AppSettings(
             themePreference: theme,
             appearancePreference: appearance,
             menuBarIconPreference: menuBarIcon,
@@ -425,6 +440,10 @@ final class AppSettings {
             openDocumentModifierRawValue: openDocumentModifierRawValue,
             openDocumentCharacters: openDocumentCharacters
         )
+        settings.hiddenOrganizationIDs = defaults.stringArray(forKey: Keys.hiddenOrganizationIDs) ?? []
+        settings.pinnedOrganizationOrder = defaults.stringArray(forKey: Keys.pinnedOrganizationOrder) ?? []
+        settings.pinnedProjectOrder = defaults.stringArray(forKey: Keys.pinnedProjectOrder) ?? []
+        return settings
     }
 
     static let allowedRefreshIntervals = [1, 5, 15, 30, 60]
@@ -439,6 +458,9 @@ final class AppSettings {
         static let hideArchivedProjects = "hideArchivedProjects"
         static let studioURLPreference = "studioURLPreference"
         static let hideScrollbar = "hideScrollbar"
+        static let hiddenOrganizationIDs = "hiddenOrganizationIDs"
+        static let pinnedOrganizationOrder = "pinnedOrganizationOrder"
+        static let pinnedProjectOrder = "pinnedProjectOrder"
         static let presenceMode = "presenceMode"
         static let openStudioKeyCode = "openStudioKeyCode"
         static let openStudioModifierRawValue = "openStudioModifierRawValue"

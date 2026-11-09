@@ -1,26 +1,32 @@
 import AppKit
 import SwiftUI
 
+/// A list row's padded, rounded background. It owns its hover state and
+/// takes already-built content, so hovering or selecting a row only redraws
+/// this background and never re-runs the row's own body.
 public struct RowContainer<Content: View>: View {
     @Environment(\.studioTheme) private var theme
     var isSelected: Bool
-    var isHovered: Bool
-    @ViewBuilder var content: () -> Content
+    let content: Content
 
-    public init(isSelected: Bool, isHovered: Bool, @ViewBuilder content: @escaping () -> Content) {
+    @State private var isHovered = false
+
+    public init(isSelected: Bool, @ViewBuilder content: () -> Content) {
         self.isSelected = isSelected
-        self.isHovered = isHovered
-        self.content = content
+        self.content = content()
     }
 
     public var body: some View {
         let metrics = theme.metrics
-        content()
+        content
             .padding(metrics.rowPadding)
             .background(
                 RoundedRectangle(cornerRadius: theme.cornerRadius(metrics.rowCornerRadius), style: theme.cornerStyle)
-                    .fill(isSelected ? theme.colors.selection : (isHovered ? theme.colors.hover : .clear))
+                    // Keyboard selection uses the same tint as hover.
+                    .fill(isSelected || isHovered ? theme.colors.hover : .clear)
             )
+            .contentShape(Rectangle())
+            .onHover { isHovered = $0 }
     }
 }
 
@@ -42,14 +48,17 @@ public struct CopyChip: View {
 
     public var body: some View {
         let colors = theme.colors
-        Button(action: action) {
-            Text(copied ? "copied ✓" : text)
-                .font(theme.typography.chip)
-                .foregroundStyle(copied ? colors.copied : colors.sub.opacity(isHovered ? 1 : 0.55))
-        }
-        .buttonStyle(.plain)
-        .onHover { isHovered = $0 }
-        .accessibilityLabel(copied ? "Copied" : accessibilityName)
+        // A tap gesture rather than a `Button`: SwiftUI wraps every button in
+        // focus, keyboard-shortcut and window-activation machinery, which adds
+        // up across the many small controls in each list row.
+        Text(copied ? "copied ✓" : text)
+            .font(theme.typography.chip)
+            .foregroundStyle(copied ? colors.copied : colors.sub.opacity(isHovered ? 1 : 0.55))
+            .contentShape(Rectangle())
+            .onTapGesture(perform: action)
+            .onHover { isHovered = $0 }
+            .accessibilityLabel(copied ? "Copied" : accessibilityName)
+            .accessibilityAddTraits(.isButton)
     }
 }
 
@@ -83,11 +92,14 @@ public struct SplitPrimaryButton: View {
     public struct MenuItem: Identifiable {
         public var id: String
         public var title: String
+        /// Optional leading image, e.g. a document status dot.
+        public var image: NSImage?
         public var action: () -> Void
 
-        public init(id: String, title: String, action: @escaping () -> Void) {
+        public init(id: String, title: String, image: NSImage? = nil, action: @escaping () -> Void) {
             self.id = id
             self.title = title
+            self.image = image
             self.action = action
         }
     }
@@ -175,6 +187,87 @@ public struct SplitPrimaryButton: View {
         // a small negative y drops that corner just below the anchor's bottom
         // edge, instead of overlapping the button by aligning it to the top.
         menu.popUp(positioning: nil, at: NSPoint(x: 0, y: -4), in: menuAnchor)
+    }
+}
+
+/// A tap target that pops a native `NSMenu` just below its label. Used for
+/// the favicon's Studio URL badge and the "+N" recent documents pill, where
+/// SwiftUI's `Menu` would draw its own disclosure indicator.
+///
+/// The menu is positioned from the click location rather than from an
+/// embedded anchor `NSView`: one AppKit view (plus a state write to hand it
+/// back) per button was a real cost when every list row carries one.
+public struct NativeMenuButton<Label: View>: View {
+    var header: String?
+    /// Built only when the menu opens, so rows that render this button in a
+    /// list don't pay for menu items (and their images) on every redraw.
+    var makeItems: () -> [SplitPrimaryButton.MenuItem]
+    var accessibilityLabel: String
+    /// The label's height, used to drop the menu just under it.
+    var labelHeight: CGFloat
+    let label: Label
+
+    public init(
+        header: String? = nil,
+        items: [SplitPrimaryButton.MenuItem],
+        accessibilityLabel: String,
+        labelHeight: CGFloat = 18,
+        @ViewBuilder label: () -> Label
+    ) {
+        self.init(header: header, makeItems: { items }, accessibilityLabel: accessibilityLabel, labelHeight: labelHeight, label: label)
+    }
+
+    public init(
+        header: String? = nil,
+        makeItems: @escaping () -> [SplitPrimaryButton.MenuItem],
+        accessibilityLabel: String,
+        labelHeight: CGFloat = 18,
+        @ViewBuilder label: () -> Label
+    ) {
+        self.header = header
+        self.makeItems = makeItems
+        self.accessibilityLabel = accessibilityLabel
+        self.labelHeight = labelHeight
+        self.label = label()
+    }
+
+    public var body: some View {
+        label
+            .contentShape(Rectangle())
+            .onTapGesture(coordinateSpace: .local) { location in
+                showMenu(tapLocation: location)
+            }
+            .accessibilityLabel(accessibilityLabel)
+            .accessibilityAddTraits(.isButton)
+    }
+
+    private func showMenu(tapLocation: CGPoint) {
+        let items = makeItems()
+        guard !items.isEmpty, let window = NSApp.currentEvent?.window ?? NSApp.keyWindow else { return }
+        let menu = NSMenu()
+        if let header {
+            let headerItem = NSMenuItem(title: header, action: nil, keyEquivalent: "")
+            headerItem.isEnabled = false
+            menu.addItem(headerItem)
+            menu.addItem(.separator())
+        }
+        let router = MenuActionRouter()
+        for item in items {
+            router.addItem(to: menu, title: item.title, image: item.image, action: item.action)
+        }
+        // NSMenuItem.target is unretained, so keep the router alive until
+        // the next menu replaces it.
+        MenuActionRouter.active = router
+
+        // The click sits `tapLocation` inside the label (y grows downward);
+        // window coordinates grow upward. Work back to the label's
+        // bottom-left corner and open the menu 4pt below it.
+        let mouse = window.mouseLocationOutsideOfEventStream
+        let labelBottomLeft = NSPoint(
+            x: mouse.x - tapLocation.x,
+            y: mouse.y + tapLocation.y - labelHeight - 4
+        )
+        menu.popUp(positioning: nil, at: window.convertPoint(toScreen: labelBottomLeft), in: nil)
     }
 }
 
@@ -266,14 +359,18 @@ private struct MenuAnchorView: NSViewRepresentable {
 }
 
 private final class MenuActionRouter: NSObject {
+    /// The router behind the most recently opened `NativeMenuButton` menu.
+    @MainActor static var active: MenuActionRouter?
+
     private var actions: [() -> Void] = []
 
-    func addItem(to menu: NSMenu, title: String, action: @escaping () -> Void) {
+    func addItem(to menu: NSMenu, title: String, image: NSImage? = nil, action: @escaping () -> Void) {
         let index = actions.count
         actions.append(action)
         let item = NSMenuItem(title: title, action: #selector(invoke(_:)), keyEquivalent: "")
         item.target = self
         item.tag = index
+        item.image = image
         menu.addItem(item)
     }
 
@@ -376,19 +473,25 @@ public struct SectionHeader: View {
                 Button {
                     onToggleFavorite?()
                 } label: {
-                    Image(systemName: isFavorite ? "star.fill" : "star")
-                        .font(.system(size: 11))
+                    Image(systemName: isFavorite ? "pin.fill" : "pin")
+                        .font(.system(size: 10))
                         .foregroundStyle(isFavorite ? theme.colors.star : colors.faint)
                         .frame(width: theme.metrics.starColumnWidth)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(isFavorite ? "Remove organization from favorites" : "Add organization to favorites")
+                .help(isFavorite ? "Unpin organization" : "Pin organization to top")
+                .accessibilityLabel(isFavorite ? "Unpin organization" : "Pin organization to top")
             }
 
-            Text(itemCount.map { "\(title.uppercased()) (\($0))" } ?? title.uppercased())
-                .font(theme.typography.section)
+            // The count reads in regular weight next to the bold title.
+            let titleText = Text(title.uppercased()).font(theme.typography.section)
+            let countText = Text(itemCount.map { " (\($0))" } ?? "").font(.system(size: 9.5, weight: .regular))
+            Text("\(titleText)\(countText)")
                 .tracking(0.7)
                 .foregroundStyle(colors.faint)
+                .lineLimit(1)
+
+            Spacer(minLength: 8)
 
             if let accessory {
                 Button {
@@ -403,15 +506,11 @@ public struct SectionHeader: View {
                 .onHover { isAccessoryHovered = $0 }
                 .accessibilityLabel(accessoryCopied ? "Copied" : "Copy organization ID \(accessory)")
             }
-
-            Rectangle()
-                .fill(colors.divider)
-                .frame(height: 1)
         }
         .padding(.leading, 8 + theme.metrics.listPadding.leading)
         .padding(.trailing, 8 + theme.metrics.listPadding.trailing)
-        .padding(.top, 6)
-        .padding(.bottom, 3)
+        .padding(.top, 10)
+        .padding(.bottom, 7)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(backing)
     }
@@ -648,18 +747,22 @@ public struct AvatarTooltipPreferenceKey: PreferenceKey {
 public struct AvatarTooltip: View {
     @Environment(\.studioTheme) private var theme
     var name: String
+    var maximumWidth: CGFloat?
 
-    public init(name: String) {
+    public init(name: String, maximumWidth: CGFloat? = nil) {
         self.name = name
+        self.maximumWidth = maximumWidth
     }
 
     public var body: some View {
         Text(name)
             .font(.system(size: 11, weight: .medium))
             .foregroundStyle(theme.colors.text)
-            .lineLimit(1)
+            .lineLimit(nil)
+            .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
+            .frame(maxWidth: maximumWidth)
             .background(theme.colors.panelFill)
             .clipShape(RoundedRectangle(cornerRadius: 2, style: .continuous))
             .overlay(
@@ -670,7 +773,7 @@ public struct AvatarTooltip: View {
             // `.overlay(alignment:)` on the avatar stack proposes the stack's own
             // (narrow) width to this tooltip — without this it would get squeezed
             // into that width instead of sizing to fit the name.
-            .fixedSize()
+            .fixedSize(horizontal: true, vertical: false)
     }
 }
 
@@ -883,16 +986,18 @@ public struct ProjectAvatar: View {
     var name: String
     var brandHex: String?
     var favicon: Image?
+    /// Overrides the theme's avatar size (corner radius and letters scale with it).
+    var size: CGFloat?
 
-    public init(name: String, brandHex: String?, favicon: Image? = nil) {
+    public init(name: String, brandHex: String?, favicon: Image? = nil, size: CGFloat? = nil) {
         self.name = name
         self.brandHex = brandHex
         self.favicon = favicon
+        self.size = size
     }
 
     public var body: some View {
-        let size = theme.metrics.avatarSize
-        avatarBody(size: size)
+        avatarBody(size: size ?? theme.metrics.avatarSize)
             .accessibilityHidden(true)
     }
 
@@ -912,19 +1017,29 @@ public struct ProjectAvatar: View {
                 Text(name.prefix(1).uppercased())
                     .font(theme.typography.avatar)
                     .foregroundStyle(.white)
+                    .scaleEffect(scale)
             } else {
                 theme.colors.tagBackground
                 Text(DisplayInitials.from(name))
                     .font(theme.typography.avatar)
                     .foregroundStyle(theme.colors.sub)
+                    .scaleEffect(scale)
             }
         }
         .frame(width: size, height: size)
-        .clipShape(RoundedRectangle(cornerRadius: theme.cornerRadius(theme.metrics.avatarCornerRadius), style: theme.cornerStyle))
+        .clipShape(RoundedRectangle(cornerRadius: cornerRadius(size), style: theme.cornerStyle))
         .overlay(
-            RoundedRectangle(cornerRadius: theme.cornerRadius(theme.metrics.avatarCornerRadius), style: theme.cornerStyle)
+            RoundedRectangle(cornerRadius: cornerRadius(size), style: theme.cornerStyle)
                 .strokeBorder(theme.colors.chipBorder, lineWidth: 1)
         )
+    }
+
+    private var scale: CGFloat {
+        (size ?? theme.metrics.avatarSize) / theme.metrics.avatarSize
+    }
+
+    private func cornerRadius(_ size: CGFloat) -> CGFloat {
+        theme.cornerRadius(theme.metrics.avatarCornerRadius * size / theme.metrics.avatarSize)
     }
 }
 

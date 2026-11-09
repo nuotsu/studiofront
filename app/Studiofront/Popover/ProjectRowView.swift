@@ -2,75 +2,46 @@ import SwiftUI
 import ThemeKit
 import StudioStore
 
+/// One project in the list.
+///
+/// This body holds no state and reads nothing from the store, so it only
+/// runs when the row is created or its project data changes. Hover,
+/// selection, copy feedback, favicons and the ⌘1–9 legend each live in a
+/// small child view (see `ProjectRowChrome.swift`).
 struct ProjectRowView: View {
     @Environment(\.studioTheme) private var theme
-    @Environment(\.colorScheme) private var colorScheme
-    @Environment(StudioStore.self) private var store
 
     var row: ProjectRow
-    /// Selection id when it differs from the project id (the search "Studios"
-    /// group lists the same project under its own list item id).
+    /// Selection id when it differs from the project id (the Pinned copy and
+    /// the search "Studios" group list the same project under their own ids).
     var listItemID: String?
-    var isSelected: Bool
     var favoriteIndex: Int?
-    /// Shown where the row sits outside its organization's section (Favorites,
+    /// Shown where the row sits outside its organization's section (Pinned,
     /// search "Studios"), so the org id isn't otherwise visible.
     var showsOrganizationID = false
 
-    @State private var isHovered = false
-    @State private var isDocumentHovered = false
-    @State private var favicon: Image?
+    /// Two 18pt lines with 5pt between them (taller than the 38pt favicon),
+    /// plus the row's 8pt padding top and bottom. The list uses this instead
+    /// of measuring the row, so keep it in step with `identity` below.
+    static let height: CGFloat = 18 + 5 + 18 + 2 * 8
 
     var body: some View {
-        let metrics = theme.metrics
-        let isDark = colorScheme == .dark
-        // Short-circuits so only favorite rows observe the Command-hold flag.
-        let showsShortcutLegend = favoriteIndex != nil && store.showFavoriteShortcutLegends
-        RowContainer(isSelected: isSelected, isHovered: isHovered) {
-            HStack(alignment: .center, spacing: metrics.rowGap) {
+        let itemID = listItemID ?? row.id
+        SelectableRow(itemID: itemID) {
+            HStack(alignment: .center, spacing: theme.metrics.rowGap) {
                 ProjectRowFavoriteButton(projectID: row.id, isFavorite: row.curation.isFavorite)
-                Button {
-                    openStudio()
-                } label: {
-                    ProjectAvatar(name: row.displayTitle, brandHex: row.project.brandColorHex, favicon: favicon)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Open Studio, \(row.displayTitle)")
-                .overlay {
-                    if showsShortcutLegend, let favoriteIndex {
-                        KeycapLegend(
-                            [.symbol("command"), .text("\(favoriteIndex)")],
-                            compact: true,
-                            foreground: isDark ? theme.colors.sub : theme.colors.text
-                        )
-                            .background(
-                                RoundedRectangle(cornerRadius: theme.cornerRadius(4), style: theme.cornerStyle)
-                                    .fill(theme.colors.panelFill)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: theme.cornerRadius(4), style: theme.cornerStyle)
-                                            .fill(isDark ? Color.black.opacity(0.18) : Color.white.opacity(0.72))
-                                    )
-                            )
-                            .allowsHitTesting(false)
-                            .transition(.opacity)
+                StudioFaviconButton(row: row) {
+                    if let favoriteIndex {
+                        FavoriteShortcutLegend(index: favoriteIndex)
                     }
                 }
-                .animation(.easeInOut(duration: 0.12), value: showsShortcutLegend)
-                .projectFavicon(for: row, into: $favicon)
-                identity
-                Spacer(minLength: 8)
-                ProjectRowTrailingActions(row: row)
+                identity(itemID: itemID)
             }
         }
-        .contentShape(Rectangle())
         .opacity(row.isUnavailable || row.project.isArchived ? 0.45 : 1)
-        .onHover { isHovered = $0 }
-        .onTapGesture { store.select(listItemID ?? row.id) }
+        .contextMenu { ProjectContextMenu(row: row, listItemID: itemID) }
         .accessibilityElement(children: .contain)
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityLabel(accessibilityStatusLabel)
-        .padding(.leading, metrics.listPadding.leading)
-        .padding(.trailing, metrics.listPadding.trailing)
     }
 
     private var accessibilityStatusLabel: String {
@@ -79,84 +50,45 @@ struct ProjectRowView: View {
         return row.displayTitle
     }
 
-    private var identity: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            projectLine(emphasized: true)
-            if let document = row.activity.lastEditedDocument {
-                documentLine(document: document, emphasized: false)
+    /// Two lines: name, plan badge, and Site icon, then the ids and Manage at
+    /// the right edge; then the recent document pills with live editors at
+    /// the right.
+    private func identity(itemID: String) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 8) {
+                nameLine(itemID: itemID)
             }
+            HStack(spacing: 6) {
+                let documents = row.activity.displayDocuments
+                if documents.isEmpty {
+                    Text("No recent edits")
+                        .font(theme.typography.meta)
+                        .foregroundStyle(theme.colors.faint)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    RecentDocumentPills(documents: documents)
+                }
+                ProjectPresenceStack(projectID: row.id)
+            }
+            .frame(height: 18)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// The project name line in the primary (name-slot) position.
-    private func projectLine(emphasized: Bool) -> some View {
-        HStack(spacing: 6) {
-            Button {
-                openStudio()
-            } label: {
-                Text(row.displayTitle)
-                    .font(emphasized ? theme.typography.projectName : theme.typography.meta)
-                    .foregroundStyle(emphasized ? theme.colors.text : theme.colors.sub)
-                    .lineLimit(1)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Open Studio, \(row.displayTitle)")
-            // Reads "<projectId> in <orgId>"; each id copies on its own.
-            HStack(spacing: 4) {
-                CopyChip(
-                    text: row.project.id,
-                    copied: store.copiedProjectID == row.project.id,
-                    accessibilityName: "Copy project ID \(row.project.id)"
-                ) {
-                    store.copyProjectID(row.project.id)
-                }
-                if showsOrganizationID, let organizationID = row.project.organizationId {
-                    Text("in")
-                        .font(theme.typography.chip)
-                        .foregroundStyle(theme.colors.faint.opacity(0.6))
-                        .accessibilityHidden(true)
-                    CopyChip(
-                        text: organizationID,
-                        copied: store.copiedOrganizationID == organizationID,
-                        accessibilityName: "Copy organization ID \(organizationID)"
-                    ) {
-                        store.copyOrganizationID(organizationID)
-                    }
-                }
-            }
+    @ViewBuilder
+    private func nameLine(itemID: String) -> some View {
+        ProjectNameLink(row: row)
+        if let plan = row.project.plan {
+            PlanBadge(plan: plan)
         }
-    }
-
-    /// The last-edited document caption beneath the project name.
-    private func documentLine(document: EditedDocument, emphasized: Bool) -> some View {
-        Button {
-            if let url = document.deepLinkURL {
-                AppDelegate.shared?.openURL(url)
-            }
-        } label: {
-            HStack(spacing: 5) {
-                Text(document.title)
-                    .font(emphasized ? theme.typography.projectName : theme.typography.meta)
-                    .foregroundStyle(emphasized ? theme.colors.text : (isDocumentHovered ? theme.colors.text : theme.colors.sub))
-                    .lineLimit(1)
-                HStack(spacing: 3) {
-                    Image(systemName: "pencil")
-                        .font(.system(size: 8, weight: .semibold))
-                    Text(RelativeTimestamp.string(from: document.editedAt))
-                }
-                .font(theme.typography.timestamp)
-                .foregroundStyle(isDocumentHovered ? theme.colors.sub : theme.colors.faint)
-                .fixedSize()
-            }
-        }
-        .buttonStyle(.plain)
-        .disabled(document.deepLinkURL == nil)
-        .onHover { isDocumentHovered = $0 }
-        .accessibilityLabel("Open document, \(document.title), edited \(RelativeTimestamp.string(from: document.editedAt))")
-    }
-
-    private func openStudio() {
-        AppDelegate.shared?.openStudio(for: row)
+        ProjectLinkButtons(row: row, showsManage: false)
+        Spacer(minLength: 0)
+        ProjectIDChips(
+            projectID: row.project.id,
+            organizationID: showsOrganizationID ? row.project.organizationId : nil,
+            itemID: itemID
+        )
+        ProjectLinkButtons(row: row, showsSite: false)
+            .padding(.trailing, -3)
     }
 }

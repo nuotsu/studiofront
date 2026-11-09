@@ -144,8 +144,8 @@ enum SettingsSearchIndex {
             systemImage: "key"
         ),
         SettingsSearchItem(
-            title: "Keybindings",
-            keywords: ["keybindings", "shortcuts", "keyboard", "hotkeys"],
+            title: "Keyboard Shortcuts",
+            keywords: ["keyboard shortcuts", "keybindings", "shortcuts", "keyboard", "hotkeys"],
             pane: .keybindings,
             target: .keybindingsOverview,
             systemImage: "keyboard"
@@ -165,8 +165,8 @@ enum SettingsSearchIndex {
             systemImage: "keyboard"
         ),
         SettingsSearchItem(
-            title: "Toggle favorite shortcut",
-            keywords: ["toggle favorite", "star", "favorite", "rebind", "record"],
+            title: "Pin or unpin shortcut",
+            keywords: ["pin", "unpin", "pinned", "toggle favorite", "star", "favorite", "rebind", "record"],
             pane: .keybindings,
             target: .favoriteToggleShortcut,
             systemImage: "keyboard"

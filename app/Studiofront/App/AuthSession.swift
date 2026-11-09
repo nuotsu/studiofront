@@ -16,7 +16,7 @@ enum SettingsPane: String, CaseIterable, Identifiable, Hashable {
         case .general: "General"
         case .appearance: "Appearance"
         case .account: "Account"
-        case .keybindings: "Keybindings"
+        case .keybindings: "Keyboard Shortcuts"
         case .about: "About"
         }
     }

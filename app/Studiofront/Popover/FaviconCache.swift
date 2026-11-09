@@ -8,7 +8,9 @@ actor FaviconCache {
     // NSCache is thread-safe; shared between the actor and synchronous row peek.
     nonisolated(unsafe) private static let imageCache: NSCache<NSString, NSImage> = {
         let cache = NSCache<NSString, NSImage>()
-        cache.countLimit = 100
+        // Entries are small pre-rendered thumbnails (see `thumbnail(from:)`),
+        // so a large account's favicons all stay in memory.
+        cache.countLimit = 600
         return cache
     }()
 
@@ -76,11 +78,51 @@ actor FaviconCache {
                 return .missing
             }
             let image = await Task.detached(priority: .utility) {
-                NSImage(data: data)
+                Self.thumbnail(from: data)
             }.value
             return image.map(FetchResult.image) ?? .missing
         } catch {
             return .failed
         }
+    }
+
+    /// Largest size a favicon is drawn at: 38pt rows on a 2x display.
+    private static let thumbnailPixels = 96
+
+    /// Decodes the favicon and redraws it into a small bitmap, off the main
+    /// thread. `NSImage(data:)` on its own decodes lazily, so the first draw
+    /// (on the main thread, mid-scroll) paid for the decode, and sites that
+    /// serve a 512px icon had it rescaled on every draw.
+    private static func thumbnail(from data: Data) -> NSImage? {
+        guard let source = NSImage(data: data), source.isValid else { return nil }
+        let pixelSize = source.representations.reduce(0) { max($0, $1.pixelsWide, $1.pixelsHigh) }
+        let side = max(16, min(thumbnailPixels, pixelSize > 0 ? pixelSize : thumbnailPixels))
+        guard let bitmap = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: side,
+            pixelsHigh: side,
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: 0,
+            bitsPerPixel: 0
+        ), let context = NSGraphicsContext(bitmapImageRep: bitmap) else {
+            return source
+        }
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = context
+        context.imageInterpolation = .high
+        source.draw(
+            in: NSRect(x: 0, y: 0, width: side, height: side),
+            from: .zero,
+            operation: .copy,
+            fraction: 1
+        )
+        NSGraphicsContext.restoreGraphicsState()
+        let image = NSImage(size: NSSize(width: side, height: side))
+        image.addRepresentation(bitmap)
+        return image
     }
 }

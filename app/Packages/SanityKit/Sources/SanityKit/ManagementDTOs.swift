@@ -34,6 +34,20 @@ public struct RemoteDataset: Sendable, Hashable {
     public var aclMode: String
 }
 
+public struct RemoteProjectPlan: Sendable, Equatable {
+    public var name: String
+    public var typeID: String
+}
+
+struct SubscriptionDTO: Decodable, Sendable {
+    var plan: PlanDTO?
+
+    struct PlanDTO: Decodable, Sendable {
+        var name: String?
+        var planTypeId: String?
+    }
+}
+
 public struct RemoteOrganization: Sendable, Identifiable, Equatable {
     public var id: String
     public var name: String

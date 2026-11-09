@@ -2,88 +2,82 @@ import SwiftUI
 import ThemeKit
 import StudioStore
 
+/// A matching document in search results, listed under its project.
 struct DocumentRowView: View {
     @Environment(\.studioTheme) private var theme
-    @Environment(StudioStore.self) private var store
 
     var row: ProjectRow
     var document: EditedDocument
     var listItemID: String
-    var isSelected: Bool
 
+    /// Drives the timestamp tint and the trailing links; the row background
+    /// tracks hover on its own.
     @State private var isHovered = false
-    @State private var favicon: Image?
+
+    /// The 33pt badge avatar plus the row's 8pt padding top and bottom. The
+    /// list uses this instead of measuring the row.
+    static let height: CGFloat = 33 + 2 * 8
 
     var body: some View {
-        let metrics = theme.metrics
-        RowContainer(isSelected: isSelected, isHovered: isHovered) {
-            HStack(alignment: .center, spacing: metrics.rowGap) {
+        SelectableRow(itemID: listItemID) {
+            HStack(alignment: .center, spacing: theme.metrics.rowGap) {
                 ProjectRowFavoriteButton(projectID: row.id, isFavorite: row.curation.isFavorite)
-                Button {
-                    openDocument()
-                } label: {
+                FaviconSource(host: ProjectRowChrome.faviconHost(for: row)) { favicon in
                     DocumentProjectAvatar(
                         name: row.displayTitle,
                         brandHex: row.project.brandColorHex,
                         favicon: favicon
                     )
                 }
-                .buttonStyle(.plain)
-                .disabled(document.deepLinkURL == nil)
+                .contentShape(Rectangle())
+                .onTapGesture(perform: openDocument)
                 .accessibilityLabel("Open document, \(document.title)")
-                .projectFavicon(for: row, into: $favicon)
+                .accessibilityAddTraits(.isButton)
                 identity
                 Spacer(minLength: 8)
-                ProjectRowTrailingActions(row: row, showPresence: false)
+                DocumentRowLinks(row: row, itemID: listItemID, isHovered: isHovered)
             }
         }
-        .contentShape(Rectangle())
         .opacity(row.isUnavailable || row.project.isArchived ? 0.45 : 1)
         .onHover { isHovered = $0 }
-        .onTapGesture { store.select(listItemID) }
         .accessibilityElement(children: .contain)
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityLabel("\(document.typeName.isEmpty ? "" : "\(document.typeName), ")\(document.title), \(row.displayTitle)")
-        .padding(.leading, metrics.listPadding.leading)
-        .padding(.trailing, metrics.listPadding.trailing)
     }
 
     private var identity: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Button {
-                openDocument()
-            } label: {
-                HStack(spacing: 5) {
-                    if !document.typeName.isEmpty {
-                        DocumentTypeChip(document.typeName)
-                    }
-                    Text(document.title)
-                        .font(theme.typography.projectName)
-                        .foregroundStyle(theme.colors.text)
-                        .lineLimit(1)
-                    HStack(spacing: 3) {
-                        Image(systemName: "pencil")
-                            .font(.system(size: 8, weight: .semibold))
-                        Text(RelativeTimestamp.string(from: document.editedAt))
-                    }
-                    .font(theme.typography.timestamp)
-                    .foregroundStyle(isHovered ? theme.colors.sub : theme.colors.faint)
-                    .fixedSize()
+            HStack(spacing: 5) {
+                DocumentStatusDot(isDraft: document.isDraft)
+                Text(document.displayTitle)
+                    .font(theme.typography.projectName)
+                    .foregroundStyle(theme.colors.text)
+                    .lineLimit(1)
+                if !document.typeName.isEmpty {
+                    DocumentTypeChip(document.typeName)
                 }
             }
-            .buttonStyle(.plain)
-            .disabled(document.deepLinkURL == nil)
+            .contentShape(Rectangle())
+            .onTapGesture(perform: openDocument)
+            .accessibilityAddTraits(.isButton)
 
-            Button {
-                openStudio()
-            } label: {
+            HStack(spacing: 6) {
                 Text(row.displayTitle)
                     .font(theme.typography.meta)
                     .foregroundStyle(theme.colors.sub)
                     .lineLimit(1)
+                    .contentShape(Rectangle())
+                    .onTapGesture { AppDelegate.shared?.openStudio(for: row) }
+                    .accessibilityLabel("Open Studio, \(row.displayTitle)")
+                    .accessibilityAddTraits(.isButton)
+                HStack(spacing: 3) {
+                    Image(systemName: "pencil")
+                        .font(.system(size: 8, weight: .semibold))
+                    Text(RelativeTimestamp.string(from: document.editedAt))
+                }
+                .font(theme.typography.timestamp)
+                .foregroundStyle(isHovered ? theme.colors.sub : theme.colors.faint)
+                .fixedSize()
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Open Studio, \(row.displayTitle)")
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -92,9 +86,5 @@ struct DocumentRowView: View {
         if let url = document.deepLinkURL {
             AppDelegate.shared?.openURL(url)
         }
-    }
-
-    private func openStudio() {
-        AppDelegate.shared?.openStudio(for: row)
     }
 }

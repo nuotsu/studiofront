@@ -8,7 +8,7 @@ struct KeybindingsSettingsView: View {
         @Bindable var settings = settings
         SettingsPaneChrome(
             title: SettingsPane.keybindings.title,
-            description: "Click to configure custom binding"
+            description: "Click a shortcut to record a new one. Press ? in Studiofront to open this page."
         ) {
             Form {
                 Section("Global") {
@@ -43,7 +43,7 @@ struct KeybindingsSettingsView: View {
                     .settingsHighlight(.openStudioShortcut)
                     KeybindingRow(label: "Copy project ID", glyphs: [.symbol("command"), .text("C")])
                     ConfigurableKeybindingRow(
-                        label: "Toggle favorite",
+                        label: "Pin or unpin",
                         keyCode: $settings.favoriteToggleKeyCode,
                         modifierRawValue: $settings.favoriteToggleModifierRawValue,
                         characters: $settings.favoriteToggleCharacters,
@@ -73,7 +73,7 @@ struct KeybindingsSettingsView: View {
                     )
                     .settingsHighlight(.openDocumentShortcut)
                     KeybindingRow(label: "Refresh", glyphs: [.symbol("command"), .text("R")])
-                    KeybindingRow(label: "Jump to favorite", glyphs: [.symbol("command"), .text("1–9")])
+                    KeybindingRow(label: "Jump to pinned project", glyphs: [.symbol("command"), .text("1–9")])
                 }
 
                 Section("Search") {
@@ -82,6 +82,9 @@ struct KeybindingsSettingsView: View {
 
                 Section("Window") {
                     KeybindingRow(label: "Open Settings", glyphs: [.symbol("command"), .text(",")])
+                    // Plain ? only works while the search field is empty;
+                    // ⌘? works any time.
+                    KeybindingRow(label: "Show keyboard shortcuts", glyphs: [.text("?")])
                 }
             }
             .formStyle(.grouped)

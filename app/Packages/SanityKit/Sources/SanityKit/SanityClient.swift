@@ -112,6 +112,19 @@ public final class SanityClient: Sendable {
         return result
     }
 
+    /// The project's current plan, from the subscriptions API Sanity Manage
+    /// uses (confirmed against the live API: `plan.name` reads "Free",
+    /// "Growth", "Growth Trial", "Free (Legacy)", "Enterprise (…)", and
+    /// `plan.planTypeId` "free", "growth", …). Nil when there's no plan.
+    public func projectPlan(token: String, projectId: String) async throws -> RemoteProjectPlan? {
+        let dto: SubscriptionDTO = try await get(
+            path: "v1/subscriptions/project/\(projectId)",
+            token: token
+        )
+        guard let name = dto.plan?.name, !name.isEmpty else { return nil }
+        return RemoteProjectPlan(name: name, typeID: dto.plan?.planTypeId ?? "")
+    }
+
     public func listOrganizations(token: String) async throws -> [RemoteOrganization] {
         let dtos: [OrganizationDTO] = try await get(
             path: "\(SanityAPI.version)/organizations",

@@ -30,20 +30,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppDelegate.shared = self
 
+        #if BENCHMARK
+        if PerformanceBenchmark.isRequested {
+            PerformanceBenchmark.run(delegate: self)
+            return
+        }
+        #endif
+
         applyActivationPolicy()
         NSApp.activate(ignoringOtherApps: true)
         clearStaleStatusItemVisibility()
         ensureStatusItem()
 
         let pop = NSPopover()
+        // Let the theme background cover the native beak as well as the body.
+        // AppKit supplies safe-area insets and clips to the popover outline.
+        pop.hasFullSizeContent = true
         pop.behavior = .transient
         pop.animates = settings.animatePopover
-        pop.contentSize = NSSize(width: 516, height: 640)
+        // Not `settings.resolvedTheme`: that caches the theme, and theme colors
+        // resolve light/dark when built. Reading it here, before
+        // `applyAppearance` runs below, locked the popover into light mode.
+        let metrics = settings.themePreference.theme.metrics
+        let contentSize = NSSize(width: metrics.popoverWidth, height: metrics.popoverContentHeight)
         pop.delegate = self
         let hosting = NSHostingController(rootView: popoverRoot)
+        // The popover owns its size. A full-size host includes AppKit's beak
+        // insets; avoid automatic resizing after arrow positioning.
+        hosting.sizingOptions = []
+        hosting.view.setFrameSize(contentSize)
         hosting.view.wantsLayer = true
         hosting.view.layer?.backgroundColor = NSColor.clear.cgColor
         pop.contentViewController = hosting
+        // Assigning a content controller resets contentSize to its view size.
+        // Set the final size afterwards, before AppKit positions the popover.
+        pop.contentSize = contentSize
         popover = pop
 
         applyAppearance(settings.appearancePreference)
@@ -54,6 +75,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         store.onRefreshRequested = { [weak self] in
             guard let self else { return }
             self.sync.refresh(force: true)
+        }
+        store.hiddenOrganizationIDs = Set(settings.hiddenOrganizationIDs)
+        store.onHiddenOrganizationsChanged = { [weak self] in
+            guard let self else { return }
+            self.settings.hiddenOrganizationIDs = self.store.hiddenOrganizationIDs.sorted()
+            self.presence.refreshEligibleProjects()
+        }
+        store.pinnedOrganizationOrder = settings.pinnedOrganizationOrder
+        store.onPinnedOrganizationOrderChanged = { [weak self] in
+            guard let self else { return }
+            self.settings.pinnedOrganizationOrder = self.store.pinnedOrganizationOrder
+        }
+        store.pinnedProjectOrder = settings.pinnedProjectOrder
+        store.onPinnedProjectOrderChanged = { [weak self] in
+            guard let self else { return }
+            self.settings.pinnedProjectOrder = self.store.pinnedProjectOrder
         }
         store.onRowsReplaced = { [weak self] in
             self?.presence.refreshEligibleProjects()
@@ -183,7 +220,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         menu.addItem(.separator())
         menu.addItem(withTitle: "Settings", action: #selector(openSettingsFromMenu(_:)), keyEquivalent: "")
         menu.addItem(withTitle: "Appearance", action: #selector(openAppearanceFromMenu(_:)), keyEquivalent: "")
-        menu.addItem(withTitle: "Keybindings", action: #selector(openKeybindingsFromMenu(_:)), keyEquivalent: "")
+        menu.addItem(withTitle: "Keyboard Shortcuts", action: #selector(openKeybindingsFromMenu(_:)), keyEquivalent: "")
         menu.addItem(withTitle: "Account", action: #selector(openAccountFromMenu(_:)), keyEquivalent: "")
         menu.addItem(.separator())
         menu.addItem(withTitle: "Check for Updates…", action: #selector(checkForUpdatesFromMenu(_:)), keyEquivalent: "")
@@ -237,6 +274,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         } else {
             store.prepareForOpen()
             applyAppearance(settings.appearancePreference)
+            let metrics = settings.resolvedTheme.metrics
+            popover.contentSize = NSSize(width: metrics.popoverWidth, height: metrics.popoverContentHeight)
+            popover.contentViewController?.view.layoutSubtreeIfNeeded()
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
             popover.contentViewController?.view.window?.makeKey()
             sync.refreshIfStale(interval: settings.refreshInterval)
@@ -517,15 +557,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         guard popover?.isShown == true else { return false }
         let flags = NSEvent.ModifierFlags(rawValue: modifierRaw).intersection(.deviceIndependentFlagsMask)
 
+        // The list follows the search field after a short pause. Anything
+        // that acts on the list applies pending text first.
         if matchesOpenStudioBinding(keyCode: keyCode, flags: flags) {
+            store.flushQueryInput()
             openSelectedStudio()
             return true
         }
         if matchesOpenDocumentBinding(keyCode: keyCode, flags: flags) {
+            store.flushQueryInput()
             openSelectedDocument()
             return true
         }
         if matchesFavoriteToggleBinding(keyCode: keyCode, flags: flags) {
+            store.flushQueryInput()
             store.toggleFavoriteOnSelection()
             return true
         }
@@ -533,11 +578,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
             store.cycleGroupBy()
             return true
         }
+        if matchesShowShortcuts(flags: flags, characters: characters) {
+            openSettingsWindow(pane: .keybindings)
+            return true
+        }
 
         if flags.contains(.command) {
             let character = characters.lowercased()
             switch character {
             case "c":
+                store.flushQueryInput()
                 store.copySelectedProjectID()
                 return true
             case "r":
@@ -552,7 +602,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
             case "1", "2", "3", "4", "5", "6", "7", "8", "9":
                 // Favorites jump is disabled while a search query is active —
                 // results aren't favorited-first and the legends are hidden.
-                guard store.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                guard store.queryInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                     return true
                 }
                 if let index = Int(character) {
@@ -566,9 +616,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
 
         switch keyCode {
         case 126:
+            store.flushQueryInput()
             store.selectPrevious()
             return true
         case 125:
+            store.flushQueryInput()
             store.selectNext()
             return true
         case 53:
@@ -601,6 +653,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         keyCode == UInt16(settings.groupByCycleKeyCode) && flags == settings.groupByCycleModifierFlags
     }
 
+    /// `?` opens Keyboard Shortcuts while the search field is empty (otherwise
+    /// it types into the query); `⌘?` opens it any time.
+    private func matchesShowShortcuts(flags: NSEvent.ModifierFlags, characters: String) -> Bool {
+        guard characters == "?" else { return false }
+        let relevant = flags.intersection([.command, .option, .control, .shift])
+        if relevant == [.command, .shift] { return true }
+        return relevant == [.shift] && store.queryInput.isEmpty
+    }
+
     /// Opens the selected list item's document — a dedicated document search
     /// row's match, or the project row's last-edited caption fallback.
     private func openSelectedDocument() {
@@ -609,7 +670,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         case let .document(_, document):
             guard let url = document.deepLinkURL else { return }
             openURL(url)
-        case let .project(row), let .studio(row):
+        case let .project(row), let .studio(row), let .pinned(row):
             guard let url = row.activity.lastEditedDocument?.deepLinkURL else { return }
             openURL(url)
         }

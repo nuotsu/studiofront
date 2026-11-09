@@ -38,8 +38,9 @@ private enum ReservedShortcut {
             case "r": return "Already used by ⌘R — Refresh"
             case ",": return "Already used by ⌘, — Open Settings"
             case "k": return "Already used by ⌘K — Focus search"
+            case "?": return "Already used by ⌘? for Show keyboard shortcuts"
             case "1", "2", "3", "4", "5", "6", "7", "8", "9":
-                return "Already used by ⌘\(characters) — Jump to favorite"
+                return "Already used by ⌘\(characters) — Jump to pinned project"
             default: return nil
             }
         }

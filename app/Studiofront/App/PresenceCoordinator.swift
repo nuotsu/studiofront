@@ -157,7 +157,7 @@ final class PresenceCoordinator {
         }
 
         let preferExternal = settings.studioURLPreference == .external
-        guard let row = store.rows.first(where: { $0.id == id }),
+        guard let row = store.row(withID: id),
               let studioURL = row.resolvedStudioURL(preferExternal: preferExternal) else { return members }
         return members.map { member in
             var member = member
@@ -173,13 +173,13 @@ final class PresenceCoordinator {
     }
 
     private func primaryDataset(for projectId: String) async -> String? {
-        guard let row = store.rows.first(where: { $0.id == projectId }) else { return nil }
+        guard let row = store.row(withID: projectId) else { return nil }
         return ProjectSyncService.primaryDataset(from: row.project.datasets)
     }
 
     private func roster(for projectId: String) async -> [Member] {
         if let cached = rosterCache[projectId] { return cached }
-        let roster = store.rows.first(where: { $0.id == projectId })?.project.members ?? []
+        let roster = store.row(withID: projectId)?.project.members ?? []
         rosterCache[projectId] = roster
         return roster
     }

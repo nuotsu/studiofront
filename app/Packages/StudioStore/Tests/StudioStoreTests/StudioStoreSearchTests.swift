@@ -53,6 +53,27 @@ struct StudioStoreSearchTests {
         #expect(store.selectedID == "p1")
     }
 
+    @Test("typed text reaches the list on flush, and clearing applies at once")
+    func queryInputAppliesOnFlush() {
+        let store = makeSearchStore(recentTitles: ["Home"], projectName: "Acme")
+        store.queryInput = "zzz"
+        // Still showing the browse list until the pause elapses or a flush.
+        #expect(store.query == "")
+        #expect(store.groups.flatMap(\.items).count == 1)
+
+        store.flushQueryInput()
+        #expect(store.query == "zzz")
+        #expect(store.groups.isEmpty)
+
+        store.queryInput = ""
+        #expect(store.query == "")
+        #expect(store.groups.flatMap(\.items).count == 1)
+
+        // Setting the applied query directly keeps the field in step.
+        store.query = "acme"
+        #expect(store.queryInput == "acme")
+    }
+
     @Test("project acronyms match through precomputed initials")
     func acronymMatchesProject() {
         let store = makeSearchStore(recentTitles: [], projectName: "Elevate Experiences")

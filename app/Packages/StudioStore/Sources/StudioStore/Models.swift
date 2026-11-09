@@ -23,6 +23,24 @@ public struct StudioApp: Sendable, Codable, Hashable, Identifiable {
     }
 }
 
+/// A project's Sanity plan, e.g. name "Growth Trial", typeID "growth".
+public struct ProjectPlan: Sendable, Hashable, Codable {
+    public var name: String
+    public var typeID: String
+
+    public init(name: String, typeID: String) {
+        self.name = name
+        self.typeID = typeID
+    }
+
+    /// Badge text: "Enterprise (Community MVP)" reads "Enterprise".
+    public var shortName: String {
+        guard let open = name.firstIndex(of: "(") else { return name }
+        let trimmed = name[..<open].trimmingCharacters(in: .whitespaces)
+        return trimmed.isEmpty ? name : trimmed
+    }
+}
+
 public struct SanityProject: Sendable, Identifiable, Hashable, Codable {
     public let id: String
     public var displayName: String
@@ -43,6 +61,8 @@ public struct SanityProject: Sendable, Identifiable, Hashable, Codable {
     /// (falling back to the deprecated single-value fields when that endpoint
     /// has nothing) — the full list backing the Studio button's dropdown.
     public var studioApps: [StudioApp]
+    /// From the subscriptions API; nil until fetched or when unavailable.
+    public var plan: ProjectPlan?
 
     public init(
         id: String,
@@ -55,7 +75,8 @@ public struct SanityProject: Sendable, Identifiable, Hashable, Codable {
         members: [Member] = [],
         brandColorHex: String? = nil,
         isArchived: Bool = false,
-        studioApps: [StudioApp] = []
+        studioApps: [StudioApp] = [],
+        plan: ProjectPlan? = nil
     ) {
         self.id = id
         self.displayName = displayName
@@ -68,6 +89,7 @@ public struct SanityProject: Sendable, Identifiable, Hashable, Codable {
         self.isArchived = isArchived
         self.brandColorHex = brandColorHex
         self.studioApps = studioApps
+        self.plan = plan
     }
 
     /// Decoded manually so cached JSON written before `studioApps` existed
@@ -86,6 +108,7 @@ public struct SanityProject: Sendable, Identifiable, Hashable, Codable {
         brandColorHex = try container.decodeIfPresent(String.self, forKey: .brandColorHex)
         isArchived = try container.decode(Bool.self, forKey: .isArchived)
         studioApps = try container.decodeIfPresent([StudioApp].self, forKey: .studioApps) ?? []
+        plan = try container.decodeIfPresent(ProjectPlan.self, forKey: .plan)
     }
 
     /// Where the "Studio" button — and any deep link into a specific document —
@@ -217,6 +240,21 @@ public struct EditedDocument: Sendable, Hashable, Codable {
         self.deepLinkURL = deepLinkURL
     }
 
+    private static let draftTitlePrefix = "Draft: "
+
+    /// The newest version is an unpublished draft. Sync marks drafts with a
+    /// "Draft: " title prefix (and keeps the `drafts.` id), so cached data
+    /// already carries this.
+    public var isDraft: Bool {
+        id.hasPrefix("drafts.") || title.hasPrefix(Self.draftTitlePrefix)
+    }
+
+    /// Title without the "Draft: " prefix, for UI that shows draft state
+    /// with an icon instead.
+    public var displayTitle: String {
+        title.hasPrefix(Self.draftTitlePrefix) ? String(title.dropFirst(Self.draftTitlePrefix.count)) : title
+    }
+
     /// Stable row identity even for cached JSON written before `id` existed.
     public var listItemID: String {
         if !id.isEmpty { return id }
@@ -237,13 +275,27 @@ public struct EditedDocument: Sendable, Hashable, Codable {
 /// presence slices. Older caches that still carry `activeUsers` or
 /// `lastDeployedAt` keys decode fine; unknown keys are ignored.
 public struct ProjectActivity: Sendable, Hashable, Codable {
-    public var lastEditedDocument: EditedDocument?
+    public var lastEditedDocument: EditedDocument? {
+        didSet { displayDocuments = Self.makeDisplayDocuments(lastEditedDocument, recentDocuments) }
+    }
     /// Newest-first, deduped draft/published documents, for title search
     /// coverage beyond the single most-recently-edited one. Equals
     /// `[lastEditedDocument]` (or `[]`) once both are populated from the
     /// same fetch — `lastEditedDocument` still drives the row's activity
     /// line UI.
-    public var recentDocuments: [EditedDocument]
+    public var recentDocuments: [EditedDocument] {
+        didSet { displayDocuments = Self.makeDisplayDocuments(lastEditedDocument, recentDocuments) }
+    }
+    /// Recent documents for the row's pills: newest first, deduped, with
+    /// plugin / infra types left out. Derived once when the activity is
+    /// built rather than on every row redraw (hover alone redraws a row).
+    public private(set) var displayDocuments: [EditedDocument]
+
+    /// `displayDocuments` is derived, so it stays out of the cache file.
+    private enum CodingKeys: String, CodingKey {
+        case lastEditedDocument
+        case recentDocuments
+    }
 
     public init(
         lastEditedDocument: EditedDocument? = nil,
@@ -251,6 +303,24 @@ public struct ProjectActivity: Sendable, Hashable, Codable {
     ) {
         self.lastEditedDocument = lastEditedDocument
         self.recentDocuments = recentDocuments
+        self.displayDocuments = Self.makeDisplayDocuments(lastEditedDocument, recentDocuments)
+    }
+
+    private static func makeDisplayDocuments(
+        _ lastEditedDocument: EditedDocument?,
+        _ recentDocuments: [EditedDocument]
+    ) -> [EditedDocument] {
+        var seen = Set<String>()
+        var result: [EditedDocument] = []
+        result.reserveCapacity(recentDocuments.count + 1)
+        func add(_ document: EditedDocument) {
+            guard !StudioStore.excludedSearchTypeNames.contains(document.typeName),
+                  seen.insert(document.listItemID).inserted else { return }
+            result.append(document)
+        }
+        if let lastEditedDocument { add(lastEditedDocument) }
+        recentDocuments.forEach(add)
+        return result.sorted { $0.editedAt > $1.editedAt }
     }
 
     /// Decoded manually so cached JSON written before `recentDocuments`
@@ -259,8 +329,22 @@ public struct ProjectActivity: Sendable, Hashable, Codable {
     /// `SanityProject.studioApps`.
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        lastEditedDocument = try container.decodeIfPresent(EditedDocument.self, forKey: .lastEditedDocument)
-        recentDocuments = try container.decodeIfPresent([EditedDocument].self, forKey: .recentDocuments) ?? []
+        let lastEdited = try container.decodeIfPresent(EditedDocument.self, forKey: .lastEditedDocument)
+        let recent = try container.decodeIfPresent([EditedDocument].self, forKey: .recentDocuments) ?? []
+        lastEditedDocument = lastEdited
+        recentDocuments = recent
+        displayDocuments = Self.makeDisplayDocuments(lastEdited, recent)
+    }
+
+    // Equality and hashing only look at the two inputs; `displayDocuments`
+    // follows from them.
+    public static func == (lhs: ProjectActivity, rhs: ProjectActivity) -> Bool {
+        lhs.lastEditedDocument == rhs.lastEditedDocument && lhs.recentDocuments == rhs.recentDocuments
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(lastEditedDocument)
+        hasher.combine(recentDocuments)
     }
 }
 
@@ -379,6 +463,9 @@ public enum PopoverListItem: Identifiable, Sendable, Hashable {
     /// pinned "Studios" group. Separate from `.project` so the same project
     /// can also appear below as the parent of its matching documents.
     case studio(ProjectRow)
+    /// A pinned project's copy in the Pinned group. The project also stays in
+    /// its org section as a `.project`, so this needs its own id.
+    case pinned(ProjectRow)
     case document(project: ProjectRow, document: EditedDocument)
 
     public var id: String {
@@ -387,6 +474,8 @@ public enum PopoverListItem: Identifiable, Sendable, Hashable {
             row.id
         case let .studio(row):
             "studio:\(row.id)"
+        case let .pinned(row):
+            "pinned:\(row.id)"
         case let .document(project, document):
             "doc:\(project.id):\(document.listItemID)"
         }
@@ -394,7 +483,7 @@ public enum PopoverListItem: Identifiable, Sendable, Hashable {
 
     public var projectRow: ProjectRow {
         switch self {
-        case let .project(row), let .studio(row):
+        case let .project(row), let .studio(row), let .pinned(row):
             row
         case let .document(project, _):
             project
@@ -403,7 +492,7 @@ public enum PopoverListItem: Identifiable, Sendable, Hashable {
 
     public var document: EditedDocument? {
         switch self {
-        case .project, .studio:
+        case .project, .studio, .pinned:
             nil
         case let .document(_, document):
             document
@@ -416,10 +505,14 @@ public struct ProjectGroup: Identifiable, Sendable, Hashable {
     public var title: String
     public var organizationId: String?
     public var items: [PopoverListItem]
+    /// Projects in this org the user hid, for the section's "hidden"
+    /// dropdown. Not part of keyboard navigation.
+    public var hiddenRows: [ProjectRow]
 
-    public init(id: String, title: String, organizationId: String? = nil, items: [PopoverListItem]) {
+    public init(id: String, title: String, organizationId: String? = nil, items: [PopoverListItem], hiddenRows: [ProjectRow] = []) {
         self.id = id
         self.title = title
+        self.hiddenRows = hiddenRows
         self.organizationId = organizationId
         self.items = items
     }

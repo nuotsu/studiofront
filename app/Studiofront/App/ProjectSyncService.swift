@@ -152,9 +152,12 @@ final class ProjectSyncService {
 
         do {
             try Task.checkCancellation()
+            // A cache from before plans existed skips the etag once, so the
+            // full path runs and plans load without waiting for ⌘R.
+            let cacheHasPlans = snapshot.projects.contains { $0.plan != nil }
             let projectsResult = try await client.listProjects(
                 token: token,
-                etag: force ? nil : snapshot.etags["projects"]
+                etag: force || !cacheHasPlans ? nil : snapshot.etags["projects"]
             )
 
             if projectsResult.notModified, !snapshot.projects.isEmpty, !force {
@@ -259,6 +262,23 @@ final class ProjectSyncService {
             }
             try Task.checkCancellation()
 
+            // Plans rarely change: refetch on a forced refresh, otherwise only
+            // for projects without a cached plan. A failed fetch keeps the
+            // cached value.
+            var plansByProject: [String: ProjectPlan] = [:]
+            for project in snapshot.projects {
+                if let plan = project.plan { plansByProject[project.id] = plan }
+            }
+            let planRequests = projectIDs.filter { force || plansByProject[$0] == nil }
+            await forEachConcurrently(planRequests, limit: limit) { id in
+                (id, try? await client.projectPlan(token: token, projectId: id))
+            } onResult: { id, plan in
+                if let plan {
+                    plansByProject[id] = ProjectPlan(name: plan.name, typeID: plan.typeID)
+                }
+            }
+            try Task.checkCancellation()
+
             var orgNames: [String: String]
             if let orgs = await fetchedOrganizations {
                 orgNames = Dictionary(uniqueKeysWithValues: orgs.map { ($0.id, $0.name) })
@@ -311,7 +331,8 @@ final class ProjectSyncService {
                     },
                     brandColorHex: project.color.flatMap(Self.normalizedHex),
                     isArchived: project.isArchived,
-                    studioApps: studioApps
+                    studioApps: studioApps,
+                    plan: plansByProject[project.id]
                 )
             }
             snapshot.cachedAt = Date()
