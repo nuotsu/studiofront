@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.0] - 2026-11-09
+
+- Major UI refresh with a redesigned widget, organization sidebar, refreshed project cards, and clearer navigation.
+- Pin, reorder, hide, and isolate organizations or date groups.
+- Open Studios from their favicons, see plan names, and browse recent documents with draft and published indicators.
+- Reorder pinned projects and hide or restore projects within organization cards.
+- Press ? with an empty search or ⌘? anytime to open Keyboard Shortcuts.
+- Reduce search, scrolling, and refresh work, with immediate typing feedback.
+- Updated website and content editor dependencies.
+
 ## [0.2.2] - 2026-11-03
 
 - Show matching Studio names first in a Studios group, with matching documents listed below.
