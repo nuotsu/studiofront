@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.1] - 2026-11-19
+
+- Add Sanity.io with orange accents, and refresh Sanity UI as Studio while preserving your saved selection.
+- Switch themes and light, dark, or system appearance directly from the sidebar, with matching previews in Settings.
+- Browse up to 20 recent documents from the dropdown, with document types and edit times.
+- Use readable slugs when document titles and names are missing or blank, and underline document links on hover.
+- Align sidebar and search headers and refine borders and search focus styling.
+
 ## [0.3.0] - 2026-11-09
 
 - Major UI refresh with a redesigned widget, organization sidebar, refreshed project cards, and clearer navigation.
