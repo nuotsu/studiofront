@@ -103,7 +103,7 @@ enum SettingsSearchIndex {
         ),
         SettingsSearchItem(
             title: "Theme",
-            keywords: ["theme", "liquid glass", "sanity ui"],
+            keywords: ["theme", "liquid glass", "studio", "sanity.io", "sanity ui"],
             pane: .appearance,
             target: .theme,
             systemImage: "paintpalette"

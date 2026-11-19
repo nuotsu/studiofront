@@ -19,6 +19,12 @@ public struct RowContainer<Content: View>: View {
     public var body: some View {
         let metrics = theme.metrics
         content
+            // Only themes with a highlighted title color pay for the
+            // environment change on hover; for the rest it stays false.
+            .environment(
+                \.rowIsHighlighted,
+                theme.colors.highlightedTitle != nil && (isSelected || isHovered)
+            )
             .padding(metrics.rowPadding)
             .background(
                 RoundedRectangle(cornerRadius: theme.cornerRadius(metrics.rowCornerRadius), style: theme.cornerStyle)
@@ -28,6 +34,12 @@ public struct RowContainer<Content: View>: View {
             .contentShape(Rectangle())
             .onHover { isHovered = $0 }
     }
+}
+
+extension EnvironmentValues {
+    /// True inside a hovered or keyboard-selected `RowContainer`, for themes
+    /// that recolor the row's title (`ColorTokens.highlightedTitle`).
+    @Entry public var rowIsHighlighted: Bool = false
 }
 
 public struct CopyChip: View {

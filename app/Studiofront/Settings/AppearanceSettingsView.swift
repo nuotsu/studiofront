@@ -26,7 +26,10 @@ struct AppearanceSettingsView: View {
                     HStack {
                         Text("Appearance")
                         Spacer()
-                        AppearancePicker(selection: $settings.appearancePreference)
+                        AppearancePicker(
+                            selection: $settings.appearancePreference,
+                            theme: settings.themePreference
+                        )
                     }
                     .settingsHighlight(.appearance)
                 }
@@ -161,7 +164,7 @@ private struct ThemeSwatch: View {
                     .fill(theme.colors.panelFill)
             }
 
-            RoundedRectangle(cornerRadius: preference == .sanityUI ? 2 : theme.cornerRadius(5), style: theme.cornerStyle)
+            RoundedRectangle(cornerRadius: theme.surface.kind == .flat ? 2 : theme.cornerRadius(5), style: theme.cornerStyle)
                 .fill(theme.colors.primaryBackground)
                 .frame(width: 18, height: 10)
 
@@ -180,8 +183,11 @@ private struct ThemeSwatch: View {
 
 private struct AppearancePicker: View {
     @Binding var selection: AppearancePreference
+    var theme: ThemePreference
 
     var body: some View {
+        let light = theme.theme(for: .light)
+        let dark = theme.theme(for: .dark)
         HStack(alignment: .top, spacing: 2) {
             ForEach(AppearancePreference.allCases) { preference in
                 SettingsOptionTile(
@@ -190,24 +196,22 @@ private struct AppearancePicker: View {
                     isSelected: selection == preference,
                     action: { selection = preference }
                 ) {
-                    AppearanceSwatch(preference: preference)
+                    AppearanceSwatch(preference: preference, light: light, dark: dark)
                 }
             }
         }
     }
 }
 
-/// Small window mockup (title strip + body) independent of the app's own
-/// theme, mirroring how macOS represents its own Appearance setting.
+/// Small window mockup (title strip + body) drawn in the selected theme's
+/// light and dark palettes, mirroring how macOS represents its own
+/// Appearance setting.
 private struct AppearanceSwatch: View {
     var preference: AppearancePreference
+    var light: any Theme
+    var dark: any Theme
 
-    private static let lightTop = Color(white: 0.82)
-    private static let lightBody = Color.white
-    private static let darkTop = Color(white: 0.32)
-    private static let darkBody = Color(white: 0.16)
-
-    /// Inset window size — leaves a wallpaper margin inside the selection ring.
+    /// Inset window size: leaves a wallpaper margin inside the selection ring.
     private static let windowWidth: CGFloat = 40
     private static let windowHeight: CGFloat = 20
 
@@ -230,12 +234,12 @@ private struct AppearanceSwatch: View {
             HStack(spacing: 0) {
                 switch preference {
                 case .system:
-                    window(top: Self.lightTop, body: Self.lightBody)
-                    window(top: Self.darkTop, body: Self.darkBody)
+                    window(light)
+                    window(dark)
                 case .light:
-                    window(top: Self.lightTop, body: Self.lightBody)
+                    window(light)
                 case .dark:
-                    window(top: Self.darkTop, body: Self.darkBody)
+                    window(dark)
                 }
             }
             .frame(width: Self.windowWidth, height: Self.windowHeight)
@@ -252,10 +256,20 @@ private struct AppearanceSwatch: View {
         .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
     }
 
-    private func window(top: Color, body: Color) -> some View {
+    /// Title strip in the sidebar fill over the panel body, with a small
+    /// primary-colored pill so each theme's accent shows.
+    private func window(_ theme: any Theme) -> some View {
         VStack(spacing: 0) {
-            top.frame(height: 5)
-            body
+            theme.colors.sidebarFill.frame(height: 5)
+            theme.colors.divider.frame(height: 0.5)
+            ZStack(alignment: .topLeading) {
+                theme.colors.panelFill
+                Capsule()
+                    .fill(theme.colors.primaryBackground)
+                    .frame(width: 8, height: 3)
+                    .padding(.top, 3)
+                    .padding(.leading, 3)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

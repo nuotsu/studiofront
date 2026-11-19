@@ -53,6 +53,12 @@ final class SidebarState {
     /// the one the user just jumped to.
     var activeGroupID: String?
     var jumpRequest: GroupJumpRequest?
+    /// The list column's header (search row, plus the auth banner when
+    /// shown), measured so the sidebar's top row and its bottom border line
+    /// up with it exactly.
+    var headerHeight: CGFloat?
+    /// The search field's height, which the Organizations / Date toggle matches.
+    var searchFieldHeight: CGFloat?
 
     func requestJump(to groupID: String, selecting itemID: String? = nil) {
         activeGroupID = groupID
@@ -79,10 +85,20 @@ struct OrganizationSidebar: View {
         let showsHiddenSection = store.groupBy == .organization && !store.hiddenOrganizationIDs.isEmpty
 
         VStack(alignment: .leading, spacing: 0) {
-            GroupBySegmentedControl(selection: $store.groupBy, cycleGlyphs: groupByCycleGlyphs)
-                .padding(.horizontal, 8)
-                .padding(.top, theme.metrics.headerPadding.top)
-                .padding(.bottom, 8)
+            // Sits on the search field's baseline row: same height as the
+            // field, same bottom inset, and the row as tall as the header, so
+            // the two bottom borders meet in one line.
+            GroupBySegmentedControl(
+                selection: $store.groupBy,
+                cycleGlyphs: groupByCycleGlyphs,
+                height: state.searchFieldHeight
+            )
+            .padding(.horizontal, 8)
+            .padding(.top, state.headerHeight == nil ? theme.metrics.headerPadding.top : 0)
+            .padding(.bottom, theme.metrics.headerPadding.bottom)
+            .frame(height: state.headerHeight, alignment: .bottom)
+
+            Divider().overlay(theme.colors.divider)
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 1) {
@@ -99,6 +115,7 @@ struct OrganizationSidebar: View {
                     }
                 }
                 .padding(.horizontal, 6)
+                .padding(.top, 6)
                 .padding(.bottom, 8)
             }
             .scrollIndicators(.never)
@@ -237,37 +254,42 @@ struct OrganizationSidebar: View {
     }
 }
 
-/// Project count and the refresh / search spinner. Its own view so the
-/// spinner turning on and off (several times per search) redraws only this
-/// line and not the whole sidebar.
+/// Project count and the refresh / search spinner on the left; theme and
+/// appearance toggles on the right. Its own view so the spinner turning on and
+/// off (several times per search) redraws only this line and not the whole
+/// sidebar.
 private struct SidebarFooter: View {
     @Environment(StudioStore.self) private var store
     @Environment(\.studioTheme) private var theme
 
     var body: some View {
         HStack(spacing: 5) {
-            if store.isRefreshing || store.isSearchingDocuments {
-                ProgressView()
-                    .controlSize(.mini)
-                    .tint(theme.colors.faint)
+            HStack(spacing: 5) {
+                if store.isRefreshing || store.isSearchingDocuments {
+                    ProgressView()
+                        .controlSize(.mini)
+                        .tint(theme.colors.faint)
+                }
+                Text(countLabel)
+                    .lineLimit(1)
             }
-            Text(countLabel)
-                .lineLimit(1)
-            Spacer(minLength: 0)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(
+                store.isRefreshing ? "Refreshing projects"
+                    : store.isSearchingDocuments ? "Searching documents"
+                    : countLabel
+            )
+            Spacer(minLength: 8)
+            SidebarAppearanceToggles()
         }
         .font(.system(size: 9.5))
         .foregroundStyle(theme.colors.faint)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.leading, 12)
+        .padding(.trailing, 7)
+        .padding(.vertical, 5)
         .overlay(alignment: .top) {
             Rectangle().fill(theme.colors.divider).frame(height: 1)
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(
-            store.isRefreshing ? "Refreshing projects"
-                : store.isSearchingDocuments ? "Searching documents"
-                : countLabel
-        )
     }
 
     private var countLabel: String {
@@ -295,11 +317,100 @@ private struct SidebarFooter: View {
     }
 }
 
+/// Click-to-cycle Theme and Appearance buttons in the sidebar footer.
+private struct SidebarAppearanceToggles: View {
+    @Environment(AppSettings.self) private var settings
+    @Environment(\.studioTheme) private var theme
+
+    var body: some View {
+        let themePreference = settings.themePreference
+        let appearance = settings.appearancePreference
+        HStack(spacing: 0) {
+            SidebarFooterButton(
+                help: "Theme: \(themePreference.title)",
+                accessibilityLabel: "Theme, \(themePreference.title). Click to change."
+            ) {
+                settings.themePreference = themePreference.next
+            } label: {
+                RoundedRectangle(cornerRadius: theme.cornerRadius(3.5), style: theme.cornerStyle)
+                    .strokeBorder(theme.colors.chipBorder, lineWidth: 1)
+                    .frame(width: 15, height: 15)
+                    .overlay(
+                        Circle()
+                            .fill(theme.colors.primaryBackground)
+                            .frame(width: 5.5, height: 5.5)
+                    )
+            }
+
+            SidebarFooterButton(
+                help: "Appearance: \(appearance.title)",
+                accessibilityLabel: "Appearance, \(appearance.title). Click to change."
+            ) {
+                settings.appearancePreference = appearance.next
+            } label: {
+                // Same quiet tone as the theme button's ring.
+                Image(appearance.sanityIconName)
+                    .renderingMode(.template)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 19, height: 19)
+                    .foregroundStyle(theme.colors.chipBorder)
+            }
+        }
+    }
+}
+
+/// A plain 22pt footer button (no hover fill or tint).
+private struct SidebarFooterButton<Label: View>: View {
+    var help: String
+    var accessibilityLabel: String
+    var action: () -> Void
+    @ViewBuilder var label: () -> Label
+
+    var body: some View {
+        Button(action: action) {
+            label()
+                .frame(width: 22, height: 22)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(help)
+        .accessibilityLabel(accessibilityLabel)
+    }
+}
+
+private extension CaseIterable where Self: Equatable, AllCases.Index == Int {
+    /// The following case, wrapping to the first.
+    var next: Self {
+        let cases = Self.allCases
+        let index = cases.firstIndex(of: self) ?? 0
+        return cases[(index + 1) % cases.count]
+    }
+}
+
+private extension AppearancePreference {
+    /// `@sanity/icons` glyph, as in Studio's own appearance menu.
+    var sanityIconName: String {
+        switch self {
+        case .system: "SanityIconDesktop"
+        case .light: "SanityIconSun"
+        case .dark: "SanityIconMoon"
+        }
+    }
+}
+
 /// Organizations / Date toggle at the top of the sidebar.
 private struct GroupBySegmentedControl: View {
     @Environment(\.studioTheme) private var theme
     @Binding var selection: GroupBy
     var cycleGlyphs: [KeyGlyph]
+    /// Overall control height; nil keeps the compact 24pt default.
+    var height: CGFloat?
+
+    /// Segment height inside the 2pt inset.
+    private var segmentHeight: CGFloat {
+        max(20, (height ?? 24) - 4)
+    }
 
     var body: some View {
         HStack(spacing: 2) {
@@ -346,7 +457,7 @@ private struct GroupBySegmentedControl: View {
                 .font(.system(size: 10.5, weight: isOn ? .semibold : .regular))
                 .foregroundStyle(isOn ? theme.colors.text : theme.colors.sub)
                 .frame(maxWidth: .infinity)
-                .frame(height: 20)
+                .frame(height: segmentHeight)
                 .background(
                     RoundedRectangle(cornerRadius: theme.cornerRadius(5), style: theme.cornerStyle)
                         .fill(isOn ? theme.colors.selection : .clear)
@@ -416,7 +527,7 @@ private struct SidebarGroupRowContent: View, Equatable {
             VStack(alignment: .leading, spacing: 1) {
                 Text(entry.title)
                     .font(theme.typography.projectName)
-                    .foregroundStyle(isActive ? theme.colors.text : (isEmpty ? theme.colors.faint : theme.colors.sub))
+                    .foregroundStyle(titleColor(isEmpty: isEmpty))
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
                 if let organizationID {
@@ -483,6 +594,13 @@ private struct SidebarGroupRowContent: View, Equatable {
         .accessibilityAddTraits(.isButton)
         .accessibilityAddTraits(isActive ? .isSelected : [])
         .accessibilityAction { select() }
+    }
+
+    private func titleColor(isEmpty: Bool) -> Color {
+        if let highlighted = theme.colors.highlightedTitle, isActive || isHovered {
+            return highlighted
+        }
+        return isActive ? theme.colors.text : (isEmpty ? theme.colors.faint : theme.colors.sub)
     }
 
     private func select() {

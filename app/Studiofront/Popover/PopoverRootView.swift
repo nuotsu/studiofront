@@ -23,9 +23,16 @@ struct PopoverRootView: View {
 
         HStack(spacing: 0) {
             OrganizationSidebar(state: sidebar)
-            Divider().overlay(theme.colors.divider)
+            // Flat themes: a plain 1pt line in the divider color, so it matches
+            // the chip borders. `Divider().overlay` would stack the system
+            // separator under Studio's translucent divider and read darker.
+            if theme.surface.kind == .flat {
+                Rectangle().fill(theme.colors.divider).frame(width: 1)
+            } else {
+                Divider().overlay(theme.colors.divider)
+            }
             VStack(spacing: 0) {
-                PopoverHeader()
+                PopoverHeader(sidebar: sidebar)
                 Divider().overlay(theme.colors.divider)
                 ProjectList(sidebar: sidebar)
                     // A new scope needs fresh lazy-list geometry and scroll position.
@@ -142,6 +149,8 @@ private struct PopoverHeader: View {
     @Environment(AppSettings.self) private var settings
     @Environment(AuthSession.self) private var auth
     @FocusState private var searchFocused: Bool
+    /// Receives the measured header and search field heights for the sidebar.
+    var sidebar: SidebarState
 
     var body: some View {
         @Bindable var store = store
@@ -165,7 +174,10 @@ private struct PopoverHeader: View {
                     .font(theme.typography.search)
                     .foregroundStyle(theme.colors.text)
                     .focused($searchFocused)
-                    .background(SearchFieldTuning())
+                    .background(SearchFieldTuning(caretColor: theme.colors.caret, isFocused: searchFocused))
+                }
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+                    if sidebar.searchFieldHeight != height { sidebar.searchFieldHeight = height }
                 }
                 Button {
                     AppDelegate.shared?.openSettingsWindow()
@@ -180,6 +192,9 @@ private struct PopoverHeader: View {
             }
         }
         .padding(theme.metrics.headerPadding)
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+            if sidebar.headerHeight != height { sidebar.headerHeight = height }
+        }
         .background(theme.surface.kind == .glass ? Color.clear : theme.colors.panelFill)
         .onAppear {
             searchFocused = true

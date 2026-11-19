@@ -27,6 +27,11 @@ public struct ColorTokens: @unchecked Sendable {
     public var fieldBorder: Color?
     /// Outline of a focused text input; nil draws none.
     public var focusRing: Color?
+    /// Title of a hovered or selected sidebar entry / project row; nil keeps
+    /// the theme's normal title colors.
+    public var highlightedTitle: Color?
+    /// Search field insertion point; nil keeps the system caret.
+    public var caret: Color?
 
     public init(
         text: Color,
@@ -50,7 +55,9 @@ public struct ColorTokens: @unchecked Sendable {
         sidebarFill: Color? = nil,
         fieldBackground: Color? = nil,
         fieldBorder: Color? = nil,
-        focusRing: Color? = nil
+        focusRing: Color? = nil,
+        highlightedTitle: Color? = nil,
+        caret: Color? = nil
     ) {
         self.text = text
         self.sub = sub
@@ -74,6 +81,8 @@ public struct ColorTokens: @unchecked Sendable {
         self.fieldBackground = fieldBackground ?? chipBackground
         self.fieldBorder = fieldBorder
         self.focusRing = focusRing
+        self.highlightedTitle = highlightedTitle
+        self.caret = caret
     }
 }
 

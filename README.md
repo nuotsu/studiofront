@@ -36,8 +36,8 @@ Anyone juggling Studios across several Sanity organizations — agencies, consul
 - Last-edited document per project, with type, draft status, and relative time
 - Last-deploy timestamp
 
-**Two full themes**
-- Liquid Glass (native macOS 26 translucent materials) and Sanity UI (mirrors Sanity Studio's own design)
+**Three full themes**
+- Liquid Glass (native macOS 26 translucent materials), Studio (mirrors Sanity Studio's own design), and Sanity.io (the neutral grays and brand orange of sanity.io)
 - Light/dark aware, full Dynamic Type and VoiceOver support
 
 **Zero-setup auth**

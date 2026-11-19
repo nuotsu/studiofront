@@ -5,10 +5,15 @@ public protocol Theme: Sendable {
     var typography: TypographyTokens { get }
     var metrics: MetricTokens { get }
     var surface: SurfaceStyle { get }
+    /// Keycap legend foreground. Declared as requirements (not only extension
+    /// methods) so a theme can override the defaults through `any Theme`.
+    func legendForeground(for colorScheme: ColorScheme) -> Color
+    /// Keycap legend border.
+    func legendBorder(for colorScheme: ColorScheme) -> Color
 }
 
 extension Theme {
-    /// Sanity UI is a flat, non-glass design language and uses its own fixed
+    /// The Sanity themes are a flat, non-glass design language and use a fixed
     /// 0.1875rem (3pt) corner radius instead of the Liquid Glass metrics.
     public func cornerRadius(_ glassValue: CGFloat) -> CGFloat {
         surface.kind == .glass ? glassValue : 3
@@ -57,22 +62,32 @@ extension Theme {
 
 public enum ThemePreference: String, CaseIterable, Identifiable, Sendable {
     case liquidGlass
-    case sanityUI
+    /// Raw value kept from the former "Sanity UI" name so saved settings carry over.
+    case studio = "sanityUI"
+    case sanityIO
 
     public var id: Self { self }
 
     public var title: String {
         switch self {
         case .liquidGlass: "Liquid Glass"
-        case .sanityUI: "Sanity UI"
+        case .studio: "Studio"
+        case .sanityIO: "Sanity.io"
         }
     }
 
     public var theme: any Theme {
         switch self {
         case .liquidGlass: LiquidGlassTheme()
-        case .sanityUI: SanityUITheme()
+        case .studio: SanityStudioTheme()
+        case .sanityIO: SanityIOTheme()
         }
+    }
+
+    /// The theme resolved for a fixed light or dark scheme, independent of
+    /// the app's current appearance (used by the Settings previews).
+    public func theme(for colorScheme: ColorScheme) -> any Theme {
+        AppearanceOverride.$isDark.withValue(colorScheme == .dark) { theme }
     }
 }
 

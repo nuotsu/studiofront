@@ -1,20 +1,20 @@
 import SwiftUI
 
-/// Flat Sanity Studio language, using the Sanity UI 5 palette
+/// "Studio": flat Sanity Studio language, using the Sanity UI 5 palette
 /// (`@sanity/ui` 5.x `styles.css` primitives and semantic tokens).
 /// Comments name the UI 5 semantic token each color resolves to.
-public struct SanityUITheme: Theme, Sendable {
+public struct SanityStudioTheme: Theme, Sendable {
     public let colors: ColorTokens
     public let typography: TypographyTokens
     public let metrics: MetricTokens
     public let surface: SurfaceStyle
 
     public init() {
-        // --separator-low: --separator-high (gray-400 / gray-600) at --opacity-low (0.25).
-        let separatorLow = Color.adaptive(
-            light: Color.rgba(148 / 255, 153 / 255, 173 / 255, 0.25),
-            dark: Color.rgba(81 / 255, 88 / 255, 112 / 255, 0.25)
-        )
+        // One solid border for dividers, chips, panels, fields and the footer
+        // icons (as in the Sanity.io theme): the text input outline from
+        // sanity.io/manage. UI 5's translucent --separator-low read too dark
+        // on its own and lighter wherever it stacked on a system separator.
+        let border = Color.adaptive(light: Color(hex: "dcdee5"), dark: Color(hex: "333749"))
 
         colors = ColorTokens(
             // --foreground-high: gray-800 / gray-200
@@ -27,8 +27,8 @@ public struct SanityUITheme: Theme, Sendable {
             tagBackground: .adaptive(light: Color(hex: "eeeef1"), dark: Color(hex: "1b1d27")),
             // --background-low: gray-50 / gray-950
             chipBackground: .adaptive(light: Color(hex: "f6f6f8"), dark: Color(hex: "13141b")),
-            chipBorder: separatorLow,
-            divider: separatorLow,
+            chipBorder: border,
+            divider: border,
             // --backdrop: white / black
             buttonBackground: .adaptive(light: Color(hex: "ffffff"), dark: Color(hex: "13141b")),
             // --foreground-high
@@ -49,13 +49,13 @@ public struct SanityUITheme: Theme, Sendable {
             selection: .adaptive(light: Color(hex: "e3e4e8"), dark: Color(hex: "252837")),
             // --backdrop
             panelFill: .adaptive(light: Color(hex: "ffffff"), dark: Color(hex: "13141b")),
-            panelBorder: separatorLow,
+            panelBorder: border,
             // sanity.io/manage: sidebar #0d0e12 beside the #13141b main area.
             // Light mirrors it one step off white: gray-50.
             sidebarFill: .adaptive(light: Color(hex: "f6f6f8"), dark: Color(hex: "0d0e12")),
             // Text input, from sanity.io/manage: --backdrop fill, 1px border, blue focus ring.
             fieldBackground: .adaptive(light: Color(hex: "ffffff"), dark: Color(hex: "13141b")),
-            fieldBorder: .adaptive(light: Color(hex: "d0d2db"), dark: Color(hex: "3d4258")),
+            fieldBorder: border,
             focusRing: Color(hex: "556bfc")
         )
         typography = TypographyTokens()

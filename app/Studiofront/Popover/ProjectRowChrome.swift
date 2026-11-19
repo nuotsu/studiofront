@@ -227,6 +227,7 @@ struct FavoriteShortcutLegend: View {
 /// state so hovering the name doesn't re-run the row.
 struct ProjectNameLink: View {
     @Environment(\.studioTheme) private var theme
+    @Environment(\.rowIsHighlighted) private var rowIsHighlighted
     var row: ProjectRow
 
     @State private var isHovered = false
@@ -234,7 +235,7 @@ struct ProjectNameLink: View {
     var body: some View {
         Text(row.displayTitle)
             .font(theme.typography.projectName)
-            .foregroundStyle(theme.colors.text)
+            .foregroundStyle(rowIsHighlighted ? theme.colors.highlightedTitle ?? theme.colors.text : theme.colors.text)
             .underline(isHovered)
             .lineLimit(1)
             .contentShape(Rectangle())

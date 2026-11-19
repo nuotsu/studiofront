@@ -1,6 +1,12 @@
 import AppKit
 import SwiftUI
 
+/// Forces `Color.adaptive` to one side while a theme is built, so a theme's
+/// light and dark palettes can be read regardless of the app appearance.
+enum AppearanceOverride {
+    @TaskLocal static var isDark: Bool?
+}
+
 extension Color {
     init(hex: String, opacity: Double = 1) {
         let cleaned = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
@@ -29,7 +35,11 @@ extension Color {
     /// Resolves to a discrete light/dark `Color` against the current app
     /// appearance. Dynamic `NSColor(name:)` providers crossfade when light/dark
     /// flips; a plain `Color` swapped via appearance remounts snaps instead.
+    /// `AppearanceOverride.isDark`, when set, wins over the app appearance.
     static func adaptive(light: Color, dark: Color) -> Color {
+        if let isDark = AppearanceOverride.isDark {
+            return isDark ? dark : light
+        }
         let appearance = NSApp.appearance ?? NSApp.effectiveAppearance
         let isDark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
         return isDark ? dark : light
