@@ -29,9 +29,9 @@ extension Theme {
         case (.glass, .light):
             return .rgba(0, 0, 0, 0.40)
         case (.flat, .dark):
-            return Color(hex: "9aa3af")
+            return Color(hex: "9499ad")
         case (.flat, .light):
-            return Color(hex: "98a0aa")
+            return Color(hex: "727892")
         default:
             return colors.faint
         }
@@ -44,10 +44,11 @@ extension Theme {
             return .rgba(1, 1, 1, 0.22)
         case (.glass, .light):
             return .rgba(0, 0, 0, 0.14)
+        // Sanity's <kbd> outline on sanity.io/manage; light mirrors it with gray-200.
         case (.flat, .dark):
-            return Color(hex: "4b5563")
+            return Color(hex: "2a2d3f")
         case (.flat, .light):
-            return Color(hex: "dfe1e6")
+            return Color(hex: "e3e4e8")
         default:
             return colors.chipBorder
         }

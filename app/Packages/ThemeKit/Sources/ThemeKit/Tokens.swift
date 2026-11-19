@@ -19,6 +19,14 @@ public struct ColorTokens: @unchecked Sendable {
     public var selection: Color
     public var panelFill: Color
     public var panelBorder: Color
+    /// The popover's left column. Defaults to `panelFill`.
+    public var sidebarFill: Color
+    /// Text input fill. Defaults to `chipBackground`.
+    public var fieldBackground: Color
+    /// Text input outline; nil draws none.
+    public var fieldBorder: Color?
+    /// Outline of a focused text input; nil draws none.
+    public var focusRing: Color?
 
     public init(
         text: Color,
@@ -38,7 +46,11 @@ public struct ColorTokens: @unchecked Sendable {
         hover: Color,
         selection: Color,
         panelFill: Color,
-        panelBorder: Color
+        panelBorder: Color,
+        sidebarFill: Color? = nil,
+        fieldBackground: Color? = nil,
+        fieldBorder: Color? = nil,
+        focusRing: Color? = nil
     ) {
         self.text = text
         self.sub = sub
@@ -58,6 +70,10 @@ public struct ColorTokens: @unchecked Sendable {
         self.selection = selection
         self.panelFill = panelFill
         self.panelBorder = panelBorder
+        self.sidebarFill = sidebarFill ?? panelFill
+        self.fieldBackground = fieldBackground ?? chipBackground
+        self.fieldBorder = fieldBorder
+        self.focusRing = focusRing
     }
 }
 

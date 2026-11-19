@@ -168,8 +168,8 @@ public final class SanityClient: Sendable {
         // yields exactly `perStateLimit` items (indices 0 through perStateLimit-1).
         let groq = """
         {
-          "published": *[!(_id in path("drafts.**")) && !(_id in path("_.**")) && \(Self.nonContentTypeFilter)] | order(_updatedAt desc)[0...\(perStateLimit)]{_id, _type, _updatedAt, title, name},
-          "draft": *[_id in path("drafts.**") && !(_id in path("_.**")) && \(Self.nonContentTypeFilter)] | order(_updatedAt desc)[0...\(perStateLimit)]{_id, _type, _updatedAt, title, name}
+          "published": *[!(_id in path("drafts.**")) && !(_id in path("_.**")) && \(Self.nonContentTypeFilter)] | order(_updatedAt desc)[0...\(perStateLimit)]{_id, _type, _updatedAt, title, name, "slug": coalesce(metadata.slug.current, slug.current)},
+          "draft": *[_id in path("drafts.**") && !(_id in path("_.**")) && \(Self.nonContentTypeFilter)] | order(_updatedAt desc)[0...\(perStateLimit)]{_id, _type, _updatedAt, title, name, "slug": coalesce(metadata.slug.current, slug.current)}
         }
         """
         guard var components = URLComponents(
@@ -211,8 +211,8 @@ public final class SanityClient: Sendable {
         guard !text.isEmpty else { return [] }
         let groq = """
         {
-          "published": *[!(_id in path("drafts.**")) && !(_id in path("_.**")) && \(Self.nonContentTypeFilter) && (title match $q || name match $q)] | order(_updatedAt desc)[0...\(limit)]{_id, _type, _updatedAt, title, name},
-          "draft": *[_id in path("drafts.**") && !(_id in path("_.**")) && \(Self.nonContentTypeFilter) && (title match $q || name match $q)] | order(_updatedAt desc)[0...\(limit)]{_id, _type, _updatedAt, title, name}
+          "published": *[!(_id in path("drafts.**")) && !(_id in path("_.**")) && \(Self.nonContentTypeFilter) && (title match $q || name match $q)] | order(_updatedAt desc)[0...\(limit)]{_id, _type, _updatedAt, title, name, "slug": coalesce(metadata.slug.current, slug.current)},
+          "draft": *[_id in path("drafts.**") && !(_id in path("_.**")) && \(Self.nonContentTypeFilter) && (title match $q || name match $q)] | order(_updatedAt desc)[0...\(limit)]{_id, _type, _updatedAt, title, name, "slug": coalesce(metadata.slug.current, slug.current)}
         }
         """
         guard var components = URLComponents(

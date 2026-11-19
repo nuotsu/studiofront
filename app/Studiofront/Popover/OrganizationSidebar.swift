@@ -107,9 +107,9 @@ struct OrganizationSidebar: View {
         }
         .frame(width: theme.metrics.sidebarWidth)
         .frame(maxHeight: .infinity, alignment: .top)
-        // Same surface as the list: the popover's own background shows
-        // through, so the sidebar keeps the theme's colors in both modes.
-        .background(theme.surface.kind == .glass ? Color.clear : theme.colors.panelFill)
+        // Glass: the popover's own background shows through. Flat: the
+        // theme's sidebar fill (darker than the list in Sanity UI).
+        .background(theme.surface.kind == .glass ? Color.clear : theme.colors.sidebarFill)
         .onChange(of: store.revealedOrganizationID) { _, id in
             if let id, store.hiddenOrganizationIDs.contains(id) { showsHidden = true }
             if id == nil { state.activeGroupID = nil }

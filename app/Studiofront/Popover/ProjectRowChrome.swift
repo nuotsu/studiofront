@@ -304,7 +304,8 @@ enum PillMetrics {
     private static let spacing: CGFloat = 4
     /// Horizontal padding (7 + 7), status dot (7), and the two gaps (4 + 4).
     private static let pillChrome: CGFloat = 29
-    private static let moreChrome: CGFloat = 14
+    /// Horizontal padding (7 + 7) plus the 8pt-wide caret glyph.
+    private static let moreWidth: CGFloat = 22
 
     /// The widest pill area any row has reported. New rows start from it, so
     /// their first layout already shows the right number of pills. (Rows
@@ -336,7 +337,7 @@ enum PillMetrics {
     }
 
     /// How many leading pills (1 to 3) fit in `width`, leaving room for the
-    /// "+N" pill when documents are left over. One pill always shows, even
+    /// caret pill when documents are left over. One pill always shows, even
     /// if it doesn't fit, which matches the old behavior.
     static func fittingCount(_ documents: [EditedDocument], width: CGFloat) -> Int {
         let limit = min(maxPills, documents.count)
@@ -351,9 +352,8 @@ enum PillMetrics {
         while count > 1 {
             var total = spacing * CGFloat(count - 1)
             for index in 0..<count { total += widths[index] }
-            let rest = documents.count - count
-            if rest > 0 {
-                total += spacing + moreChrome + textWidth("+\(rest)", font: timeFont, kind: "s")
+            if documents.count > count {
+                total += spacing + moreWidth
             }
             if total <= width { return count }
             count -= 1
@@ -362,8 +362,9 @@ enum PillMetrics {
     }
 }
 
-/// Up to three recent documents as pills, then a "+N" pill whose menu lists
-/// the rest. Fewer pills show when the row is too narrow for three.
+/// Up to three recent documents as pills, then a caret pill whose menu lists
+/// every recent document, the visible pills included. Fewer pills show when
+/// the row is too narrow for three.
 struct RecentDocumentPills: View {
     @Environment(\.studioTheme) private var theme
 
@@ -371,7 +372,8 @@ struct RecentDocumentPills: View {
 
     @State private var availableWidth = PillMetrics.widestSeen
 
-    private static let maxMenuItems = 15
+    /// Matches `SanityClient.recentDocumentsCacheLimit`, so every cached doc lists.
+    private static let maxMenuItems = 20
 
     var body: some View {
         let shownCount = PillMetrics.fittingCount(documents, width: availableWidth)
@@ -380,7 +382,7 @@ struct RecentDocumentPills: View {
                 DocumentPill(document: document)
             }
             if documents.count > shownCount {
-                morePill(Array(documents.dropFirst(shownCount)))
+                morePill(Array(documents.prefix(Self.maxMenuItems)))
             }
         }
         .fixedSize()
@@ -393,29 +395,46 @@ struct RecentDocumentPills: View {
         }
     }
 
-    private func morePill(_ rest: [EditedDocument]) -> some View {
+    private func morePill(_ all: [EditedDocument]) -> some View {
+        RecentDocumentsMenuPill(documents: all)
+    }
+}
+
+/// The caret pill that opens the full recent documents menu.
+private struct RecentDocumentsMenuPill: View {
+    @Environment(\.studioTheme) private var theme
+
+    var documents: [EditedDocument]
+
+    @State private var isHovered = false
+
+    var body: some View {
         NativeMenuButton(
-            header: "Recent documents",
+            header: "Recent \(documents.count) documents",
             makeItems: {
-                rest.prefix(Self.maxMenuItems).compactMap { document -> SplitPrimaryButton.MenuItem? in
+                documents.compactMap { document -> SplitPrimaryButton.MenuItem? in
                     guard let url = document.deepLinkURL else { return nil }
                     return SplitPrimaryButton.MenuItem(
                         id: document.listItemID,
-                        title: "\(document.displayTitle)  ·  \(RelativeTimestamp.string(from: document.editedAt))",
-                        image: DocumentStatusDot.menuImage(isDraft: document.isDraft)
+                        title: document.displayTitle,
+                        image: DocumentStatusDot.menuImage(isDraft: document.isDraft),
+                        detail: document.typeName.isEmpty ? nil : document.typeName,
+                        trailing: RelativeTimestamp.string(from: document.editedAt)
                     ) {
                         AppDelegate.shared?.openURL(url)
                     }
                 }
             },
-            accessibilityLabel: "\(rest.count) more recent documents"
+            accessibilityLabel: "Recent \(documents.count) documents"
         ) {
-            PillChrome(isHovered: false) {
-                Text("+\(rest.count)")
-                    .font(theme.typography.timestamp)
-                    .foregroundStyle(theme.colors.faint)
+            PillChrome(isHovered: isHovered) {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 8, weight: .semibold))
+                    .foregroundStyle(isHovered ? theme.colors.text : theme.colors.faint)
+                    .frame(width: 8)
             }
         }
+        .onHover { isHovered = $0 }
     }
 }
 

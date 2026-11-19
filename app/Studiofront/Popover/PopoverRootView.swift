@@ -151,7 +151,8 @@ private struct PopoverHeader: View {
                 authBanner
             }
             HStack(spacing: 8) {
-                SearchFieldChrome {
+                // Blue ring only once there's a query; the field is always focused.
+                SearchFieldChrome(isFocused: searchFocused && !store.queryInput.isEmpty) {
                     // Explicit prompt color: the default placeholder came out
                     // white on the light gray field in light mode.
                     TextField(

@@ -146,7 +146,10 @@ public struct RemoteEditedDocument: Sendable, Equatable {
             winner = nil
         }
         guard let winner else { return nil }
-        let resolvedTitle = winner.doc.title ?? winner.doc.name ?? winner.doc.id
+        let resolvedTitle = [winner.doc.title, winner.doc.name, winner.doc.slug]
+            .lazy
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first { !$0.isEmpty } ?? winner.doc.id
         return RemoteEditedDocument(
             id: winner.doc.id,
             typeName: winner.doc.type,
@@ -246,6 +249,9 @@ struct DocumentProjectionDTO: Decodable, Sendable {
     var updatedAt: Date
     var title: String?
     var name: String?
+    /// `metadata.slug.current`, else `slug.current`: a readable fallback for
+    /// documents with no `title` or `name`, ahead of the raw id.
+    var slug: String?
 
     enum CodingKeys: String, CodingKey {
         case id = "_id"
@@ -253,6 +259,7 @@ struct DocumentProjectionDTO: Decodable, Sendable {
         case updatedAt = "_updatedAt"
         case title
         case name
+        case slug
     }
 
     init(from decoder: Decoder) throws {
@@ -262,5 +269,6 @@ struct DocumentProjectionDTO: Decodable, Sendable {
         updatedAt = try container.decode(Date.self, forKey: .updatedAt)
         title = try? container.decode(String.self, forKey: .title)
         name = try? container.decode(String.self, forKey: .name)
+        slug = try? container.decode(String.self, forKey: .slug)
     }
 }

@@ -46,19 +46,7 @@ struct DocumentRowView: View {
 
     private var identity: some View {
         VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 5) {
-                DocumentStatusDot(isDraft: document.isDraft)
-                Text(document.displayTitle)
-                    .font(theme.typography.projectName)
-                    .foregroundStyle(theme.colors.text)
-                    .lineLimit(1)
-                if !document.typeName.isEmpty {
-                    DocumentTypeChip(document.typeName)
-                }
-            }
-            .contentShape(Rectangle())
-            .onTapGesture(perform: openDocument)
-            .accessibilityAddTraits(.isButton)
+            DocumentTitleLink(document: document, action: openDocument)
 
             HStack(spacing: 6) {
                 Text(row.displayTitle)
@@ -86,5 +74,33 @@ struct DocumentRowView: View {
         if let url = document.deepLinkURL {
             AppDelegate.shared?.openURL(url)
         }
+    }
+}
+
+/// The document title line: opens the document, title underlined on hover.
+/// Owns its hover state so hovering it doesn't re-run the row.
+private struct DocumentTitleLink: View {
+    @Environment(\.studioTheme) private var theme
+    var document: EditedDocument
+    var action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        HStack(spacing: 5) {
+            DocumentStatusDot(isDraft: document.isDraft)
+            Text(document.displayTitle)
+                .font(theme.typography.projectName)
+                .foregroundStyle(theme.colors.text)
+                .underline(isHovered)
+                .lineLimit(1)
+            if !document.typeName.isEmpty {
+                DocumentTypeChip(document.typeName)
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture(perform: action)
+        .onHover { isHovered = $0 }
+        .accessibilityAddTraits(.isButton)
     }
 }

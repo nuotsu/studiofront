@@ -94,12 +94,25 @@ public struct SplitPrimaryButton: View {
         public var title: String
         /// Optional leading image, e.g. a document status dot.
         public var image: NSImage?
+        /// Dimmed text right after the title, e.g. a document type.
+        public var detail: String?
+        /// Dimmed text pinned to the menu's right edge, e.g. an edit date.
+        public var trailing: String?
         public var action: () -> Void
 
-        public init(id: String, title: String, image: NSImage? = nil, action: @escaping () -> Void) {
+        public init(
+            id: String,
+            title: String,
+            image: NSImage? = nil,
+            detail: String? = nil,
+            trailing: String? = nil,
+            action: @escaping () -> Void
+        ) {
             self.id = id
             self.title = title
             self.image = image
+            self.detail = detail
+            self.trailing = trailing
             self.action = action
         }
     }
@@ -252,8 +265,9 @@ public struct NativeMenuButton<Label: View>: View {
             menu.addItem(.separator())
         }
         let router = MenuActionRouter()
-        for item in items {
-            router.addItem(to: menu, title: item.title, image: item.image, action: item.action)
+        let titles = MenuActionRouter.attributedTitles(for: items)
+        for (item, attributed) in zip(items, titles) {
+            router.addItem(to: menu, title: item.title, attributedTitle: attributed, image: item.image, action: item.action)
         }
         // NSMenuItem.target is unretained, so keep the router alive until
         // the next menu replaces it.
@@ -364,14 +378,66 @@ private final class MenuActionRouter: NSObject {
 
     private var actions: [() -> Void] = []
 
-    func addItem(to menu: NSMenu, title: String, image: NSImage? = nil, action: @escaping () -> Void) {
+    func addItem(
+        to menu: NSMenu,
+        title: String,
+        attributedTitle: NSAttributedString? = nil,
+        image: NSImage? = nil,
+        action: @escaping () -> Void
+    ) {
         let index = actions.count
         actions.append(action)
         let item = NSMenuItem(title: title, action: #selector(invoke(_:)), keyEquivalent: "")
         item.target = self
         item.tag = index
         item.image = image
+        if let attributedTitle { item.attributedTitle = attributedTitle }
         menu.addItem(item)
+    }
+
+    /// Styled titles for items with a `detail` or `trailing` part: the
+    /// detail dimmed after the title, and the trailing text right-aligned
+    /// on a shared tab stop so every row's date lines up at the menu's
+    /// right edge. `nil` for plain items.
+    static func attributedTitles(for items: [SplitPrimaryButton.MenuItem]) -> [NSAttributedString?] {
+        guard items.contains(where: { $0.detail != nil || $0.trailing != nil }) else {
+            return items.map { _ in nil }
+        }
+        let font = NSFont.menuFont(ofSize: 0)
+        let dimFont = NSFont.menuFont(ofSize: font.pointSize - 2)
+        let detailGap = "  "
+        let trailingGap: CGFloat = 24
+
+        func leading(_ item: SplitPrimaryButton.MenuItem) -> NSMutableAttributedString {
+            let text = NSMutableAttributedString(string: item.title, attributes: [.font: font])
+            if let detail = item.detail, !detail.isEmpty {
+                text.append(NSAttributedString(
+                    string: detailGap + detail,
+                    attributes: [.font: dimFont, .foregroundColor: NSColor.tertiaryLabelColor]
+                ))
+            }
+            return text
+        }
+
+        let leadings = items.map(leading)
+        let leadingWidth = leadings.map { ceil($0.size().width) }.max() ?? 0
+        let trailingWidth = items
+            .compactMap { $0.trailing }
+            .map { ceil(($0 as NSString).size(withAttributes: [.font: dimFont]).width) }
+            .max() ?? 0
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.tabStops = [NSTextTab(textAlignment: .right, location: leadingWidth + trailingGap + trailingWidth)]
+
+        return zip(items, leadings).map { item, text in
+            if let trailing = item.trailing, !trailing.isEmpty {
+                text.append(NSAttributedString(
+                    string: "\t" + trailing,
+                    attributes: [.font: dimFont, .foregroundColor: NSColor.secondaryLabelColor]
+                ))
+            }
+            text.addAttribute(.paragraphStyle, value: paragraph, range: NSRange(location: 0, length: text.length))
+            return text
+        }
     }
 
     @objc private func invoke(_ sender: NSMenuItem) {
@@ -779,29 +845,51 @@ public struct AvatarTooltip: View {
 
 public struct SearchFieldChrome<Content: View>: View {
     @Environment(\.studioTheme) private var theme
+    var isFocused: Bool
     @ViewBuilder var content: () -> Content
 
-    public init(@ViewBuilder content: @escaping () -> Content) {
+    public init(isFocused: Bool = false, @ViewBuilder content: @escaping () -> Content) {
+        self.isFocused = isFocused
         self.content = content
     }
 
     public var body: some View {
-        HStack(spacing: 7) {
+        let isFlat = theme.surface.kind == .flat
+        // Sanity UI text inputs use a 0.375rem (6pt) radius, not the 3pt button radius.
+        let shape = RoundedRectangle(
+            cornerRadius: isFlat ? 6 : theme.metrics.searchFieldCornerRadius,
+            style: theme.cornerStyle
+        )
+        HStack(spacing: isFlat ? 8 : 7) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(theme.colors.faint)
+                .foregroundStyle(isFlat ? theme.colors.sub : theme.colors.faint)
             content()
             KeycapLegend([.symbol("command"), .text("K")])
         }
-        .padding(.horizontal, 9)
-        .padding(.vertical, 6)
-        .background(
-            ZStack {
-                theme.colors.chipBackground
-                Color.black.opacity(0.04)
+        .padding(.horizontal, isFlat ? 10 : 9)
+        .padding(.vertical, isFlat ? 7 : 6)
+        .background {
+            if isFlat {
+                theme.colors.fieldBackground
+            } else {
+                ZStack {
+                    theme.colors.chipBackground
+                    Color.black.opacity(0.04)
+                }
             }
-        )
-        .clipShape(RoundedRectangle(cornerRadius: theme.cornerRadius(theme.metrics.searchFieldCornerRadius), style: theme.cornerStyle))
+        }
+        .clipShape(shape)
+        .overlay {
+            if let border = theme.colors.fieldBorder {
+                shape.strokeBorder(border, lineWidth: 1)
+            }
+        }
+        .overlay {
+            if isFocused, let ring = theme.colors.focusRing {
+                shape.strokeBorder(ring, lineWidth: 1)
+            }
+        }
     }
 }
 
@@ -861,7 +949,7 @@ public struct KeycapLegend: View {
         .frame(minHeight: compact ? 11 : 14)
         .padding(.horizontal, compact ? 2 : 5)
         .padding(.vertical, compact ? 1.5 : 2)
-        .background(theme.colors.chipBackground)
+        .background(theme.surface.kind == .flat ? theme.colors.fieldBackground : theme.colors.chipBackground)
         .overlay(
             RoundedRectangle(cornerRadius: theme.cornerRadius(4), style: theme.cornerStyle)
                 .strokeBorder(theme.legendBorder(for: colorScheme), lineWidth: 1)
